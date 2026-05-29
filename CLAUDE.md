@@ -29,7 +29,8 @@ This project follows the durable conventions in [`docs/PHILOSOPHY.md`](docs/PHIL
 file is silent or ambiguous. Specific sections referenced inline: §1 Earn its keep,
 §2 Languages, §3 Single-instance default, §4 Modular monolith, §5 Postgres only,
 §6 Managed platforms, §7 No serverless / no edge, §8 Web architecture matrix,
-§9 Cloudflare, §10 End-to-end type safety, §11 API integration primitives.
+§9 Cloudflare, §10 End-to-end type safety, §11 API integration primitives,
+§12 Observability, §13 Outsource the non-core.
 
 Where this file overrides PHILOSOPHY.md, the override must name a specific project
 reason that clears §1's earn-its-keep bar.
@@ -149,6 +150,10 @@ long-running owned server. -->
 
 - **Earn its keep.** Any architectural complexity beyond the §3 / §5 / §6 / §7
   defaults must clear PHILOSOPHY §1's bar before it lands.
+- **Outsource the non-core** (PHILOSOPHY §13). When the problem is not the
+  project's core competency, pay for a managed solution. Building or self-hosting
+  earns its keep only on a current, felt cost or reliability problem with the paid
+  path. Applies to hosting, CDN, observability, auth, email, managed Postgres, etc.
 - **Conventional commits.** Enforced by the `commit-msg` hook. Types:
   `feat|fix|refactor|chore|docs|test|style|perf|ci|build|revert`. One logical change
   per commit — **atomic**. Don't fold unrelated cleanup into a feature commit.
@@ -160,6 +165,11 @@ long-running owned server. -->
   inline.
 - **Structured logging via child loggers.** `log.info({ <fields> }, "<event>")`, not
   interpolated strings. Never log API keys.
+- **Observability from day one** (PHILOSOPHY §12). Structured logs **and**
+  distributed traces ship with the first deploy. Errors are **never sampled out**.
+  Successful traces default to 100% sampling at low scale; aggressive sampling
+  earns its keep against a real ingest-cost problem and stays tail-based (keep all
+  errors and slow traces).
 - **Fail loud, and distinguish two zeros.** Errors propagate or are handled explicitly;
   silent `catch` is forbidden. Critically: **"genuinely nothing there" (a legitimate
   empty result) is not the same as "the fetch failed".** A failed upstream call
@@ -238,6 +248,26 @@ retry loops are violations.
 <!-- TODO: cache schema, TTL / freshness field, repository module path. Per
 PHILOSOPHY §5, prefer Postgres (a `*_cache` table, materialized view, or
 pre-computed rollup) over Redis. -->
+
+## Observability
+
+Per PHILOSOPHY §12 + §13: structured logs and distributed traces from day one;
+errors never sampled; default tooling is **Sentry** + **BetterStack**; self-hosted
+Grafana stack rejected unless §13 has been cleared. Cross-service tracing uses the
+W3C `traceparent` standard via OpenTelemetry.
+
+What gets logged on every external upstream call: latency, status, retry count,
+circuit-breaker state, rate-limiter wait. Cache decisions log hit/miss/write with
+the key. Domain-meaningful events get their own log line.
+
+<!-- TODO: this project's specific observability setup:
+- Sentry DSN env var, project, error filters
+- BetterStack source tokens for logs / traces
+- OpenTelemetry SDK setup (where the tracer is initialized; which exporter)
+- The structured-log shape (top-level fields you always include: requestId, userId,
+  component, traceId)
+- Any project-specific tail-based sampling rules
+-->
 
 ## Testing
 

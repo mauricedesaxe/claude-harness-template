@@ -430,6 +430,128 @@ reference TypeScript implementation lives in the WalkUp / job-finder repos as
 
 ---
 
+## §12. Observability
+
+**Rule.** Every project ships with **structured logs and distributed traces from day
+one**. Errors are **never sampled out**. At small scale, the default sampling rate
+for successful traces is **100%** (or as close as the ingest budget allows). Metrics
+and alerts are secondary tools — useful when there's an SLO to defend or an on-call
+rotation receiving alerts, not load-bearing primitives.
+
+**Why.** When something breaks, you can only diagnose with the signal you already
+captured. Sampling decisions made before an incident are bets that the failure
+you're about to hit will be among the kept samples — and at small scale, that bet
+is unnecessary. Keep everything until you have a real ingest-cost problem.
+
+Traces (with spans) are the single most valuable observability tool: they show the
+actual execution path through your code, including DB calls, external upstreams,
+and timing. That's exactly the surface area where the load-bearing bugs and
+latency problems live. A single trace with proper spans usually answers a debugging
+question that would take an hour of `git log` and `console.log` to reach.
+
+**Default tools** (apply §13 / outsource-the-non-core):
+
+- **Sentry** for error tracking and exception reporting. Even with `Result<T,E>` and
+  no `throw`s (per Hard rules / §11), Sentry's structured error events with context
+  + breadcrumbs are the fastest way to triage failures.
+- **BetterStack** (formerly Logtail) for logs and uptime monitoring; supports
+  OpenTelemetry trace ingest for distributed tracing as well.
+- Either can take the other's role for tracing depending on project flavor; pick one,
+  not both, as the primary trace sink.
+
+**Rejected as defaults** (must earn their keep under §13):
+
+- Self-hosted Grafana / Loki / Tempo / Mimir / Prometheus. Earns its keep only at a
+  scale where the managed bill is a current, felt budget problem, or a regulatory
+  reason names the data plane.
+- DataDog by default — the cost curve grows non-linearly and is hostile at the
+  scales where managed observability should be cheapest.
+- Building any observability primitive in-house — almost never the right call (§13).
+
+**Distributed tracing.** When the system is more than one process, use the W3C
+**Trace Context** standard (`traceparent` / `tracestate` headers) so a single trace
+spans every service. Both Sentry and BetterStack consume OpenTelemetry, which uses
+the standard. Don't invent your own correlation header.
+
+**What to log** (in addition to the structured-logging Hard rule):
+
+- Every external upstream call: latency, status code, retry count, circuit-breaker
+  state, rate-limiter wait time.
+- Cache decisions: hit / miss / write, with the cache key.
+- Domain-meaningful events: a score computed, a job enqueued, a webhook received.
+- Never log API keys; never log full PII without an explicit, documented reason.
+
+**Earn-its-keep.**
+
+- **Aggressive sampling** (5%, 1%, 0.1%) earns its keep when ingest cost is a
+  current, felt budget problem. When it does, prefer **tail-based** sampling: keep
+  100% of errors and slow traces; sample the successful, fast ones. Never sample
+  errors.
+- **Metrics dashboards** earn their keep when there's an SLO or capacity-planning
+  decision riding on them.
+- **Alerts** earn their keep when there's a human (or a rotation) actually receiving
+  them. An unactioned alert is noise.
+
+---
+
+## §13. Outsource the non-core
+
+**Rule.** When you have a problem to solve and the problem is **not your core
+competency**, default to **paying for an existing solution**. Building it yourself or
+self-hosting earns its keep only when (a) the problem IS your core competency, or
+(b) the paid solution becomes a current, felt cost problem, or (c) the paid solution
+is demonstrably unreliable in a way that's hurting users.
+
+**Why.** The time cost of building, running, and operating a homebrew solution is
+almost always greater than the dollar cost of the paid one — *especially* once you
+include ongoing maintenance, security patches, upgrade churn, and the on-call
+burden of being the operator of last resort. Vendors whose core competency is the
+problem you're trying to solve have already paid the cost of fixing the hard edges
+you haven't hit yet. Outsourcing buys you their solved problem; building means you
+re-solve it on your own time.
+
+This is the **sister rule to §1**. §1 says "the simpler architecture wins by
+default." §13 says "the paid tool wins over the built tool by default." Together
+they bias the system toward shipping product on top of someone else's solved
+problem, not toward becoming a platform team for your own infrastructure.
+
+**Applications across this doc** (these are §13 in action):
+
+- **Hosting (§6)** — managed Docker platforms over IaC and k8s.
+- **CDN (§9)** — Cloudflare's CDN over a homebrew edge cache.
+- **Observability (§12)** — Sentry + BetterStack over self-hosted Grafana stack.
+- **Data (§5)** — managed Postgres (Neon, Supabase, Railway Postgres, DO Managed
+  Postgres) is a reasonable default over operating your own instance.
+- **Auth** — Clerk, Auth0, Descope over rolling your own auth from scratch unless
+  identity is your product.
+- **Email / SMS** — Resend, Postmark, Twilio over running your own MTA.
+
+**Where you do NOT outsource:**
+
+- **The domain core.** If you're building a scoring engine, the scoring engine is
+  yours; you don't pay a vendor for "scoring as a service." The product *is* the way
+  you do that one thing.
+- **Anything that exposes proprietary data or a strategic moat** to a vendor whose
+  incentives could turn against you.
+
+**Earn-its-keep for building or self-hosting** a non-core component — the bar is
+the same as §1:
+
+1. A current, felt, named problem with the paid solution (cost is biting *now*,
+   not "what if it scales"; reliability has caused specific user-visible incidents
+   with documented numbers).
+2. An articulated reason the simpler (paid) thing genuinely doesn't work for the
+   problem — not a hypothetical or aesthetic objection.
+3. An accepted operational cost — on-call, upgrades, security, the new failure
+   modes you're now responsible for.
+
+"It would be cleaner if we owned this" doesn't qualify. "It would be cheaper at
+some future scale" doesn't qualify. "The vendor's API isn't quite ergonomic" doesn't
+qualify. Reach for the build path only when the paid path is *currently broken in a
+named way* — and document the named problem in the commit that adopts the build.
+
+---
+
 ## What this document is not
 
 - A roadmap. Sections aren't features; they're principles.

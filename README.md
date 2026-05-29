@@ -81,6 +81,9 @@ template feeding many projects with different needs.
 
 - **Earn its keep.** Any complexity beyond the single-machine default needs a
   named, current problem and an articulated reason the simpler thing won't work.
+- **Outsource the non-core.** Pay for the managed solution unless the problem
+  *is* your core competency. Building / self-hosting earns its keep only on a
+  current cost or reliability problem.
 - **TypeScript by default.** Python and Rust earn their keep.
 - **Single instance, one Postgres, modular monolith.** Replicas, queues like
   Kafka, Redis, k8s all earn their keep. Background queues on Postgres (Graphile,
@@ -90,6 +93,9 @@ template feeding many projects with different needs.
   cloud. Dockerfile + push.
 - **No serverless, no edge** for the app layer. App close to DB; CDN handles user
   latency. Cloudflare for CDN.
+- **Observability from day one.** Structured logs + distributed traces. Errors
+  never sampled out. Sentry + BetterStack as defaults; self-hosted Grafana stack
+  must earn its keep.
 - **End-to-end type safety.** Schema at every boundary; tRPC / OpenAPI / native
   framework typing between front and back.
 - **API integrations** stack five primitives: in-flight map, rate limiter,
