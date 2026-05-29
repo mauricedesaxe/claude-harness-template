@@ -145,9 +145,20 @@ Tests being "a follow-up PR" is a violation.
 
 ### 11. Logging and observability
 
-Structured logging with a component-scoped child logger. Flag a plan that says "we'll
-log the error" without naming the component child or the structured fields, and flag
-any plan that could leak an API key into a log line.
+PHILOSOPHY §12. Structured logging with a component-scoped child logger; distributed
+traces alongside logs; errors never sampled. Flag plans that:
+
+- Say "we'll log the error" without naming the component child or the structured
+  fields.
+- Could leak an API key or full PII into a log line.
+- Add a new external upstream call without logging the latency, status, retry
+  count, breaker state, rate-limiter wait.
+- Add a new error path that doesn't reach the error tracker (Sentry or
+  equivalent).
+- Mention sampling without naming what's sampled (errors must always be kept;
+  successful traces can be sampled when ingest is a real cost problem).
+- Span multiple services without naming `traceparent` / OpenTelemetry context
+  propagation.
 
 ### 12. Vagueness as a finding
 
@@ -155,6 +166,80 @@ If a section reads as fluent prose with no concrete shape — no file paths, no 
 names, no specific failure mode — that vagueness *is* the finding. Concrete plans get
 concrete reviews; vague plans get a "please make this concrete first" finding so the
 user knows where to push.
+
+### 13. Architecture deviations (PHILOSOPHY §1 / §3 / §5 / §6 / §7 / §8 / §9 / §13)
+
+Plan-time is the last cheap place to catch architectural drift. Once code that
+talks to Mongo or deploys to Lambda is in the diff, the diff is the easy part —
+the choice is the hard part. Flag plans that:
+
+- **Introduce a second application instance, a read replica, a load balancer, a
+  service mesh, Kafka, Redis, or k8s** (PHILOSOPHY §3) without naming the
+  current, felt, specific problem the single-instance default doesn't solve.
+- **Introduce a data store other than Postgres** (SQLite, MongoDB, Redis,
+  Timescale, Influx, etc. — PHILOSOPHY §5) without naming what Postgres extensions
+  / patterns can't do here, measured. Vendor lock-in and trendiness don't count.
+- **Reach for IaC, Kubernetes, or raw cloud VMs** (PHILOSOPHY §6) when the
+  default — a Dockerfile on a managed Docker platform — would do.
+- **Put the app on a serverless or edge runtime** (PHILOSOPHY §7). The app sits
+  close to the DB; the CDN handles user latency. Even with React Router 7 /
+  TanStack Start, deploy to a server, not a serverless adapter. The carve-outs
+  (genuinely stateless, edge-cacheable workloads) need to be named, not assumed.
+- **Pick a web architecture without naming the choice and the reason**
+  (PHILOSOPHY §8). The three options (SPA + Express, SSR monolith on owned
+  server, Astro) are equal-footing if §7 is honored. Mixing patterns in one
+  product without a written reason is a finding.
+- **Choose a CDN other than Cloudflare** (PHILOSOPHY §9) without a named
+  geographic or contractual reason.
+- **Build / self-host a non-core component** (PHILOSOPHY §13) without naming the
+  current cost or reliability problem with the paid path. "It would be cleaner"
+  doesn't qualify. The default is to pay for the solved problem, especially when
+  the data ownership story matches (e.g. BetterAuth for auth, Railway Postgres
+  for managed Postgres, not Supabase or Neon, not self-hosted Grafana).
+
+### 14. Value-type plans (PHILOSOPHY §14 + §16)
+
+Plans that introduce time, money, or domain-key values must say how they're
+typed. Flag plans that:
+
+- **Store or transmit moments-in-time as numeric Unix timestamps** without
+  branding (`type UnixSeconds = number & { __brand: "UnixSeconds" }`). UTC
+  `timestamptz` in Postgres + ISO-8601 on the wire is the default.
+- **Use floating-point for money** where the math matters. `bigint` minor units
+  or `decimal.js` is the default; `numeric(p,s)` for storage.
+- **Introduce a new domain identifier (user ID, booking ID, tenant ID, etc.)
+  with a bare `string` / `number`/ `bigint`** signature. Brand it so the
+  compiler refuses to confuse it with sibling IDs.
+- **Mix durations and instants in the same type** ("we pass `delay: number`")
+  without branding units. `delayMs` vs `delaySec` should be distinct branded
+  types or a `Duration` value.
+
+### 15. Commercial-readiness gating (PHILOSOPHY §19)
+
+Read the `Commercial readiness` declaration at the top of `CLAUDE.md`. If
+declared **yes**, the plan must address:
+
+- **RBAC at the app layer** — the role model, where role checks attach
+  (middleware? per-handler? both?), and how the model evolves.
+- **Postgres Row-Level Security** as the second policy layer, or a written
+  reason why it's not the right second layer for this plan.
+- **Audit logging** on each authorization decision and data mutation introduced
+  by the plan.
+- **Tenant isolation** — explicitly named at both app and DB layer for any
+  table introduced.
+- **An authorization test plan** — the role × resource matrix to be covered in
+  tests landing with the same commit.
+- **PII handling** — what data is in scope, what logging / error-tracker
+  redaction is applied, what retention rules apply.
+
+If declared **no**, app-layer authorization is still required (every project
+needs it); the rest are optional. Flag a plan that adds authentication or
+mutation routes and lists no authorization check at all — even a non-commercial
+project has principals and permissions.
+
+If the declaration is missing or still on the TODO placeholder, the finding is
+"`CLAUDE.md` does not yet declare commercial readiness; the plan's authorization
+posture is ambiguous." That's a meta-finding the user resolves by declaring.
 
 ## How to report
 

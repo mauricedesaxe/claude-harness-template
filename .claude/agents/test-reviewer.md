@@ -19,13 +19,17 @@ Other reviewers cover the rest — don't duplicate them:
   correct. You check whether the tests would *catch* it being wrong; it checks the
   formula.
 
-## The two questions you ask of every test
+## The three questions you ask of every test
 
 1. **Does it test the real thing, directly?** It should assert on the actual observable
    behaviour — the returned `Result`, the score, the parsed value — not a proxy for it.
 2. **Would it fail if the behaviour broke?** If you can picture the implementation
    being wrong while the test still passes, the test is theatre. Say so, and give the
    concrete input that would expose the bug.
+3. **Could it live one rung higher on the fidelity ladder and stay deterministic?**
+   PHILOSOPHY §18: bugs live at the seams. If a unit test could be an integration
+   test (a real collaborator with a recorded fixture instead of a stub) without
+   becoming flaky, flag the missed opportunity. Slower-but-real beats fast-but-fake.
 
 ## Test the thing, not a shadow of it
 
@@ -61,22 +65,41 @@ Never say "add more tests". Name the input and the expected output of the missin
   farther item never lowers a category score"). Assert the property across samples,
   not one happy point.
 
-## Push toward end-to-end
+## Climb the fidelity ladder
 
-Standing rule: prefer the highest-fidelity test that stays deterministic, and mock only
-genuine external boundaries.
+PHILOSOPHY §18: **test behaviour, climb the ladder.** Most production bugs live at
+the seams between modules, at the I/O boundary, in how parts hand off to each
+other. A test that crosses a seam and stays deterministic is worth ten unit tests
+of the components in isolation. Unit tests have a place; they are **not** the
+load-bearing layer.
 
-- **Over-mocking.** A "unit" test that mocks through three internal modules to reach
-  the one under test is fragile and proves little. Flag it; propose the
-  real-collaborator version or a move to an integration lane.
-- **Hand-built stubs that encode assumptions.** A fixture written to match what you
-  *think* the upstream returns tests your assumption, not reality. Prefer a recorded
-  real response committed as a fixture; flag invented-shape stubs for boundary parsers.
-- **A heavily-mocked "unit" test that is really an integration test** — it belongs in
-  the integration lane, hitting the real upstream behind its key.
-- **Missing the integration rung.** When a change adds an integration boundary or
-  wires the pipeline, a parser unit test alone doesn't prove the live call works —
-  flag the absent integration test.
+| Rung | Tests | Choose this when |
+|---|---|---|
+| E2E | The full pipeline against a real or recorded external surface | Determinism is achievable (recorded fixtures, fixed time/RNG) |
+| Integration | Two or more real modules talking, mocking only true external boundaries | E2E is too slow or genuinely flaky |
+| Unit | One pure function, no collaborators | Behaviour is genuinely localized (domain math, parser shape, decay curve) |
+
+Standing review pressure: **could this test live one rung higher and stay
+deterministic?** Yes ⇒ flag it. The answer is "yes" more often than people think.
+
+Things to specifically flag:
+
+- **Over-mocking.** A "unit" test that mocks through three internal modules to
+  reach the one under test is fragile and proves little. Propose the
+  real-collaborator version or a move to the integration lane.
+- **Hand-built stubs that encode assumptions.** A fixture written to match what
+  you *think* the upstream returns tests your assumption, not reality. Prefer a
+  recorded real response committed as a fixture; flag invented-shape stubs for
+  boundary parsers.
+- **A heavily-mocked "unit" test that is really an integration test** — it
+  belongs in the integration lane, hitting the real upstream behind its key.
+- **Missing the integration rung.** When a change adds an integration boundary
+  or wires the pipeline, a parser unit test alone doesn't prove the live call
+  works — flag the absent integration test.
+- **A unit test that could trivially be an integration test.** If swapping the
+  stub for the real collaborator (with a recorded fixture for the actual
+  external boundary) wouldn't introduce flakiness, the integration version is
+  strictly better. Slower-but-real beats fast-but-fake.
 
 ## Patterns & hygiene (fast checks)
 

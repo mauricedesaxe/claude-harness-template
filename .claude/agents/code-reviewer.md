@@ -46,16 +46,32 @@ importing from a module's index over reaching into its internals.
 under `scripts/` reading their own ad-hoc flags). API keys are config — flag an inline
 key or a key read straight from `process.env` at a call site.
 
-**Logging.** Structured logging with a component-scoped child logger:
+**Logging and observability** (PHILOSOPHY §12). Structured logging with a
+component-scoped child logger:
 
 ```ts
 const log = logger.child({ component: "<module>" });
 log.info({ <fields> }, "<event>");
 ```
 
-Flag interpolated message strings (`log.info(\`fetched ${n}\`)`), bare `console.log` for
-diagnostics, and any log line that could include an API key. Pass errors as `{ err }` so
-the logger serialises them.
+Flag:
+
+- Interpolated message strings (`log.info(\`fetched ${n}\`)`).
+- Bare `console.log` for diagnostics.
+- Any log line that could include an API key or full PII.
+- **An external upstream call without logging** latency, status, retry count,
+  circuit-breaker state, and rate-limiter wait.
+- **A new error path that doesn't reach the error tracker** (Sentry or equivalent).
+  Even with `Result<T, E>` and no `throw`s, the error needs to be captured for
+  the operator-side visibility — flag a `Result.err()` path that is created and
+  consumed silently.
+- **Errors deliberately sampled out.** Sampling on successful traces / logs is
+  fine at scale (PHILOSOPHY §12 earn-its-keep); errors are always kept.
+- **In a multi-service change**: missing `traceparent` / `tracestate` propagation
+  (W3C Trace Context). Both Sentry and BetterStack consume OpenTelemetry, which
+  uses the standard; don't invent a homebrew correlation header.
+
+Pass errors as `{ err }` so the logger serialises them.
 
 **Error handling — `Result`, not `throw`.** Application code does not throw: every
 fallible function returns a `Result<T, E>` (or `ResultAsync`) with a typed error union,
@@ -80,16 +96,62 @@ the cache without the freshness field.
 
 ## Concurrency
 
-Upstream bursts must be bounded. The project's `CLAUDE.md` "Concurrency primitives"
-section names the stack (typically `Semaphore.run(() => CircuitBreaker.run(() =>
-withRetry(...)))` or equivalent). Flag:
+Upstream bursts must be bounded. The canonical stack from PHILOSOPHY §11 is **five
+primitives**, outermost → innermost:
 
-- A raw, unbounded `Promise.all` over upstream calls — it will trip free-tier rate
-  limits and dogpile a sick service.
-- A call site that retries by hand (`for`-loop + `setTimeout`) instead of using the
-  project's retry helper.
-- A reordered stack (retry outside the semaphore, etc.) — the order is load-bearing.
+```
+inFlight.run(key, () =>
+  rateLimiter.run(() =>
+    semaphore.run(() =>
+      breaker.run(() =>
+        withRetry(() => fetch(...), { shouldRetry, baseDelayMs, maxAttempts })))))
+```
+
+Functional implementation (`createX(opts)` factories returning closures, no classes);
+consumer-supplied policies; in-memory state by default.
+
+Flag:
+
+- A raw, unbounded `Promise.all` over upstream calls — it will trip free-tier
+  rate limits and dogpile a sick service.
+- An external call site that **skips one of the five primitives** without a
+  written reason. Each skip has earn-its-keep cases (§11), but they're explicit,
+  not silent omissions.
+- A reordered stack (retry outside the semaphore, breaker outside the rate-limiter,
+  in-flight inside any of the others). The order is load-bearing.
+- A call site that retries by hand (`for`-loop + `setTimeout`) instead of using
+  the project's `withRetry`.
 - 403/429/etc. from upstream not treated as retryable/limit signals.
+- A new primitive being added inline instead of via the project's
+  `server/concurrency/` module — the primitives are shared, not per-integration.
+
+## Database boundaries
+
+PHILOSOPHY §15: data and indexes live in the DB; **business rules live in the
+application layer**. Flag in a diff:
+
+- **Stored procedures or DB functions** that encode business decisions. A function
+  named `notify_listener` for `LISTEN/NOTIFY` plumbing is fine; one named
+  `calculate_order_total` or `compute_score` is business logic in the wrong place.
+- **Triggers that mutate data based on business rules.** A trigger touching
+  `updated_at` is plumbing; one recomputing a status field is business logic — flag.
+- **`CHECK` constraints** beyond simple, stable invariant range/shape checks.
+  `CHECK (price >= 0)` is fine. `CHECK (status IN ('draft', 'submitted',
+  'approved'))` is right at the line — defensible for stable enums; push back if
+  the values are likely to evolve.
+- **Materialized views** encoding domain calculations rather than caching
+  app-computed aggregates. The cache-of-aggregate case is fine (§5); the
+  formula-lives-here case is the violation.
+- **A migration that lacks a working `down()` (or equivalent)** without a comment
+  explaining why it is irreversible.
+- **Invasive migrations in production-touching code** — a single migration that
+  renames a populated column live, drops an in-use column, or changes a type
+  with existing rows. Propose the **expand → backfill → contract** sequence
+  (PHILOSOPHY §15) instead.
+- **Value types at the schema boundary** (PHILOSOPHY §16): a column storing a
+  moment-in-time as `bigint` (Unix seconds/ms) rather than `timestamptz`; a money
+  column as `float`/`real`/`double precision` rather than `numeric(p,s)` or
+  `bigint` minor units. Flag both.
 
 ## The type system as a guardrail
 
@@ -108,6 +170,17 @@ boolean bags.
 domain key (category, band, role, etc.) should use the `as const` union from the
 domain module, not a bare `string`. Don't demand narrowing for genuinely free-form text
 (place names, raw addresses, user input).
+
+**Branded types where domain values live** (PHILOSOPHY §14 + §16). A `string`
+parameter that means a `UserId`, a `number` parameter that means Unix seconds, or
+a `bigint` parameter that means cents — flag the bare type. The project's domain
+modules should expose branded aliases (`type UserId = string & { __brand: "UserId" }`
+or equivalent); call sites should use them. The compiler then refuses to confuse a
+`BookingId` with a `UserId`, or seconds with milliseconds. Don't flag bare
+primitives where the value is genuinely free-form (a parsed input that's about to
+be used and discarded). Do flag them at module boundaries, function signatures,
+DB-derived types, and anywhere two values of the same primitive type could be
+swapped without the type system complaining.
 
 **Purity leaks into the pure core.** If the project has a pure functional core (scoring,
 pricing, routing math, etc. — `CLAUDE.md` names it), flag any import of an integration,
