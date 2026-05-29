@@ -596,6 +596,372 @@ named way* — and document the named problem in the commit that adopts the buil
 
 ---
 
+## §14. Code-level discipline
+
+**Rule.** A small set of universal coding habits shape every file in every project.
+They are not all hard rules — but together they catch entire classes of bug at
+compile time or commit time, when fixing them is cheap.
+
+- **Functional over OOP.** Prefer factory functions returning closures over
+  `class` / `this`, and composition over inheritance. Stateful primitives (the
+  semaphores, breakers, in-flight maps of §11) are `createX(opts)` returning
+  closures over private state, not classes. Reserve classes for genuine
+  framework-interface compliance (a React `Component`, a Drizzle `pgTable`,
+  etc.), not as a stylistic preference.
+- **`Result<T, E>` over `throw`.** Application code does not throw. Every fallible
+  function returns a `Result` (neverthrow in TypeScript, `Either`/equivalent
+  elsewhere) carrying a typed error union. The caller handles failure as a
+  value. `_unsafeUnwrap` / `_unsafeUnwrapErr` are test-only. Total functions that
+  genuinely cannot fail are the exception.
+- **Parse at boundaries.** Every external input (env, network response, file
+  content) goes through a schema (Zod / Valibot / Pydantic / serde) at the
+  boundary. Never `JSON.parse` and cast.
+- **Discriminated unions over boolean flags.** Express multi-state outcomes as
+  tagged unions, not `{ found: boolean; failed: boolean }` bags. This is the
+  type-level form of the "two zeros" distinction (§11).
+- **Branded types whenever possible.** A `string` that means a user ID, a `number`
+  that means Unix seconds, a `bigint` that means cents — brand them at the type
+  level. TypeScript: intersection with an opaque tag (`type UserId = string & {
+  __brand: "UserId" }`). Rust: newtype pattern. Python: `NewType`. The compiler
+  then refuses "you passed a `BookingId` where `UserId` was expected" or "you
+  compared seconds to milliseconds." They are nearly free and *infinitely*
+  useful — reach for them by default.
+- **Atomic conventional commits.** One logical change per commit. The
+  `commit-msg` hook enforces the type prefix; the atomic discipline is on you.
+- **Plan first, attack the plan, gate on the user, then write code.** The `work`
+  skill encodes the workflow; this is the underlying habit. Designing in prose
+  where the cost of being wrong is a paragraph is cheaper than designing in code.
+
+**Why.** These habits compound. Each one alone is a small tax; collectively they
+shift large classes of bug from "discovered in production" to "caught at the
+moment you typed them."
+
+**Earn-its-keep.** A `class` is acceptable when the framework expects one. A
+`throw` is acceptable when the runtime expects one (a thrown `Response` in
+React Router 7, an `error()` in a loader). These are interface compliance, not
+deviations.
+
+---
+
+## §15. Database discipline
+
+**Rule.** The database stores and indexes data; the **application layer owns the
+rules**. Business logic in SQL is invisible to your code search, in a different
+language, harder to test, harder to evolve, and silently drifts out of sync
+with the app-side version. Keep it out.
+
+**Avoid in the database** (these are nudges, not hard prohibitions):
+
+- **Stored procedures and DB functions** that encode business decisions.
+- **Triggers** that mutate data based on business rules.
+- **`CHECK` constraints** that encode anything beyond simple, stable, invariant
+  range/shape checks. `CHECK (price >= 0)` is fine — that's a hard invariant.
+  `CHECK (status IN ('draft', 'submitted', 'approved'))` is right at the
+  line — defensible if the enum is genuinely stable; pushes back on it if the
+  values are likely to evolve.
+- **Materialized views** as a place to encode complex domain calculations. (A
+  materialized view as a *cache* of an aggregate the app already computes is
+  fine — see §5.)
+
+**Migrations: reversible by default, simple by default.** Each migration ships
+with a working `down()` (or equivalent) unless deliberately marked irreversible
+with a written reason. Roll-back is a real operation, not a hope.
+
+For any change that touches existing rows (rename, type change, column drop),
+default to the **expand → backfill → contract** pattern:
+
+1. **Expand**: add the new column / table / shape.
+2. **Backfill**: write to both old and new for a release; backfill historical
+   data in a job that can be paused / resumed.
+3. **Contract**: switch reads to new, then drop the old in a later release.
+
+Each step is a small, reversible migration. The big-bang migration that
+renames a live column under traffic is what burns you.
+
+**Earn-its-keep.** A genuinely irreversible migration (dropping a column that
+has been unread for years) is fine — document it. A trigger that protects a
+hard referential invariant the app cannot enforce is fine. A stored procedure
+for a perf-critical path that ran an explicit `EXPLAIN ANALYZE` to justify
+itself is fine. The bar is the same as §1: name the problem, articulate why
+the app-side version doesn't work, accept the operational cost.
+
+---
+
+## §16. Value-type discipline
+
+**Rule.** Certain primitive types **lie to you when used naively**. Encode them at
+the boundary so they can't.
+
+**Dates and times.**
+
+- **Wire format**: ISO-8601 with explicit UTC offset
+  (`2026-05-29T14:00:00Z` / `2026-05-29T14:00:00+00:00`). Never bare local time.
+- **Storage**: Postgres `timestamptz` (a UTC instant) or the language's equivalent
+  "moment in time with zone" type.
+- **Avoid numeric Unix timestamps.** "Is this seconds or milliseconds?" is a
+  question nobody should have to ask. Sources that hand you Unix time get
+  parsed into a temporal type at the boundary.
+- **If numeric seconds are unavoidable** (a third-party API expects them, an
+  embedded system emits them), use a **branded type** (§14):
+  `type UnixSeconds = number & { __brand: "UnixSeconds" }`. The compiler then
+  refuses to compare seconds with milliseconds. This is the canonical
+  branded-types example.
+
+**Durations** are typed too. `delayMs: number` and `delaySec: number` should
+not both be unbranded `number`s; they should be branded distinct types or a
+`Duration` value with explicit units.
+
+**Money.**
+
+- **Where math matters: never floating-point.** JavaScript's `0.1 + 0.2 !== 0.3`
+  is the famous case; most languages have the same problem at some
+  precision. In TypeScript, use `bigint` for whole units of the smallest
+  denomination (cents, satoshis) or `decimal.js` / equivalent when you need
+  arbitrary fractional precision.
+- **In Postgres**: `numeric(p, s)` is the safe default. Storing money as `text`
+  is a defensive option that preserves original precision through round-trips
+  at the cost of in-DB filtering/sorting/arithmetic — pick `text` when you
+  compute exclusively in the app, `numeric` when the DB also computes.
+- **Brand the money type**: `Cents`, `MoneyMinorUnits`. A `number` parameter
+  accidentally treated as cents when it was dollars is the kind of bug that
+  shows up on a wire transfer.
+
+**Why.** These tiny rules are nearly impossible to retrofit. By the time the
+bug shows up — a half-day duplicate in a timezone-naive timestamp, a rounding
+error in a billing run — you have a backfill problem on production data.
+Encoding at the boundary turns the entire class of bug into a compile error.
+
+**Earn-its-keep.** A throwaway script that prints a chart and exits is allowed
+to use floats. A throwaway script that prints "now" is allowed to use a naive
+`Date`. State the choice explicitly when you deviate so future-you reading the
+commit knows it was deliberate.
+
+---
+
+## §17. Feature flags
+
+**Rule.** Feature flags are good. Use them for half-shipped features, gradual
+rollouts, A/B experiments, and kill switches. **Store them in your own
+Postgres**, not in a third-party flag SaaS.
+
+**Why.** Feature flag systems are conceptually small — a flag has a name, a
+value (boolean / percentage / variant set), and optionally a targeting rule.
+You don't need LaunchDarkly or Statsig for that; a `feature_flags` table plus
+a thin reader does the job. Outsourcing them adds:
+
+- A new vendor dependency with its own outages on your hot path.
+- A network round-trip per evaluation (or a caching layer to mask it).
+- A SaaS bill for a feature you can implement in 200 lines.
+- Lock-in: if pricing or product direction shifts, you migrate every flag
+  reference in the codebase.
+
+Owning the flags in your Postgres also makes them participate in §13's "own
+the data" sub-rule: flag history, exposure events, who-toggled-what all live
+where the rest of your data lives.
+
+**The trunk-based pattern.** Feature branch → atomic commits → PR → rebase-merge
+to `main` → production deploy. Half-finished features hide behind a flag that
+defaults to off; the unfinished code still ships to production, gated. When
+ready, flip the flag (gradually if needed).
+
+**Earn-its-keep.** A flag earns its keep when it solves a real problem: a
+feature too big to ship atomically, an A/B cut, a fast kill switch for a
+regression. A flag is *anti*-keep when it becomes permanent dead code with
+both branches still maintained. Set a removal target when you add one, and
+follow through.
+
+---
+
+## §18. Testing philosophy
+
+**Rule.** **Test behaviour. Climb the fidelity ladder.** Most production bugs
+live at the seams — at integration layers, at I/O boundaries, in how modules
+hand off to each other. A test that crosses a seam *and stays deterministic*
+is worth ten unit tests of the components in isolation.
+
+**The fidelity ladder** (prefer the higher rung wherever determinism survives):
+
+| Rung | Tests | When to choose this |
+|---|---|---|
+| E2E | The full pipeline against a real or recorded external surface | Whenever determinism is achievable (recorded fixtures, fixed time, fixed RNG) |
+| Integration | Two or more real modules talking, mocking only true external boundaries | When E2E is too slow or genuinely flaky |
+| Unit | One pure function, no collaborators | When the behaviour is genuinely localized — domain math, parser shape, decay curve |
+
+Unit tests have a place; they are **not the load-bearing layer**. A unit-test-heavy
+suite passes while the system is broken — a function returning `Result.ok({})`
+satisfies a unit test even when its caller expects `{ status: "scored" }`. The
+mock-heavy unit world hides exactly the seam bugs that production exercises.
+
+**Concrete rules:**
+
+- **Test names are third-person verbs of observable behaviour.** `test("scores
+  a 5-minute grocery at full credit")`, not `test("computeScore works")` or
+  `test("calls decay")`.
+- **Recorded fixtures over invented stubs** for external boundaries. A response
+  shape you invented to match what you *think* the upstream returns tests
+  your assumption, not reality. Capture one real response, commit it, parse
+  it through the schema in tests.
+- **No `.skip`, no `.only`, no env-guarded skips.** A test that needs a key
+  fails loudly without the key.
+- **Tests in the same commit as the behaviour.** A new mapping, a new error
+  path, a new integration parser — all land with coverage in one commit.
+- **Drive `Result` to its `err` branch in tests.** A `Result`-returning function
+  whose tests only ever assert `isOk()` isn't tested.
+
+**Earn-its-keep.** Heavy mocking earns its keep only when the alternative is
+genuinely non-deterministic and no recording strategy works (a third-party
+system that doesn't replay sensibly, time-sensitive logic with no clock
+abstraction). It does *not* earn its keep merely because the higher-fidelity
+test "would be slower" — slower-but-real beats fast-but-fake.
+
+---
+
+## §19. Commercial readiness and authorization
+
+**Rule.** Every project declares whether it is **commercial-ready** or not. This
+single setting changes defaults in security-sensitive areas — primarily
+**authorization**.
+
+The declaration lives in `CLAUDE.md` near the top (a TODO marker is in the
+skeleton). Setting it deliberately at bootstrap prevents both modal failures:
+over-engineering a personal tool with full RBAC scaffolding, *and*
+under-engineering a SaaS with no authorization plan when the first customer
+arrives.
+
+**Defaults by readiness.**
+
+| Concern | Personal / non-commercial | Commercial-ready |
+|---|---|---|
+| App-layer authorization | Required (even one user has a principal) | Required; **RBAC** is the default model |
+| Postgres Row-Level Security | Optional, often overkill | **Strongly recommended** as the second policy layer |
+| Audit logging | Not required | Required for auth decisions and data mutations |
+| Authorization tests | Smoke tests | Each role × resource matrix tested explicitly |
+| PII handling | Project's discretion | Documented in `CLAUDE.md` with explicit rules |
+| Tenant isolation | N/A | Enforced and tested at both app and DB layer |
+
+**App-layer authorization is the default.** Even a one-user project has a
+"principal" and "permissions" — anything that isn't a query against fully
+public data needs a check. RBAC adds structure when distinct roles exist.
+
+**Postgres RLS is the second layer.** It runs *underneath* the application and
+catches authorization bugs the app misses — a forgotten `WHERE tenant_id = ?`
+becomes a silent zero-rows result instead of a cross-tenant leak. RLS is
+non-trivial to operate (connection pooling needs care, debugging is harder),
+so it earns its keep when the failure mode (data leak) is unacceptable — i.e.
+commercial systems.
+
+**Why this matters at bootstrap.** A commercial-ready project that ships
+without RBAC, RLS, and an authorization test matrix is the failure mode this
+section exists to prevent. Naming the readiness up front turns it into a
+single, visible choice rather than a hundred unmade decisions.
+
+**Earn-its-keep.** A non-commercial project that adopts the commercial defaults
+is fine — they're not harmful, just optional for that flavor. A commercial
+project that skips them is the violation.
+
+---
+
+## §20. Frontend defaults and local-first
+
+**Rule.** The frontend feels **native, instant, and keyboard-first**. The target is
+interactions under the **Doherty threshold (~400 ms)**, where the user
+perceives the system as responsive enough to stay in flow. The defaults below
+deliver this for app-shaped products; small enough surfaces (a static blog,
+a single-form landing page) skip them.
+
+**Default stack:**
+
+| Concern | Default | Notes |
+|---|---|---|
+| Server state | **TanStack Query** | Cache, refetch, optimistic update, suspense — the boring middle layer of every app |
+| Local UI state | **Zustand**, or React's built-ins | `useState`/`useReducer` for component-scoped; Zustand for app-wide UI state |
+| Styling | **Tailwind + `neobrutalist-pop`** | Tailwind for the system, the skill for the look |
+| Forms | **TanStack Form** | Type-safe, server-action-friendly, lower ergonomic tax than the alternatives |
+| Routing | Whatever §8's chosen architecture brings | React Router for the SPA / SSR monolith, the framework's router for Astro |
+
+**Earn-its-keep — the simplicity exception.** Each of these is overkill for a
+small enough surface. An Astro blog with three pages and no interactivity
+needs none of them. A landing page with a contact form doesn't need TanStack
+Form. A static dashboard with one fetch doesn't need TanStack Query. *Reach
+for these tools when the complexity is real; skip them when it isn't.*
+Simplicity is the tier-1 value.
+
+**Local-first feel.** The Doherty target shapes how the UI behaves:
+
+- **Keyboard-first.** Every primary action has a shortcut. Show the shortcut
+  in the UI (the `.brut-kbd` element from the `neobrutalist-pop` skill, or
+  equivalent). `⌘K` focuses search, `Space` toggles the primary action,
+  `Esc` cancels, `Enter` confirms, single letters for nav.
+- **Optimistic updates.** Local state mutates the moment the user acts; the
+  server reconciles in the background. Failures show as a toast with retry /
+  undo, not a blocking dialog.
+- **No spinners for local actions.** Spinners are for genuine network waits,
+  not for "I just clicked a button and you're about to redraw."
+- **View state in the URL.** Filters, search, open modal — encode in the URL
+  so reload, back / forward, and shared links all work.
+
+This isn't only aesthetic. It's the difference between "this software feels
+good to use" and "this software is fine, I guess." Most products fail the
+Doherty test by default; the ones that pass feel noticeably alive.
+
+**Earn-its-keep.** A truly content-driven site (documentation, a blog)
+doesn't need the full local-first treatment — readers aren't pressing
+keyboard shortcuts at it. For anything where the user *does things*, the
+Doherty target is the bar.
+
+---
+
+## §21. Documentation discipline
+
+**Rule.** Write **why**, not **what**. The code says *what*; documentation,
+comments, and commit messages say *why*. They are also simple, clear, and
+not needlessly verbose.
+
+**Comments.** Default to no comments. Add one only when:
+
+- A **non-obvious constraint or invariant** lives here ("this loop must run
+  before X because Y").
+- A **workaround for a specific external bug** ("upstream returns 200 with
+  HTML on rate-limit; treat as 429").
+- A **surprising algorithmic choice** ("greedy match is intentional — the
+  recursive version was 3× slower on N>10k").
+
+Don't write comments that:
+
+- Explain *what* the code does — the code already does that.
+- Reference the current task / fix / caller ("added for issue #123") — that
+  belongs in the commit message and rots as the codebase evolves.
+- Restate the function signature in prose above the function.
+
+**Commit messages.** Same rule, harder discipline. The subject line *is* the
+*what* in compressed form (Conventional Commits). The body — when present —
+explains the **why** and the **how-if-non-obvious**. Skip the body when the
+subject is enough; never pad. Bad: "Updated `score.ts` to handle the new
+mapping." (What the diff already shows.) Good: "Treat fast_food as additive
+coverage, not parity." (Why the rule changed.)
+
+**ADRs (Architecture Decision Records).** ADRs earn their keep as **temporary
+discussion artefacts** for an in-flight decision:
+
+1. A short doc captures the question, the options, the trade-offs.
+2. The team / individual debates in PR comments or chat.
+3. The chosen direction lands in the codebase (and in `CLAUDE.md` or
+   `docs/PHILOSOPHY.md` if it's a durable convention).
+4. The ADR is then **archived or removed**.
+
+Permanent ADRs as a documentation strategy compete with `CLAUDE.md` + commit
+history and tend to rot — a decision recorded in 2023 referenced by an ADR
+from 2021 is harder to track than the commits that implemented the change.
+Prefer letting the code, the commits, and the durable docs speak.
+
+**Earn-its-keep.** A permanent ADR earns its keep when the decision involves
+something the code genuinely can't express — a vendor choice, a process
+change, an SLA commitment, a contractual constraint. Even then, consider
+whether it belongs in `CLAUDE.md` (a durable rule) or `docs/PHILOSOPHY.md`
+(a durable principle) before it earns its own file.
+
+---
+
 ## What this document is not
 
 - A roadmap. Sections aren't features; they're principles.

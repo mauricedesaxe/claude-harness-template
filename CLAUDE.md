@@ -22,6 +22,14 @@ must preserve. Examples: "the score stays trustworthy and explainable", "the lat
 budget stays under N", "the export is reproducible". This is the bar every plan,
 diff, and review is judged against. -->
 
+**Commercial readiness:** <!-- TODO: yes / no. See PHILOSOPHY §19. Set to "yes" if
+this project handles other people's data, runs in production for paying users, or
+otherwise has data-leak as an unacceptable failure mode. Setting it to "yes" makes
+RBAC, Postgres RLS, audit logging, authorization-matrix tests, and explicit PII
+handling required defaults rather than optional. Setting it to "no" leaves those as
+optional. Pick deliberately at bootstrap; the choice cascades through the
+Authorization and Observability sections below. -->
+
 ## Philosophy
 
 This project follows the durable conventions in [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md)
@@ -30,7 +38,10 @@ file is silent or ambiguous. Specific sections referenced inline: §1 Earn its k
 §2 Languages, §3 Single-instance default, §4 Modular monolith, §5 Postgres only,
 §6 Managed platforms, §7 No serverless / no edge, §8 Web architecture matrix,
 §9 Cloudflare, §10 End-to-end type safety, §11 API integration primitives,
-§12 Observability, §13 Outsource the non-core.
+§12 Observability, §13 Outsource the non-core, §14 Code-level discipline,
+§15 Database discipline, §16 Value-type discipline, §17 Feature flags,
+§18 Testing philosophy, §19 Commercial readiness & authorization,
+§20 Frontend defaults & local-first, §21 Documentation discipline.
 
 Where this file overrides PHILOSOPHY.md, the override must name a specific project
 reason that clears §1's earn-its-keep bar.
@@ -146,6 +157,31 @@ command, healthcheck path). -->
 The hard constraint is PHILOSOPHY §7 — whichever pattern, the runtime is a
 long-running owned server. -->
 
+## Frontend defaults
+
+For app-shaped products (skip this whole section when the surface is a static blog
+or a single-form landing page — per PHILOSOPHY §20, simplicity is tier-1):
+
+- **Server state:** TanStack Query.
+- **Local UI state:** Zustand for app-wide; React `useState` / `useReducer` for
+  component-scoped.
+- **Styling:** Tailwind + the `neobrutalist-pop` skill.
+- **Forms:** TanStack Form.
+
+**Local-first feel** is the product target — interactions under the Doherty
+threshold (~400 ms) so the UI feels alive:
+
+- Every primary action has a keyboard shortcut, shown in the UI (`.brut-kbd` from
+  the `neobrutalist-pop` skill).
+- Optimistic updates; the server reconciles in the background. Failures surface
+  as a toast with retry/undo, not a blocking dialog.
+- No spinners for local actions — only genuine network waits.
+- View state (filters, search, open modal) lives in the URL.
+
+<!-- TODO: this project's specific frontend stack pinned with versions, where the
+TanStack Query client / Zustand stores / form definitions live, and the keyboard
+shortcut map. -->
+
 ## Hard rules
 
 - **Earn its keep.** Any architectural complexity beyond the §3 / §5 / §6 / §7
@@ -187,12 +223,30 @@ long-running owned server. -->
   the error as a typed discriminated union, never a thrown string. Total functions
   that genuinely cannot fail are the exception. `_unsafeUnwrap`/`_unsafeUnwrapErr`
   are for tests only.
+- **Branded types wherever possible** (PHILOSOPHY §14 + §16). A `string` that means
+  a user ID, a `number` that means Unix seconds, a `bigint` that means cents — brand
+  them at the type level so the compiler catches "passed a `BookingId` where
+  `UserId` was expected" and "compared seconds to milliseconds." Nearly free,
+  *infinitely* useful — default to using them.
+- **Database stores data; app owns the rules** (PHILOSOPHY §15). No business logic
+  in stored procedures, triggers, or non-trivial `CHECK` constraints. Migrations
+  reversible by default; invasive changes follow expand → backfill → contract.
+- **Feature flags live in our Postgres** (PHILOSOPHY §17). No third-party flag
+  SaaS. Trunk-based: half-shipped features hide behind a flag that defaults to
+  off; flag has a removal target when added.
 - **End-to-end type safety** (PHILOSOPHY §10). Every network response parses through
   a schema at the boundary. Frontend ↔ backend boundaries are typed via tRPC,
   OpenAPI codegen, or a framework's native loader/action typing — never an untyped
   fetch wrapper.
+- **Test behaviour; climb the fidelity ladder** (PHILOSOPHY §18). Bugs live at the
+  seams — prefer the highest-fidelity test that stays deterministic. Recorded
+  fixtures over invented stubs. Unit tests are a tool, not the load-bearing layer.
 - **Tests must always run.** No `skip`, no conditional skipping. A test that needs a
   key fails loudly without it.
+- **Comments and commits say *why*, not *what*** (PHILOSOPHY §21). The code says
+  what; you say why. Default to no comments; add one when a non-obvious invariant,
+  external-bug workaround, or surprising choice lives at that spot. Commit bodies
+  same rule — skip the body when the subject is enough.
 <!-- TODO: domain-specific hard rules go here — e.g. "Scoring is a pure function",
 "Pricing math lives in one module", "All money is integer minor units". -->
 - **Modules are domain models.** A file's name describes the subject it owns, not a
@@ -249,11 +303,75 @@ retry loops are violations.
 
 -->
 
+## Database discipline
+
+Per PHILOSOPHY §15: data and indexes live in the DB; business rules live in the
+application layer. Avoid stored procedures, triggers, non-trivial `CHECK`
+constraints, and materialized views that encode domain logic. A materialized view
+*as a cache of an aggregate the app already computes* is fine — see Caching below.
+
+**Migrations** are reversible by default — each migration ships a working `down()`
+unless deliberately marked irreversible with a written reason. Invasive changes
+(renames, type changes, column drops on populated rows) follow the
+**expand → backfill → contract** pattern from PHILOSOPHY §15.
+
+**Value types at the boundary** (PHILOSOPHY §16):
+
+- Dates: `timestamptz` in Postgres, ISO-8601 with UTC offset on the wire. Avoid
+  Unix numeric timestamps; if unavoidable, brand them.
+- Money: where math matters, `numeric(p, s)` in Postgres + `bigint`/`decimal.js`
+  in app code. Brand money types. Never floating-point.
+- Durations: branded types with explicit units.
+
+<!-- TODO: this project's migrations tool (drizzle-kit, prisma migrate, sqlx, alembic,
+etc.), the schema entry-point file, and any project-specific value-type rules
+(e.g. "all money fields are `cents: bigint`", "all timestamps are UTC `timestamptz`"). -->
+
 ## Caching
 
 <!-- TODO: cache schema, TTL / freshness field, repository module path. Per
-PHILOSOPHY §5, prefer Postgres (a `*_cache` table, materialized view, or
-pre-computed rollup) over Redis. -->
+PHILOSOPHY §5, prefer Postgres (a `*_cache` table, materialized view as a pure
+aggregate cache, or pre-computed rollup) over Redis. -->
+
+## Feature flags
+
+Per PHILOSOPHY §17: feature flags live in **this project's Postgres**, not in a
+third-party flag SaaS. Trunk-based: half-shipped features hide behind a flag that
+defaults to off; the unfinished code still ships to production, gated; flag has a
+named removal target.
+
+<!-- TODO: this project's flag table location, the reader API, and the convention
+for flag naming. Pattern:
+
+- Table: `feature_flags(name TEXT PRIMARY KEY, value JSONB NOT NULL, removed_after DATE)`
+- Reader: `flags.evaluate(name, { userId, ... }) -> Result<FlagValue, FlagError>`
+- Naming: `<area>.<feature>` (e.g. `scoring.fast_food_additive`)
+-->
+
+## Authorization
+
+Per PHILOSOPHY §19: defaults are gated by the **Commercial readiness** declaration
+at the top of this file.
+
+**App-layer authorization is required for every project.** Even a single user has
+a principal; even one resource that isn't fully public needs a permission check.
+
+For **commercial-ready projects**:
+
+- **RBAC** at the app layer is the default model.
+- **Postgres Row-Level Security** is the second policy layer — it catches the
+  bugs the app misses (a forgotten `WHERE tenant_id = ?` becomes zero rows, not a
+  cross-tenant leak).
+- **Audit logging** on every authorization decision and data mutation.
+- **Authorization tests** cover the role × resource matrix explicitly.
+- **Tenant isolation** is enforced and tested at both app and DB layer.
+
+For **non-commercial projects**: app-layer authorization required; the rest are
+optional.
+
+<!-- TODO: this project's auth library (BetterAuth recommended per PHILOSOPHY §13),
+the role model, where RLS policies live (if commercial-ready), and the audit-log
+schema. -->
 
 ## Observability
 
@@ -277,7 +395,20 @@ the key. Domain-meaningful events get their own log line.
 
 ## Testing
 
-<!-- TODO: name the test runners and lanes. Examples:
+Per PHILOSOPHY §18: **test behaviour, climb the fidelity ladder.** Most production
+bugs live at the seams; a test that crosses a seam and stays deterministic is
+worth ten unit tests of the components in isolation. Unit tests have a place;
+they are not the load-bearing layer.
+
+The fidelity ladder (prefer the higher rung wherever determinism survives):
+
+1. **E2E / pipeline** against a real or recorded external surface.
+2. **Integration** — two or more real modules talking, mocking only true external
+   boundaries.
+3. **Unit** — one pure function, no collaborators (genuinely localized behaviour
+   only: domain math, parser shape, decay curve).
+
+<!-- TODO: name the test runners and lanes. Pattern:
 Vitest for unit, Playwright for e2e. The lanes split into `__tests__/` (deterministic,
 code correctness), `__integration__/` (live, keyed, pipeline drift), and any others. -->
 
@@ -286,9 +417,12 @@ code correctness), `__integration__/` (live, keyed, pipeline drift), and any oth
   boundaries (curve inflection points, caps at exactly the cap and at cap+1).
 - **Integration boundaries are tested with recorded fixtures**, not live calls —
   capture a real upstream response once, parse it through the schema in tests.
-- **Test names are third-person verbs.** `test("scores a 5-minute grocery at full
-  credit")`, `describe("decay")`. Behaviour, not implementation.
-- **All tests always run.** No `.skip`, no conditional skipping.
+- **Test names are third-person verbs of observable behaviour.** `test("scores a
+  5-minute grocery at full credit")`, `describe("decay")`. Behaviour, not
+  implementation.
+- **All tests always run.** No `.skip`, no `.only`, no env-guarded skipping.
+- **Drive `Result` to its `err` branch.** A `Result`-returning function whose
+  tests only ever assert `isOk()` isn't tested.
 - **New behaviour ships with tests in the same commit.** A new mapping, a curve
   change, a new integration parser — all land with coverage, including the failure
   branch (the `unavailable` path).
@@ -357,12 +491,18 @@ backlinks. When an issue is genuinely waiting on something, apply the `blocked` 
 
 ## Style
 
-- **Functional over OOP.** Prefer factory functions returning closures over
-  `class`/`this`, and composition over inheritance. Stateful primitives are
-  `createX(opts): Result<X, Error>` returning an object of closures over private
-  state — no classes. This matches the `Result` / pure-function grain of the domain
-  core and the API-integration primitives (PHILOSOPHY §11). Reserve classes for
-  genuinely rare cases, and say why.
+- **Functional over OOP** (PHILOSOPHY §14). Prefer factory functions returning
+  closures over `class`/`this`, and composition over inheritance. Stateful
+  primitives are `createX(opts): Result<X, Error>` returning an object of closures
+  over private state — no classes. Reserve classes for genuine framework-interface
+  compliance and say why.
+- **Comments: default to none, write why-not-what** (PHILOSOPHY §21). Add one
+  when the non-obvious WHY lives there — a hidden constraint, a workaround for a
+  specific external bug, a surprising algorithmic choice. Don't restate the code;
+  don't reference the current task or fix.
+- **Commit subjects are the *what* in compressed form**; commit bodies, when
+  present, explain the *why* and the *how if non-obvious*. Skip the body when the
+  subject is enough.
 - **Formatting & linting.** <!-- TODO: name the formatter and linter (Biome, Prettier
   + ESLint, etc.). Don't fight the formatter. -->
 - **Imports** follow the project's configured path aliases (`~/…`, `@/…`); don't

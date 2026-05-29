@@ -100,12 +100,27 @@ template feeding many projects with different needs.
   never sampled out. Sentry + BetterStack as defaults; self-hosted Grafana stack
   must earn its keep.
 - **End-to-end type safety.** Schema at every boundary; tRPC / OpenAPI / native
-  framework typing between front and back.
+  framework typing between front and back. **Branded types** wherever they fit.
 - **API integrations** stack five primitives: in-flight map, rate limiter,
   semaphore, circuit breaker, retry — in that order. Functional,
   consumer-policied, in-memory.
+- **Database stores data; app owns the rules.** No business logic in stored
+  procedures, triggers, or non-trivial constraints. Migrations reversible by
+  default; expand → backfill → contract for invasive changes.
+- **Value types at the boundary.** UTC `timestamptz` for time. `bigint` /
+  `decimal.js` for money. Avoid Unix-numeric timestamps and floating-point money.
+- **Feature flags live in our Postgres.** No third-party flag SaaS.
+- **Test behaviour, climb the fidelity ladder.** Bugs live at the seams.
+  Recorded fixtures over invented stubs. Unit tests are a tool, not the load-
+  bearing layer.
+- **Commercial readiness** is declared per project. Commercial-ready ⇒ RBAC + RLS
+  + audit logging + authorization-matrix tests required.
+- **Frontend (when app-shaped):** TanStack Query + Zustand + Tailwind +
+  `neobrutalist-pop` + TanStack Form. Local-first feel under the Doherty
+  threshold; keyboard-first. Skip the stack on small surfaces — simplicity wins.
 - **Atomic conventional commits**, no `--no-verify`, no `Co-Authored-By`. Rebase-merge.
 - **Plan first, attack the plan, gate on the user, then write code.**
+- **Comments and commits say *why*, not *what*.** Default to no comments.
 - **Fail loud, distinguish "no data" from "fetched zero"** — the "two zeros" rule.
 - **No `throw` in app code** — return a `Result<T, E>`.
 - **Felt product value** is the bar for issues — not "feature vs refactor".
