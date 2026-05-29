@@ -8,8 +8,9 @@ Guidance for Claude Code (and any other agent) working in this repository.
   This file is the *skeleton* installed by `claude-harness-template`. The sections
   marked "TODO" are the project-specific body you fill in for *this* repo: what it
   does, its architecture, its load-bearing invariants, its triage labels. The other
-  sections (Hard rules, Type system, Testing, Git workflow, Style, Skills) are the
-  universal philosophy — keep them, edit only if your project genuinely diverges.
+  sections (Philosophy, Architecture defaults, Hosting, Hard rules, Type system,
+  Testing, Git workflow, Style, Skills) are the universal philosophy — keep them,
+  edit only if your project has a written earn-its-keep reason to diverge.
 
   Delete this comment block once you've filled in the TODOs.
 -->
@@ -20,6 +21,18 @@ The bar for changes is: <!-- TODO: one sentence — the load-bearing quality the
 must preserve. Examples: "the score stays trustworthy and explainable", "the latency
 budget stays under N", "the export is reproducible". This is the bar every plan,
 diff, and review is judged against. -->
+
+## Philosophy
+
+This project follows the durable conventions in [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md)
+— that file is the **why** behind the rules below, and the canonical source when this
+file is silent or ambiguous. Specific sections referenced inline: §1 Earn its keep,
+§2 Languages, §3 Single-instance default, §4 Modular monolith, §5 Postgres only,
+§6 Managed platforms, §7 No serverless / no edge, §8 Web architecture matrix,
+§9 Cloudflare, §10 End-to-end type safety, §11 API integration primitives.
+
+Where this file overrides PHILOSOPHY.md, the override must name a specific project
+reason that clears §1's earn-its-keep bar.
 
 ## Project status
 
@@ -64,7 +77,9 @@ The reviewer **agents** in `.claude/agents/` are run *by* skills, not invoked di
 
 ## Runtime
 
-<!-- TODO: language, version, package manager, lockfile policy. Examples:
+- **Language: TypeScript** by default (PHILOSOPHY §2). Python / Rust may be used only
+  where they specifically earn their keep — name the reason in this section if so.
+<!-- TODO: node version, package manager, lockfile policy. Pattern:
 
 - **Node 22 + pnpm** (pinned via `.node-version` / `packageManager`). Never `npm`,
   never a global tool. TypeScript throughout; run scripts with `pnpm exec tsx <file>`.
@@ -74,13 +89,66 @@ The reviewer **agents** in `.claude/agents/` are run *by* skills, not invoked di
   add a dependency version younger than 7 days.
 -->
 
-## Architecture
+## Architecture defaults
+
+These come from PHILOSOPHY.md and apply to every project unless overridden with a
+written earn-its-keep reason:
+
+- **Single deployable** (PHILOSOPHY §3). One application instance + one Postgres
+  instance is the starting point; background workers run on the same machine.
+  Multi-instance, read replicas, Kafka, Redis, and a load balancer must earn their
+  keep. Queues like Graphile Worker / `pg-boss` running on the same Postgres are the
+  default for async work.
+- **Modular monolith** (PHILOSOPHY §4). Code is organized by **business domain**,
+  not by technical layer. A new domain is a new module folder, not a new repo.
+- **Data: Postgres only** (PHILOSOPHY §5). SQLite, Kafka, Redis, MongoDB, Timescale /
+  Influx / domain-specific DBs are rejected by default. Postgres extensions
+  (JSONB, PostGIS, pgvector, partitioning) cover most "specialty" needs. Postgres
+  also handles queues and pre-computed aggregates.
+
+## Architecture (this project)
 
 <!-- TODO: target layout — directory map + one-line per module describing what it
-owns. Name the external-dependency boundaries here so reviewers can flag bypasses. -->
+owns. Name the external-dependency boundaries here so reviewers can flag bypasses.
+The shape should reflect PHILOSOPHY §4 (domain-organized) — e.g. `modules/<domain>/`
+or a domain-shaped top-level like `server/{integrations,scoring,...}`. -->
+
+## Hosting & deployment
+
+- **Default platform**: a managed Docker target (Railway, Render, DigitalOcean App
+  Platform) — see PHILOSOPHY §6. Ship a Dockerfile, push. No Terraform, no
+  Kubernetes, no raw EC2 by default.
+- **No serverless, no edge** for the app layer (PHILOSOPHY §7). The app runs as a
+  long-running owned server, close to the database. This holds even with SSR
+  frameworks (React Router 7, TanStack Start) — deploy to a server, not to a
+  serverless adapter.
+- **CDN: Cloudflare** (PHILOSOPHY §9) for the frontend / static hosting / DNS /
+  TLS. Cloudflare Workers / KV / D1 are excluded by §7 unless a specific exception
+  applies.
+
+<!-- TODO: this project's specific deploy target (e.g. "Railway, single web service +
+Postgres add-on") and any project-specific deployment notes (env-var setup, build
+command, healthcheck path). -->
+
+## Web architecture
+
+<!-- TODO: pick from the matrix in PHILOSOPHY §8 and name the choice + the reason:
+
+- **React SPA + Express backend** (separate deploys) — for highly interactive apps
+  with no SEO-critical pages. Type safety via tRPC (preferred) or OpenAPI codegen.
+- **React Router 7 / TanStack Start monolith (SSR on owned server)** — for
+  SEO-critical, fast-first-paint apps where mixed static + interactive content
+  benefits from server-side rendering. Framework-native loader/action type safety.
+- **Astro (static or with Node adapter)** — for marketing sites, blogs,
+  e-commerce-light, content-heavy pages with sprinkles of interactivity.
+
+The hard constraint is PHILOSOPHY §7 — whichever pattern, the runtime is a
+long-running owned server. -->
 
 ## Hard rules
 
+- **Earn its keep.** Any architectural complexity beyond the §3 / §5 / §6 / §7
+  defaults must clear PHILOSOPHY §1's bar before it lands.
 - **Conventional commits.** Enforced by the `commit-msg` hook. Types:
   `feat|fix|refactor|chore|docs|test|style|perf|ci|build|revert`. One logical change
   per commit — **atomic**. Don't fold unrelated cleanup into a feature commit.
@@ -99,10 +167,14 @@ owns. Name the external-dependency boundaries here so reviewers can flag bypasse
   simply had nothing.
 - **No `throw` in application code — return a `Result` (neverthrow / equivalent).**
   Every fallible operation returns `Result<T, E>` (or `ResultAsync` for async) and the
-  caller handles the outcome — a failure is a value, not a control-flow jump. This
-  covers both input-guard failures and operational ones; model the error as a typed
-  discriminated union, never a thrown string. Total functions that genuinely cannot
-  fail are the exception. `_unsafeUnwrap`/`_unsafeUnwrapErr` are for tests only.
+  caller handles the outcome — a failure is a value, not a control-flow jump. Model
+  the error as a typed discriminated union, never a thrown string. Total functions
+  that genuinely cannot fail are the exception. `_unsafeUnwrap`/`_unsafeUnwrapErr`
+  are for tests only.
+- **End-to-end type safety** (PHILOSOPHY §10). Every network response parses through
+  a schema at the boundary. Frontend ↔ backend boundaries are typed via tRPC,
+  OpenAPI codegen, or a framework's native loader/action typing — never an untyped
+  fetch wrapper.
 - **Tests must always run.** No `skip`, no conditional skipping. A test that needs a
   key fails loudly without it.
 <!-- TODO: domain-specific hard rules go here — e.g. "Scoring is a pure function",
@@ -117,7 +189,7 @@ Lean on compile-time checks; save runtime checks for what types can't see — en
 network responses.
 
 - **Parse at boundaries.** Every external response goes through a schema (Zod /
-  Valibot / Pydantic / etc.) in its integration module the moment it arrives. Don't
+  Valibot / Pydantic / serde) in its integration module the moment it arrives. Don't
   `JSON.parse` and cast — let the schema fail loudly so malformed upstream data never
   reaches the domain core.
 - **Discriminated unions over boolean flags.** Model a result as a tagged union —
@@ -129,20 +201,43 @@ network responses.
 - **`as const` for domain keys, weights, and error codes** so callers get narrow types.
 - **No `as any`, no non-null `!`.** If you reach for them, the model is wrong — fix it.
 
-<!-- TODO (if applicable): External data, rate limits & ToS.
-List each upstream the project consumes with its rate limits, the module that owns it,
-and any required attribution (e.g. "© OpenStreetMap contributors" for OSM data). -->
+## External integrations & concurrency primitives
 
-<!-- TODO (if applicable): Domain section.
-The scoring/pricing/routing model, its load-bearing invariants, where weights and
-mappings live, how to extend it. This is what the domain reviewer enforces. -->
+Every integration with an external API stacks five primitives in this order
+(outermost → innermost), per PHILOSOPHY §11:
 
-<!-- TODO (if applicable): Concurrency primitives.
-Name the project's `Semaphore` / `CircuitBreaker` / `withRetry` (or equivalents) and
-the order they stack. Anything bursty must use them. -->
+```
+inFlight.run(key, () =>
+  rateLimiter.run(() =>
+    semaphore.run(() =>
+      breaker.run(() =>
+        withRetry(() => fetch(...), { shouldRetry, baseDelayMs, maxAttempts })))))
+```
 
-<!-- TODO (if applicable): Caching.
-The cache schema, TTL/freshness field, and which repos own access. -->
+- Functional implementation: `createX(opts)` factories returning closures, no classes.
+- Consumer-supplied policies (caps, thresholds, `shouldRetry` predicates).
+- In-memory state by default — matches the single-instance default (§3). Swap for a
+  shared backing only after §1 has been cleared.
+- Each primitive returns a `Result<T, E>` with a typed error union; nothing throws.
+
+The reference implementation lives in `server/concurrency/` (or the project's
+equivalent — see Architecture above). All upstream calls go through it; ad-hoc
+`Promise.all` over external calls, hand-rolled `setTimeout` throttles, and inline
+retry loops are violations.
+
+<!-- TODO: list each upstream this project consumes:
+
+| Upstream | Owner module | Free-tier limits | User-Agent | Attribution |
+|---|---|---|---|---|
+| <name> | server/integrations/<name>.ts | <rate / day / month> | <UA string> | <if required> |
+
+-->
+
+## Caching
+
+<!-- TODO: cache schema, TTL / freshness field, repository module path. Per
+PHILOSOPHY §5, prefer Postgres (a `*_cache` table, materialized view, or
+pre-computed rollup) over Redis. -->
 
 ## Testing
 
@@ -161,8 +256,6 @@ code correctness), `__integration__/` (live, keyed, pipeline drift), and any oth
 - **New behaviour ships with tests in the same commit.** A new mapping, a curve
   change, a new integration parser — all land with coverage, including the failure
   branch (the `unavailable` path).
-
-<!-- TODO (if applicable): Frontend / UI section. -->
 
 ## Issue triage
 
@@ -232,7 +325,8 @@ backlinks. When an issue is genuinely waiting on something, apply the `blocked` 
   `class`/`this`, and composition over inheritance. Stateful primitives are
   `createX(opts): Result<X, Error>` returning an object of closures over private
   state — no classes. This matches the `Result` / pure-function grain of the domain
-  core. Reserve classes for genuinely rare cases, and say why.
+  core and the API-integration primitives (PHILOSOPHY §11). Reserve classes for
+  genuinely rare cases, and say why.
 - **Formatting & linting.** <!-- TODO: name the formatter and linter (Biome, Prettier
   + ESLint, etc.). Don't fight the formatter. -->
 - **Imports** follow the project's configured path aliases (`~/…`, `@/…`); don't

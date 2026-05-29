@@ -22,7 +22,11 @@ shared "Lemon Pie" UI vocabulary.
     code-reviewer.md        engineering-quality reviewer
     test-reviewer.md        adversarial test reviewer
     plan-reviewer.md        adversarial plan reviewer (run before code exists)
-CLAUDE.md                   skeleton: universal philosophy + per-project TODOs
+docs/
+  PHILOSOPHY.md             durable "why" doc — single-instance, Postgres-only,
+                            no serverless, API-integration primitives, etc.
+CLAUDE.md                   skeleton: short rules + per-project TODOs, references
+                            PHILOSOPHY.md for the long-form reasoning
 bootstrap-harness/
   SKILL.md                  the global skill that installs everything above
 ```
@@ -50,11 +54,17 @@ Inside any git repo:
 ```
 
 Claude clones the template, overwrites the universal skills/agents into `.claude/`,
-preserves any non-universal ones already there, and writes a `CLAUDE.md` skeleton (only
+overwrites `docs/PHILOSOPHY.md` (the canonical "why" doc, always synced), preserves
+any non-universal skills/agents already there, and writes a `CLAUDE.md` skeleton (only
 if one doesn't exist). Then fill the `<!-- TODO -->` markers in `CLAUDE.md` with the
 project's specifics: what the project does, its architecture, the load-bearing bar
 ("the score stays trustworthy and explainable", "the latency budget stays under N",
 etc.), area labels, and (if applicable) GitHub Project IDs.
+
+`docs/PHILOSOPHY.md` is the load-bearing reference doc — read it once, then let
+`CLAUDE.md` point at its section numbers (§1 Earn its keep, §3 Single-instance
+default, §5 Postgres only, §7 No serverless / no edge, §11 API integration
+primitives, etc.).
 
 ## Customizing
 
@@ -69,18 +79,30 @@ template feeding many projects with different needs.
 
 ## Philosophy in one breath
 
-- **Atomic conventional commits**, no `--no-verify`, no `Co-Authored-By`.
+- **Earn its keep.** Any complexity beyond the single-machine default needs a
+  named, current problem and an articulated reason the simpler thing won't work.
+- **TypeScript by default.** Python and Rust earn their keep.
+- **Single instance, one Postgres, modular monolith.** Replicas, queues like
+  Kafka, Redis, k8s all earn their keep. Background queues on Postgres (Graphile,
+  pg-boss) are the default async story.
+- **Postgres only.** Reject SQLite, Kafka, Redis, Mongo, Timescale, etc.
+- **Managed Docker platforms** (Railway / Render / DO App Platform) > IaC, k8s, raw
+  cloud. Dockerfile + push.
+- **No serverless, no edge** for the app layer. App close to DB; CDN handles user
+  latency. Cloudflare for CDN.
+- **End-to-end type safety.** Schema at every boundary; tRPC / OpenAPI / native
+  framework typing between front and back.
+- **API integrations** stack five primitives: in-flight map, rate limiter,
+  semaphore, circuit breaker, retry — in that order. Functional,
+  consumer-policied, in-memory.
+- **Atomic conventional commits**, no `--no-verify`, no `Co-Authored-By`. Rebase-merge.
 - **Plan first, attack the plan, gate on the user, then write code.**
 - **Fail loud, distinguish "no data" from "fetched zero"** — the "two zeros" rule.
 - **No `throw` in app code** — return a `Result<T, E>`.
-- **Parse at boundaries** — schema-validate every external response.
-- **Pure domain core**, side effects live at the edges.
-- **Rebase-merge**, linear history, branch commit messages good enough to live on
-  `main`.
 - **Felt product value** is the bar for issues — not "feature vs refactor".
 
-Full text in `CLAUDE.md` (the universal sections are kept; per-project sections are
-marked TODO).
+Full reasoning in [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md). Project-specific bindings
+(runtimes, labels, modules) in `CLAUDE.md`.
 
 ## Not in here
 

@@ -7,9 +7,14 @@ description: Install the Claude harness (universal skills, reviewer agents, CLAU
 
 Install the portable parts of the `claude-harness-template` into the current repo. The
 universal skills (`work`, `commit`, `review`, `capture`, `ship`, `setup`,
-`neobrutalist-pop`) and reviewer agents (`code-reviewer`, `test-reviewer`,
-`plan-reviewer`) are overwritten with the template's versions. Domain-specific skills
-and agents already in `.claude/` are left alone. `CLAUDE.md` is written only if missing.
+`neobrutalist-pop`), reviewer agents (`code-reviewer`, `test-reviewer`,
+`plan-reviewer`), and the durable philosophy doc (`docs/PHILOSOPHY.md`) are overwritten
+with the template's versions on every run. Domain-specific skills and agents already in
+`.claude/` are left alone. `CLAUDE.md` is written only if missing.
+
+`docs/PHILOSOPHY.md` is the canonical "why" doc behind the rules in `CLAUDE.md` —
+it travels with every bootstrap so the conventions land in the target repo even when
+an existing `CLAUDE.md` is preserved.
 
 This skill is **opinionated** — it doesn't ask which skills you want or whether you've
 "customized" the universal ones. The bar is: "the standard workflow is the standard
@@ -73,13 +78,17 @@ The universal manifest (kept in sync with what's in the template):
 - `test-reviewer`
 - `plan-reviewer`
 
+**Docs** — top-level:
+- `docs/PHILOSOPHY.md` — durable "why" doc, always overwritten. See Step 3 for the
+  reason this travels independently of `CLAUDE.md`.
+
 For each, overwrite the file at the target path with the template's copy. Leave any
 sibling skill/agent in `.claude/` (e.g. `.claude/agents/payments-reviewer.md`,
 `.claude/skills/run-evals/`) untouched — those are domain-specific and belong to the
-project.
+project. Leave any sibling docs in `docs/` untouched.
 
 ```sh
-mkdir -p .claude/skills .claude/agents
+mkdir -p .claude/skills .claude/agents docs
 
 # Universal skills
 for s in work commit review capture ship setup neobrutalist-pop; do
@@ -95,6 +104,9 @@ cp "$TMPDIR_HARNESS/.claude/skills/neobrutalist-pop/assets/brutpop.css" \
 for a in code-reviewer test-reviewer plan-reviewer; do
   cp "$TMPDIR_HARNESS/.claude/agents/$a.md" ".claude/agents/$a.md"
 done
+
+# Universal docs
+cp "$TMPDIR_HARNESS/docs/PHILOSOPHY.md" docs/PHILOSOPHY.md
 ```
 
 Track what was written vs already-existed (for the Step 5 summary): a file that existed
@@ -112,14 +124,21 @@ test -f CLAUDE.md && echo present || echo missing
   ```
   The skeleton has `<!-- TODO -->` markers for the project-specific body (description,
   bar, architecture, runtime, area labels, project-board IDs). The user fills those in.
+  The skeleton references `docs/PHILOSOPHY.md` (just installed by Step 2) for the
+  durable conventions.
 
 - **Present** → don't touch it. Print a pointer:
   > "Found existing `CLAUDE.md` — preserved. The template skeleton is at
   > `$TMPDIR_HARNESS/CLAUDE.md` if you want to diff against it for sections you might
-  > want to adopt (Hard rules, Type system, Testing, Git workflow, Style, Issue
-  > triage shape)."
+  > want to adopt (Philosophy pointer, Architecture defaults, Hosting & deployment,
+  > Web architecture, Hard rules, External integrations & concurrency primitives,
+  > Issue triage shape). `docs/PHILOSOPHY.md` was overwritten regardless and is the
+  > canonical source of the durable conventions, so the existing `CLAUDE.md` does not
+  > need to repeat them — pointing at the PHILOSOPHY.md sections is enough."
 
   Don't auto-merge. The project's `CLAUDE.md` is its identity — the user owns it.
+  `docs/PHILOSOPHY.md` carries the durable conventions independently, so the
+  philosophy still lands.
 
 ## Step 4: clean up
 
@@ -150,6 +169,9 @@ Print a summary:
     .claude/agents/test-reviewer.md         (updated | added)
     .claude/agents/plan-reviewer.md         (updated | added)
 
+  Docs (universal, overwritten):
+    docs/PHILOSOPHY.md                      (updated | added)
+
   CLAUDE.md: <added skeleton | preserved existing>
 
   Preserved (project-specific, untouched):
@@ -157,6 +179,8 @@ Print a summary:
 
 Next:
   - Fill the <!-- TODO --> markers in CLAUDE.md (if added).
+  - Read docs/PHILOSOPHY.md if you haven't recently — it's the canonical source for
+    the durable conventions referenced from CLAUDE.md.
   - Review the universal skills/agents; tune to taste and back-port useful edits to
     the template repo (see Drift, below).
 ```
@@ -181,8 +205,14 @@ fight that. Manual backport discipline is the price of multi-project consistency
 - **Don't** ask the user to choose which universal skills to install. The whole point
   is "the standard workflow is the standard workflow". Edit after install if needed.
 - **Don't** auto-merge into an existing `CLAUDE.md`. Diff yourself; the user owns it.
+- **Don't** skip overwriting `docs/PHILOSOPHY.md`. It's universal and the
+  canonical source — drift in the philosophy file is exactly what this skill exists
+  to prevent. If the user has edited `docs/PHILOSOPHY.md` in a target project, that
+  edit should have been a PR to the template repo, not a local override.
 - **Don't** delete or rename non-universal skills/agents. They are the project's
   domain extensions and not yours to touch.
+- **Don't** touch other files under `docs/` — only `docs/PHILOSOPHY.md` is in the
+  manifest. Project-specific docs (PRDs, ADRs, runbooks) belong to the project.
 - **Don't** install if the target isn't a git repo. The harness presumes git.
 - **Don't** fall back to a stale local clone if the fetch fails. Surface the error.
 - **Don't** add a `Co-Authored-By` trailer or "Generated with Claude Code" line to
