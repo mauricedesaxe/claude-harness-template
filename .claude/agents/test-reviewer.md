@@ -100,6 +100,15 @@ Things to specifically flag:
   stub for the real collaborator (with a recorded fixture for the actual
   external boundary) wouldn't introduce flakiness, the integration version is
   strictly better. Slower-but-real beats fast-but-fake.
+- **Background-job tests that stop before the seam** (PHILOSOPHY §22). When the
+  diff adds a job, the ideal test is end-to-end through the API → queue →
+  worker → final-state seam: a fixture user triggers the action, the test
+  asserts the job got enqueued, the worker picks it up, the final state is
+  correct. Flag a job that ships with only a worker-internal unit test — the
+  bug lives at the enqueue boundary, not in the worker's pure logic. When E2E
+  is genuinely hard to set up, the fallback is two narrower tests (action
+  enqueues the right job; worker produces the right outcome) — *both*, not
+  just the second.
 
 ## Patterns & hygiene (fast checks)
 
@@ -117,10 +126,39 @@ Things to specifically flag:
 - **Determinism in the unit lane** — no `Date.now()`/`Math.random()`/network/filesystem-
   order reliance. A domain test must be reproducible from its fixtures alone.
 
+## Eval suites (PHILOSOPHY §27)
+
+When the diff touches an AI-integrated feature, eval suites get reviewed by a
+different set of rules from deterministic tests. They are *not* pass/fail; they
+measure aggregate behaviour against a threshold.
+
+- **Fixtures + accuracy threshold, not pass/fail.** A new eval suite expressed
+  as "every fixture must match exactly" is the wrong shape — the model is
+  non-deterministic. Flag an eval written as a series of `expect(output).toBe(...)`
+  asserts where a threshold-on-aggregate (`expect(scoreAcrossSuite).toBeGreaterThan(0.8)`)
+  belongs.
+- **Prefer fixture comparison over LLM-as-judge** where the output is binary,
+  multi-choice, or otherwise deterministically scoreable. Flag an LLM-as-judge
+  setup that could be a fixture match — every judge call is its own
+  non-determinism and its own bill.
+- **Threshold is named and visible.** The pass bar (`≥ 80%`, `false-positive
+  rate ≤ 5%`, etc.) lives in the eval definition, not buried in a config.
+  Flag a threshold that isn't checked in.
+- **Inception vs. mature.** New eval suites can be non-blocking in CI (the
+  §24 carve-out). As they stabilise, a regression threshold makes them
+  blocking. Flag an eval suite that has been visibly stable for several PRs
+  but isn't yet enforced — push to promote it.
+- **Eval-improvement system, not a frozen suite.** An eval suite that's just a
+  static fixture set with no path for adding adversarial cases / user-flagged
+  outputs / sampled production traffic is a finding. The suite needs a
+  documented intake (manual labelling workflow, self-healing pipeline) so it
+  grows with the system.
+
 ## How to report
 
-For each finding: the test file + line, which of the two questions it fails (or the gap
-it leaves), and the concrete fix — the missing input/expected pair, the assertion that
-should replace the weak one, or "move to integration and call the real X". Keep it
-brief — you feed a collated review. If the changed tests are genuinely solid, say so
+For each finding: the test file + line, which of the three questions it fails
+(or the gap it leaves), and the concrete fix — the missing input/expected pair,
+the assertion that should replace the weak one, "move to integration and call
+the real X", or "this eval needs a threshold, not exact match". Keep it brief —
+you feed a collated review. If the changed tests are genuinely solid, say so
 plainly; don't manufacture findings.

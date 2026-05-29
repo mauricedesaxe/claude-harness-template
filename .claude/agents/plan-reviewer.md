@@ -241,6 +241,125 @@ If the declaration is missing or still on the TODO placeholder, the finding is
 "`CLAUDE.md` does not yet declare commercial readiness; the plan's authorization
 posture is ambiguous." That's a meta-finding the user resolves by declaring.
 
+### 16. Background jobs (PHILOSOPHY §22)
+
+Plans that introduce or modify background work address:
+
+- **Queue choice.** Postgres-backed (Graphile Worker, `pg-boss`) is the default;
+  flag a plan reaching for BullMQ-on-Redis, SQS, or any external queue without
+  naming the §5 + §13 reason.
+- **Worker location.** Same machine as the web tier by default (§3). A plan that
+  spins up a separate-instance worker deployment names the earn-its-keep
+  argument.
+- **Cron source.** Schedules live in code (Graphile Worker cron, `node-cron`,
+  equivalent). Plans relying on a third-party scheduler dashboard or a
+  Kubernetes CronJob YAML are findings.
+- **Idempotency** is a hard line. The plan names the stable identifier each job
+  keys off and the state-check before mutating. Plans that gloss this with
+  "the worker handles retries" are findings — the worker handling retries is
+  exactly *why* the body must be idempotent.
+- **Async-by-default for slow or flaky work.** A plan that proposes a
+  synchronous handler for work that's slow, retry-prone, or upstream-dependent
+  is a finding — propose the enqueue-and-respond shape, with status surfaced
+  via polling (§25).
+- **Test plan.** The Tests section names the end-to-end test through the API
+  → queue → worker → final-state seam; the two-narrower-tests fallback when
+  E2E is hard to set up. Worker-internal-only tests are insufficient.
+
+### 17. File and blob storage (PHILOSOPHY §23)
+
+Plans that introduce uploads or large-binary storage address:
+
+- **Storage: Cloudflare R2** (§9 alignment, no egress fees). Flag a plan
+  reaching for S3, DO Spaces, MinIO, or Backblaze without a written reason.
+- **Upload flow: pre-signed URLs from the browser direct to R2.** The plan
+  names the three-step shape (sign → client PUT → complete). A plan where the
+  server receives the bytes is the violation.
+- **Schema: paths in DB, bytes in R2.** Flag plans that mention `bytea` /
+  `BLOB` / `LONGBLOB` columns storing user-uploaded contents — a §5 + §23
+  anti-pattern. The plan describes a `media` (or equivalent) metadata table
+  storing the R2 key.
+- **Post-processing in a §22 job**, not on the request path. Plans that do
+  image resizing or virus scanning synchronously in the upload handler are
+  findings.
+- **Public URL is gated on virus-scan status.** The plan names the status
+  transitions (`pending → scanned → processed → public`) and where the URL
+  becomes safe to serve.
+
+### 18. Realtime — polling first (PHILOSOPHY §25)
+
+Plans that propose WebSockets, SSE, or inbound webhooks address:
+
+- **The named problem polling doesn't solve.** Latency-critical (event needs
+  to reach the user well under one polling interval) or resource-intensity
+  (data changes rarely, polling wastes both ends). Plans without one of these
+  are findings — push back to polling.
+- **For inbound webhooks specifically:** HMAC signing, idempotent receiver
+  (§22), and a queue between the receiver and the actual work (§22). A
+  webhook handler that does the work synchronously is a §22 violation
+  waiting to happen.
+- **Channel choice when justified.** SSE for one-way server → client streams;
+  WebSockets only for bidirectional or sub-100 ms; webhooks for inbound. A
+  plan reaching for WebSockets when SSE would do is a finding.
+
+### 19. Avoid double state (PHILOSOPHY §26)
+
+Plans that introduce a second store / cache / dedicated index / read replica
+address:
+
+- **The current, felt problem** the single-source-of-truth approach doesn't
+  solve. "We might need a search index someday" is not a problem; "FTS
+  queries are at 1.8s p95 today and we've exhausted index tuning" is.
+- **The sync strategy and its failure modes.** Change-data-capture, dual-
+  writes, periodic reindexers — each has its own outage shape. The plan
+  names the chosen strategy and acknowledges what breaks when it falls
+  behind.
+- **The operational cost.** A second store means a second backup story,
+  monitoring story, on-call story, version-upgrade story.
+
+Common cases to flag:
+
+- A plan introducing **Elasticsearch / OpenSearch / Algolia / Meilisearch /
+  Typesense** without naming a Postgres FTS shape that doesn't work for
+  this query pattern.
+- A plan introducing **Redis as a cache** when a Postgres `*_cache` table
+  would do — Redis is duplicate state with a TTL; a PG cache table is
+  invalidatable from the same transaction as the write.
+- A plan introducing a **read replica** preemptively rather than against a
+  measured read/write contention problem.
+- A plan declaring an **eventually-consistent zone** without naming the
+  boundary — the rest of the system must stay strongly consistent.
+
+### 20. AI / LLM integration (PHILOSOPHY §27)
+
+Plans that introduce or modify an AI feature address:
+
+- **Provider routing via OpenRouter** as the default. Plans reaching for
+  direct `@anthropic-ai/sdk` / `openai` for new call sites without a written
+  reason are findings.
+- **Eval strategy.** The plan names: the suite location, the fixtures, the
+  threshold (e.g. `≥ 80% match`, `false-positive ≤ 5%`), the run-on-PR
+  setup, and whether evals block this PR's merge (the §24 carve-out — they
+  often shouldn't block in the inception phase). An AI plan without an eval
+  strategy is the highest-priority finding — evals are the load-bearing
+  tool, not an optional extra.
+- **Eval-improvement system.** The plan names the intake (manual labelling
+  workflow, self-healing pipeline, user-flagged outputs) so the suite grows
+  with the product. A static fixture set with no growth path is a finding.
+- **Cost tracking.** The `api_calls` table (or equivalent) is named, with
+  the per-row attribution fields (user, request, provider, model, tokens,
+  cost, latency). Plans that introduce a metered call without this row are
+  findings — extends to any per-request metered API, not just LLMs.
+- **Provider fallback.** Default is "provider down ⇒ feature down". A plan
+  proposing an ordered fallback chain names the trigger (§11 breaker), the
+  ordering, and the observability story (which provider served each
+  request). Commercial-ready projects (§19) are more likely to need this.
+- **Prompt storage.** The plan names code vs data and why. Inline string-
+  mashed prompts at call sites are findings either way.
+- **Retries respect §11.** The plan describes the LLM call going through
+  `inFlight → rateLimiter → semaphore → breaker → withRetry → providerCall`,
+  same as any upstream.
+
 ## How to report
 
 Return findings as a short list (no preamble, no scope-restating). For each finding:

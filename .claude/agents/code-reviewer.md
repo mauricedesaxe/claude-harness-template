@@ -70,6 +70,12 @@ Flag:
 - **In a multi-service change**: missing `traceparent` / `tracestate` propagation
   (W3C Trace Context). Both Sentry and BetterStack consume OpenTelemetry, which
   uses the standard; don't invent a homebrew correlation header.
+- **A new metered API call (LLM, SMS, Maps, transaction processor) without an
+  `api_calls` row** (or whatever the project's cost-tracking table is named).
+  PHILOSOPHY §27 makes per-request cost tracking a hard line — provider, model,
+  endpoint, token counts (where applicable), cost estimate, latency, status,
+  per-user attribution. Missing the insert at a new metered call site is a
+  finding even when the request itself works.
 
 Pass errors as `{ err }` so the logger serialises them.
 
@@ -152,6 +158,75 @@ application layer**. Flag in a diff:
   moment-in-time as `bigint` (Unix seconds/ms) rather than `timestamptz`; a money
   column as `float`/`real`/`double precision` rather than `numeric(p,s)` or
   `bigint` minor units. Flag both.
+
+## Background jobs (PHILOSOPHY §22)
+
+When the diff adds or modifies a background job:
+
+- **Idempotency is a hard line.** Re-running the job with the same input must
+  produce the same outcome. Flag a job that increments a counter unconditionally,
+  inserts a row without an idempotency key, sends an email without
+  record-and-check, or mutates state without a guard. Pattern: jobs key off a
+  stable identifier, check current state, apply changes only if not already done.
+- **Queue choice.** Postgres-backed (Graphile Worker, `pg-boss`) is the default.
+  Flag a new dependency on BullMQ-on-Redis, SQS, or any external queue — that's
+  a §5 + §13 deviation needing a written reason.
+- **Workers run on the same machine as the web tier** (§3) by default. Flag a
+  new separate-process / separate-instance worker deployment without an
+  earn-its-keep argument.
+- **Cron lives in code**, not in a third-party scheduler dashboard or a
+  Kubernetes CronJob YAML. Flag a new scheduled job declared outside the source.
+- **No request-path work that should be a job.** Flag a route handler that
+  performs slow or flaky work synchronously (image resize, email send,
+  third-party fetch with retries, anything that could block the user). Propose
+  the equivalent enqueue-and-respond pattern.
+- **Job-result delivery defaults to polling** (§25). Flag a new WS/SSE channel
+  spun up to deliver job results when polling would do.
+
+## File and blob storage (PHILOSOPHY §23)
+
+When the diff touches file uploads or large-binary storage:
+
+- **Object storage is Cloudflare R2.** Flag a new dependency on `aws-sdk` /
+  raw S3 / DigitalOcean Spaces / MinIO / Backblaze without a written reason —
+  R2 is the §9-aligned default.
+- **Uploads use pre-signed URLs from the browser direct to R2.** Flag a route
+  handler that accepts a `multipart/form-data` upload body and writes bytes
+  to storage from the server. The server signs the URL after authorization
+  (§19) and records the metadata row; it does not move the bytes.
+- **Paths in DB, bytes in R2.** Flag a `bytea` / `BLOB` / `LONGBLOB` column
+  storing user-uploaded file contents — a §5 + §23 anti-pattern. The schema
+  records the R2 key + metadata; the bytes never live in Postgres.
+- **Post-processing runs in a §22 job.** Flag synchronous image resizing,
+  virus scanning, or thumbnail generation inside a route handler. Upload
+  complete → enqueue job → metadata row status transitions.
+- **Public URLs are gated on virus-scan status** for user-uploaded files. Flag
+  a new code path that emits a public R2 URL before the scan-status field
+  reaches `clean`.
+
+## AI integration (PHILOSOPHY §27)
+
+When the diff adds an LLM / AI call:
+
+- **Provider routing via OpenRouter** is the default. Flag direct
+  `@anthropic-ai/sdk` / `openai` imports introduced for *new* call sites
+  without a written reason. The OpenRouter SDK fronts both (and many others)
+  with a single switching surface.
+- **Cost tracking at the call site is mandatory.** The call returns; the
+  `api_calls` row gets inserted with provider, model, input/output tokens,
+  cost estimate, latency, status, user attribution. The logging-and-observability
+  rule above states this as a hard line — flag any new LLM call site that
+  doesn't write the row.
+- **Retries respect the §11 stack.** A new LLM call goes through `inFlight →
+  rateLimiter → semaphore → breaker → withRetry → providerCall`, same as any
+  other upstream. Flag an LLM call that bypasses the project's concurrency
+  primitives.
+- **Provider fallback (when present) is explicit and observable.** Flag a
+  fallback chain that silently swaps models without logging which provider
+  served the request and which fallback fired.
+- **Prompts are either in code or in a typed prompt table** — never inline
+  string-mashed at the call site. Flag a new prompt that's a template literal
+  in the middle of a handler.
 
 ## The type system as a guardrail
 
