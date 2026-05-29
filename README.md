@@ -112,6 +112,23 @@ template feeding many projects with different needs.
 - **Value types at the boundary.** UTC `timestamptz` for time. `bigint` /
   `decimal.js` for money. Avoid Unix-numeric timestamps and floating-point money.
 - **Feature flags live in our Postgres.** No third-party flag SaaS.
+- **Background jobs are idempotent — always.** Graphile Worker on Postgres,
+  workers next to the web tier, cron in code. The ideal job test is end-to-end
+  through the API → queue → worker → final-state seam.
+- **File storage: Cloudflare R2 + pre-signed URLs.** Paths in DB, bytes in R2.
+  Uploads go browser → R2 direct; the server only signs and records.
+- **Polling first; push (WS / SSE / webhooks) earns its keep** on latency,
+  resource intensity, or inbound from an external system.
+- **Avoid double state.** One source of truth per piece of state. Caches,
+  dedicated search indexes, read replicas — each duplicate earns its keep.
+  Strong consistency over availability in the CAP trade.
+- **Green CI + full-stack preview deploys + deploy on every merge.** Multiple
+  deploys per day is the cadence. Evals (non-deterministic) are the one
+  exception — run on every PR, not always required to pass.
+- **AI: evals are load-bearing, costs are tracked per request.** Anthropic +
+  OpenAI via OpenRouter is the default. Every metered API call is logged in
+  Postgres (per user / request / model / cost). Fallback: provider down ⇒
+  feature down, unless the product must stay available.
 - **Test behaviour, climb the fidelity ladder.** Bugs live at the seams.
   Recorded fixtures over invented stubs. Unit tests are a tool, not the load-
   bearing layer.

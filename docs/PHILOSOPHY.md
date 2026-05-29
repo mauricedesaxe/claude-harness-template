@@ -962,6 +962,413 @@ whether it belongs in `CLAUDE.md` (a durable rule) or `docs/PHILOSOPHY.md`
 
 ---
 
+## §22. Background jobs and scheduled work
+
+**Rule.** When a process is **lengthy or flaky**, run it in the background. The user
+clicks, the API enqueues a job, the worker processes it, and the user sees the
+result via polling (§25) or the next page load. The user never waits on something
+slow or watches it fail in their face. **Every job is idempotent** — re-running it
+produces the same outcome. This is a hard line.
+
+**Why.** Background jobs are one of the most powerful tools for shipping a
+responsive product. The request path stays fast and predictable, retries and
+failures stay invisible to the user, and load smooths instead of spiking. The
+cost (a queue, workers, idempotency discipline) is moderate; the benefit is large.
+
+**Queue: Postgres-backed, on the same machine.** **Graphile Worker** is the default
+(`pg-boss` is a reasonable alternative). Per §5, the queue lives in the same
+Postgres as the rest of the data; per §3, workers run on the same host as the
+web tier — separate process, same machine.
+
+**Cron lives in code.** Scheduled jobs are declared in the project's source —
+not in a third-party scheduler dashboard or a Kubernetes CronJob YAML the app
+doesn't own. Graphile Worker's cron support, a `node-cron` declaration next to
+the worker, or an equivalent in-code declaration is the pattern.
+
+**Idempotency is a hard line.** Every job is idempotent — re-running it
+produces the same outcome. Non-negotiable because retries are inevitable
+(network blips, worker crashes mid-job, queue redelivers). A job that can't be
+safely re-run is a bug waiting to be reported. Pattern: jobs operate on a target
+identifier (an order ID, a user ID), check current state, and apply changes only
+if the work hasn't already been done. "Send the welcome email" is idempotent by
+recording the send or checking a flag. "Increment a counter" is not idempotent
+and is the wrong shape for a job — model it as "set the counter to N" instead.
+
+**Retry policy is case by case.** Different jobs need different retry semantics
+— quick exponential backoff for transient network errors, longer backoff for
+upstream rate-limits, no retry for poisoned inputs that will fail again. The
+retry config is part of the job definition.
+
+**Testing background jobs.** The ideal test is **end-to-end through the seam**:
+a fixture user triggers the action via the API, the test asserts the job got
+enqueued, the worker picks it up, and the final state is correct. This is
+exactly the §18 fidelity-ladder pressure — bugs live at the seams between API,
+queue, and worker.
+
+When end-to-end is hard to set up, fall back to two narrower tests:
+
+1. The user action enqueues the right job with the right payload.
+2. The worker, given that job, produces the right outcome.
+
+Worker-only tests with mocked inputs are fine for intricate transitions, but
+they sit at the *bottom* rung; cover the seam separately or you'll catch
+internal bugs while missing the wiring bugs.
+
+**Earn-its-keep.** The synchronous request path earns its keep when (a) the
+work is fast and reliable, AND (b) the user genuinely needs the result before
+the next action. Otherwise default to async — even for "fast" work that has
+flake risk.
+
+---
+
+## §23. File and blob storage
+
+**Rule.** Object storage is **Cloudflare R2** (consistent with §9). User uploads,
+generated assets, and large binaries live in R2; metadata and paths live in
+Postgres. Uploads go **directly from the browser to R2 via a pre-signed URL** —
+never through the application server.
+
+**Why.** Pre-signed direct uploads remove the application server from the
+bytes-moving path. The user's bytes go straight to R2 (no server bandwidth, no
+server CPU, no memory pressure, no upload-timeout headaches). The server (1)
+issues the pre-signed URL after authorization (§19), and (2) records the
+metadata once the upload completes. The request path stays tiny, which keeps the
+§3 single instance happy.
+
+R2 specifically because: §9 Cloudflare alignment, **no egress fees** (the killer
+feature for media-heavy products), S3-compatible API so libraries port without
+rewrites, and the pricing is reasonable.
+
+**Patterns:**
+
+- **Paths in DB, bytes in R2.** Postgres stores a `media` (or equivalent) row
+  with the R2 key, content type, size, owner, and any domain metadata. The app
+  never stores bytes in Postgres — `bytea` columns for user uploads are a §5
+  anti-pattern.
+- **Pre-signed URL flow:**
+  1. Client requests an upload URL from the server.
+  2. Server checks authorization (§19), generates the pre-signed `PUT` URL with
+     a short TTL, records a pending metadata row.
+  3. Client `PUT`s the bytes directly to R2 against the URL.
+  4. Client notifies the server (or R2 fires a webhook); server marks the
+     metadata row complete and schedules any post-processing via §22.
+
+**Image processing** where the product needs it — `sharp` (Node) is the standard
+tool. Run it in a background job per §22 once the upload completes, not on the
+request path. Produce the variants you need (thumbnail, preview, optimized
+original), store them as separate R2 keys, record the paths in the metadata row.
+
+**Virus scanning** for user-uploaded files. ClamAV in a §22 background job, or a
+vendor (Cloudmersive, etc.) per §13. Mark the metadata row as unscanned until
+clean; don't expose the file's public URL until scanning passes.
+
+**Public assets** (CSS, JS bundles, static images that ship with the app) —
+Cloudflare Pages handles these per §9, not R2. R2 is for *user* and *runtime*
+bytes, not deploy artefacts.
+
+**Earn-its-keep.** S3, DigitalOcean Spaces, or Backblaze B2 are reasonable
+alternatives only when a named constraint (existing AWS billing relationship,
+geographic gap in R2's PoP coverage) blocks R2. Self-hosted MinIO / Garage /
+similar earns its keep only against §13's bar.
+
+---
+
+## §24. CI/CD discipline
+
+**Rule.** **Green CI is non-negotiable** (with one partial exception — evals,
+see §27); **preview deploys per PR, full-stack**; **commit-msg hook re-enforced
+server-side**; **deploy on every merge to `main`**.
+
+**Why.** Tight feedback loops are how you ship multiple times a day with
+confidence. A PR that can be clicked-through on a real preview deploy removes
+the "well, it works locally" failure mode. A green-only `main` means `main` is
+always deployable, which means deploys are routine and small (low-risk by
+construction). Conversely, a CI that's allowed to be red sometimes erodes the
+signal until nobody trusts it.
+
+**Concrete defaults:**
+
+- **CI runs on every PR**, before merge. Lint, type-check, deterministic tests
+  (unit + integration + recorded-fixture E2E), and the commit-msg hook
+  re-enforced server-side. Per §1, hooks aren't the obstacle — the client-side
+  hook can be bypassed; CI can't.
+- **Preview deploys per PR, full-stack.** Frontend, API, **and an ephemeral
+  database** where the platform supports it. Railway and Render both do (§6).
+  The goal: open a PR, the reviewer clicks a link, the actual feature runs on
+  the actual stack — no checkout, no `pnpm install`, no "works on my machine."
+  Frontend-only previews are the fallback when full-stack is genuinely hard
+  to set up; aim for full-stack — once you have it, you don't go back.
+- **Migrations run in CI** against a real ephemeral Postgres before the merge,
+  and against production in the deploy step. Migration failure in CI is a
+  blocker.
+- **Deploy on merge to `main`.** Trunk-based per §17. Every merge triggers
+  production. Half-shipped features hide behind flags. Multiple deploys per day
+  is the normal cadence, not a milestone.
+
+**The one negotiable: evals (§27).** Deterministic tests must be green; **evals
+(non-deterministic by nature) must run on every PR but need not be green** in
+the early life of an AI-integrated system. As the system matures and the eval
+suite stabilizes, lock the threshold in. Details in §27.
+
+**Earn-its-keep.**
+
+- Full-stack preview deploys are a real setup cost. If the platform doesn't make
+  it trivial (Railway and Render do; raw Docker hosts don't), the project's
+  earliest milestones can run with frontend-only previews. Plan to upgrade.
+- Manual approval gates on deploy-to-prod earn their keep in regulated industries
+  and never elsewhere. Trust the test suite or fix the test suite.
+
+---
+
+## §25. Realtime — polling first
+
+**Rule.** **Default to polling** for any "the UI should reflect the latest server
+state" need. Reach for **WebSockets, SSE, or webhooks only when polling
+genuinely doesn't work** — and "doesn't work" has to mean a named, current,
+specific problem.
+
+**Why.** Polling is dramatically simpler than persistent connections or push
+channels. A `GET /thing` every 5–30 seconds is one HTTP request to reason about,
+one timeout to tune, one cache header to set, one rate limit to respect.
+WebSockets and SSE add: connection lifecycle, reconnection logic, message
+ordering, back-pressure, an entirely different observability story (per §12),
+and a long-lived stateful object that complicates §3's single-instance default
+(when a second instance does eventually earn its keep, sticky sessions become a
+thing).
+
+Polling is also cache-friendly. A `GET` with `Cache-Control` and `ETag` behind
+Cloudflare (§9) can serve most polls without touching the origin. Persistent
+connections bypass the CDN entirely.
+
+**When push earns its keep:**
+
+1. **Latency-critical.** The event must reach the user in well under one polling
+   interval — collaborative editing, live order book, real-time chat where the
+   perceived delay *is* the product. Polling every 100 ms is bad for both sides;
+   push is the right tool.
+2. **Resource-intensity.** Data changes rarely (an event per hour) but the
+   consumer needs to know promptly. Polling every 5 s wastes both ends' compute
+   for no event. A push channel is cheaper at steady state.
+3. **Server-to-server webhooks** for an external system calling *into* your app
+   — the inverse of polling an upstream API. Webhooks let the upstream tell you
+   when something happened (with retries + HMAC signing). The right shape when
+   you'd otherwise hammer an external API.
+
+**Defaults when push is justified:**
+
+- **SSE** for one-way server → client streams (notifications, live data feeds,
+  log tails). Simpler than WebSockets, works over HTTP/2, behind CDNs
+  reasonably, native browser support.
+- **WebSockets** only when you need bidirectional traffic or sub-100 ms latency
+  — collaborative editing, multiplayer, voice signaling.
+- **Webhooks** for inbound. Required: HMAC signing, idempotent receivers (§22),
+  and a queue between the receiver and the actual work (§22). A webhook handler
+  that does the work synchronously is a §22 violation waiting to happen.
+
+**Earn-its-keep.** WebSockets / SSE / inbound webhooks earn their keep on a
+named, measured latency or resource problem, not "it would be cooler." The
+complexity tax is real and shows up at the worst time.
+
+---
+
+## §26. Avoid double state — single source of truth, prefer consistency
+
+**Rule.** The system has **one source of truth** for any given piece of state.
+Wherever a second store, a derived index, a cache, or a replicated copy would
+create state that must be kept in sync, the burden is on the *deviation* to earn
+its keep. **Strong consistency over availability** in the CAP trade for most
+products.
+
+**Why.** Double state is the second-most expensive complexity tax in software
+(after the §1 reach-for-bigger-architecture one). Every duplicate is a sync
+problem in waiting: the indexer falls behind, the cache goes stale, the replica
+diverges. Bugs that come from these are notoriously hard to reproduce because
+they depend on *which* copy you read and *when*. Avoiding the duplicate in the
+first place — the single Postgres source-of-truth that everything reads — is
+cheaper than any of the strategies for managing it.
+
+**The CAP-theorem stance.** Most products aren't Google-scale; the actual cost
+of dropping availability briefly during a partition or write spike is small, and
+the cost of operating an eventually-consistent system is large. We pick **C**
+(strong consistency) over **A** (availability) for most things. Outages are
+explainable and recoverable; data corruption from eventually-consistent merges
+is not.
+
+**Applications:**
+
+- **Search.** Postgres FTS (`tsvector` + `tsquery`, `pg_trgm`, GIN indexes) is
+  the default. A dedicated search index (Meilisearch, Typesense, OpenSearch,
+  Algolia) duplicates the indexed data, requires sync (CDC, dual-writes,
+  background reindexers) with its own failure modes, and earns its keep only at
+  scale or feature shapes Postgres FTS genuinely can't serve (advanced relevance
+  ranking, faceted search at enormous scale, fuzzy multi-language). Most
+  products outgrow their original search problem before they outgrow Postgres
+  FTS.
+- **Caching.** A cache is duplicate state. Eat the database read first; reach for
+  the cache only when a real, current, measured performance problem demands it.
+  When you do, prefer caches that are *invalidatable* (a Postgres `*_cache`
+  table you control) over caches that are only *time-bounded* (Redis with a
+  TTL). The §11 in-flight map covers stampede protection on egress without
+  introducing a second store.
+- **Read replicas.** Same pattern as §3 — earn-their-keep on a measured
+  read/write contention problem, never preemptively.
+- **Materialized views.** Acceptable as cached aggregates the app already knows
+  how to compute (§5 / §15). Not acceptable as the place where the app's actual
+  data lives.
+
+**When availability beats consistency.** Some products legitimately need it — a
+content-delivery layer that has to stay up under partition (eat the small chance
+of serving stale content), a write path that absolutely must not block (queue
+and reconcile later via §22). When you make this trade, **name the boundary**
+of the eventually-consistent zone so the rest of the system stays strongly
+consistent.
+
+**Earn-its-keep.** Any deviation that creates double state names the current,
+felt problem the single-source-of-truth approach doesn't solve, the sync
+strategy *with its failure modes*, and the operational cost. Same bar as §1.
+
+---
+
+## §27. AI / LLM integration
+
+**Rule.** Integrating an LLM into a product brings its own slice of the
+philosophy: **non-deterministic outputs**, **per-request cost**, **provider
+risk**, and **eval discipline as the load-bearing tool**. Treat an LLM call as a
+§11 API integration with these concerns layered on top.
+
+### Evals are the load-bearing tool
+
+Deterministic tests can't tell you whether the system *actually does the thing*
+when the model itself is non-deterministic. Evals can.
+
+**Fixtures + accuracy thresholds**, not pass/fail. An eval suite is a set of
+`(input, expected_or_acceptable_output)` fixtures, run through the actual model,
+scored against a target threshold (e.g. *≥ 80% match*, *false-positive rate
+≤ 5%*, *ranking agreement ≥ 0.7 with the human gold*). The pass/fail is on the
+**threshold**, not on any individual fixture — the model is allowed to miss any
+particular case as long as the aggregate behaves.
+
+**Prefer fixtures over LLM-as-judge** wherever the output is binary,
+multi-choice, or otherwise scoreable by a deterministic comparison. LLM-as-judge
+has its place (open-ended generation where no fixed answer exists), but every
+judge call is its own non-determinism and its own bill. Use it sparingly.
+
+**Evals run on every PR but are not always required to pass.** Especially in the
+inception phase of an AI feature — when you're still figuring out the model,
+the prompt, and the eval suite itself — a red eval is a signal, not a blocker.
+Locking the threshold in on day one teaches the team to game the threshold
+instead of building the feature.
+
+As the system stabilizes, **promote evals to blocking** with a regression
+threshold (new PR's score must be ≥ baseline − N%). Until then, the score is
+visible on every PR but not enforced. This is the carve-out in §24's "green CI
+is non-negotiable" rule.
+
+**Eval improvement is itself a system.** You start with a small fixture set and
+you improve it as you ship — adversarial cases, user-flagged outputs, sampled
+production traffic. Two viable strategies:
+
+1. **Manual labelling** — recurring review of recent outputs, tagged for
+   correctness, added to the eval set.
+2. **Self-healing** — production traffic sampled and auto-labelled (by another
+   model, by heuristics, by explicit thumbs-up/down in the UI), fed back into
+   the eval set.
+
+Manual is the safe default; self-healing earns its keep when volume makes manual
+infeasible and the auto-labelling is reliable. Either way, there *is* a system —
+not a static suite that ages out of relevance.
+
+**Eval improvement informs model improvement.** When the eval bar moves, the
+prompt / RAG retrieval / fine-tune improves to clear it — either manually
+(a human reads the failing cases and edits the prompt) or self-healing (a
+tuning loop optimises against the eval set). The cycle — eval → model
+improvement → eval again — is the actual product loop for AI features.
+
+### Provider choice
+
+**Default: Anthropic and OpenAI**, accessed via **OpenRouter** as the unified
+surface. Same logic as §13: managed APIs absorb the operational cost of running
+large models; self-hosted earns its keep only on a named cost or compliance
+reason.
+
+**OpenRouter specifically** because: a single SDK fronts dozens of providers,
+easy switching without code rewrites, single billing across providers, and
+pay-with-crypto. Reduces vendor lock-in along the §13 own-the-data axis — you
+can leave any single provider without changing your code.
+
+**Self-hosted models earn their keep** on:
+
+- **Regulatory or data-protection** constraints that genuinely forbid sending
+  data to a third party. The most common real reason.
+- **Cost** at very high volume — bar is high; operating a model at production
+  quality is expensive in its own ways (GPUs, ops, security patches, model
+  upkeep).
+- **Latency** in a specific geo where managed providers don't serve well — rare.
+
+### Cost discipline — track every metered call
+
+**Hard line: every metered API call is logged in Postgres** with enough fields
+to attribute cost per user, per request, per model, per time window. This is
+non-negotiable for any project that ships AI features.
+
+Shape (adapt to the project):
+
+```
+api_calls (
+  id, user_id, request_id, provider, model, endpoint,
+  input_tokens, output_tokens, cost_estimate_cents,
+  latency_ms, status, started_at, finished_at
+)
+```
+
+**Why this is non-negotiable.** AI costs scale per-request, not per-user-month.
+A bug, an abusive user, or a hot loop can rack up four-digit bills in hours.
+Without per-request tracking, you find out from the provider's billing page
+weeks after the fact. With it, you alert at the first $10/hour anomaly and you
+know exactly which user / request / model / time window did it.
+
+**The rule extends to any per-request metered API**, not only LLMs (Twilio SMS,
+certain Maps APIs, transaction-fee processors). The §11 in-flight map / rate
+limiter is about *not making* expensive calls; the cost-tracking table is about
+*knowing what you did make* once you let them through.
+
+**Earn-its-keep — when cost tracking can be relaxed:**
+
+- **Non-commercial / personal projects** with a known small footprint and a
+  single user. The provider's billing page is fine.
+- **Multi-tenant where each user gets their own deployment / self-hosts.** Cost
+  is naturally segregated by deployment; internal tracking is redundant.
+- **Non-metered APIs** (a flat-rate SaaS, an internal service). No per-call cost
+  to attribute.
+
+### Provider fallback
+
+**Default: if the provider is down, that feature is down.** Accept the §26 trade
+— consistency over availability — and let the request fail loud (with the §11
+breaker open, the §12 error tracker firing). Most products survive an AI
+provider being down for an hour; few products survive an auto-failover that
+silently produces wrong answers from a fallback model.
+
+**When the product must stay available** (commercial-ready, customer-facing,
+contractually guaranteed), declare an **ordered fallback chain** in code — try
+the primary, on §11 breaker-open or provider error fall through to the
+secondary, etc. The chain is observable per §12 so you know when you're
+degraded. The cost-tracking table (above) records which provider actually
+served each request so the bill stays attributable.
+
+### Prompt as code vs prompt as data
+
+**Case by case.** The eval strategy is the strongest constraint: if your evals
+are stable and prompts change rarely, **code** is fine (versioned with the
+codebase, simple to ship, branches under git). If your prompts iterate
+per-customer or per-experiment, **data** is fine (a `prompts` table with
+versions, A/B-tested, possibly self-healed by the eval loop).
+
+Pick based on how the prompt actually evolves in your product. Both can be
+right; neither has a default.
+
+---
+
 ## What this document is not
 
 - A roadmap. Sections aren't features; they're principles.

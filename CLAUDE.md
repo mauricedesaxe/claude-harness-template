@@ -41,7 +41,9 @@ file is silent or ambiguous. Specific sections referenced inline: §1 Earn its k
 §12 Observability, §13 Outsource the non-core, §14 Code-level discipline,
 §15 Database discipline, §16 Value-type discipline, §17 Feature flags,
 §18 Testing philosophy, §19 Commercial readiness & authorization,
-§20 Frontend defaults & local-first, §21 Documentation discipline.
+§20 Frontend defaults & local-first, §21 Documentation discipline,
+§22 Background jobs, §23 File and blob storage, §24 CI/CD discipline,
+§25 Realtime — polling first, §26 Avoid double state, §27 AI/LLM integration.
 
 Where this file overrides PHILOSOPHY.md, the override must name a specific project
 reason that clears §1's earn-its-keep bar.
@@ -143,9 +145,24 @@ or a domain-shaped top-level like `server/{integrations,scoring,...}`. -->
   TLS. Cloudflare Workers / KV / D1 are excluded by §7 unless a specific exception
   applies.
 
+### CI/CD (PHILOSOPHY §24)
+
+- **Green CI is non-negotiable** — with one partial carve-out for non-deterministic
+  evals on AI-integrated projects (see §27 + the AI integration section below).
+- **CI runs on every PR**: lint, type-check, deterministic tests, commit-msg
+  hook re-enforced server-side.
+- **Preview deploys per PR, full-stack** where the platform supports it (Railway
+  and Render do): frontend + API + ephemeral database. Goal: the reviewer
+  clicks a link and tries the actual feature without checking out the branch.
+- **Migrations run in CI** against an ephemeral Postgres before merge, against
+  production on deploy.
+- **Deploy on every merge to `main`.** Trunk-based per §17. Multiple deploys
+  per day is the normal cadence.
+
 <!-- TODO: this project's specific deploy target (e.g. "Railway, single web service +
-Postgres add-on") and any project-specific deployment notes (env-var setup, build
-command, healthcheck path). -->
+Postgres add-on"), CI workflow file path, preview-deploy setup notes, and any
+project-specific deployment quirks (env-var setup, build command, healthcheck
+path). -->
 
 ## Web architecture
 
@@ -239,6 +256,19 @@ shortcut map. -->
 - **Feature flags live in our Postgres** (PHILOSOPHY §17). No third-party flag
   SaaS. Trunk-based: half-shipped features hide behind a flag that defaults to
   off; flag has a removal target when added.
+- **Background jobs are idempotent** (PHILOSOPHY §22). Hard line. Every job
+  re-runs safely; retries are inevitable. Postgres-backed queue (Graphile
+  Worker by default), workers on the same machine as the web tier, cron lives
+  in code.
+- **Avoid double state** (PHILOSOPHY §26). One source of truth per piece of
+  state. Caches, dedicated search indexes, read replicas, materialized views
+  encoding domain logic — each duplicate has to earn its keep on a named,
+  current problem. Strong consistency over availability in the CAP trade.
+- **Track every metered API call in Postgres** (PHILOSOPHY §27). Hard line for
+  any project shipping AI features; extends to any per-request metered API
+  (SMS, certain Maps APIs, transaction processors). Per user, per request, per
+  model, with token counts + cost estimate + latency. Without it, you find out
+  from the provider's billing page weeks late.
 - **End-to-end type safety** (PHILOSOPHY §10). Every network response parses through
   a schema at the boundary. Frontend ↔ backend boundaries are typed via tRPC,
   OpenAPI codegen, or a framework's native loader/action typing — never an untyped
@@ -353,6 +383,48 @@ for flag naming. Pattern:
 - Naming: `<area>.<feature>` (e.g. `scoring.fast_food_additive`)
 -->
 
+## Background jobs
+
+Per PHILOSOPHY §22: lengthy or flaky work runs in the background. **Graphile Worker**
+on the project's Postgres is the default; workers run on the same machine as the
+web tier; cron lives in code. **Every job is idempotent.**
+
+The ideal test is end-to-end through the seam: user triggers the action → job
+enqueued → worker picks it up → final state asserted (per §18 fidelity ladder).
+Fall back to two narrower tests (action enqueues the right job; worker produces
+the right outcome) when E2E is genuinely hard.
+
+<!-- TODO: this project's worker package, the job registry, the cron schedule
+declarations, and the per-job idempotency strategy. Pattern:
+
+- Worker entry: `server/workers/index.ts` (runs alongside the web tier)
+- Job registry: `server/workers/jobs/<job-name>.ts` — each export defines `{ run,
+  identifier, maxAttempts, backoff }`.
+- Cron: `server/workers/cron.ts` — declarations in code.
+- Idempotency: each job's `run` is keyed by a stable identifier (the target row's
+  ID); the work checks current state and applies changes only if not already done.
+-->
+
+## File and blob storage
+
+Per PHILOSOPHY §23: object storage is **Cloudflare R2**; metadata and paths live in
+Postgres; uploads go **directly from the browser to R2 via a pre-signed URL** —
+not through the server. Image processing and virus scanning run in §22 background
+jobs once the upload completes.
+
+<!-- TODO: this project's R2 bucket names, the pre-signed URL flow, the `media`
+table schema, and any post-processing pipeline. Pattern:
+
+- Bucket: `<project>-uploads` (private, R2 access keys in env config per §10)
+- Pre-signed flow: `POST /api/uploads/sign` returns a PUT URL with TTL;
+  client PUTs to R2; `POST /api/uploads/complete` marks the metadata row done.
+- Metadata: `media(id, r2_key, content_type, size_bytes, owner_id, status,
+  scanned_at, created_at)`.
+- Post-processing: a `process-upload` job that runs sharp for image variants
+  and ClamAV (or vendor) for virus scanning. Status transitions: `pending` →
+  `scanned` → `processed` → `public`.
+-->
+
 ## Authorization
 
 Per PHILOSOPHY §19: defaults are gated by the **Commercial readiness** declaration
@@ -396,6 +468,44 @@ the key. Domain-meaningful events get their own log line.
 - The structured-log shape (top-level fields you always include: requestId, userId,
   component, traceId)
 - Any project-specific tail-based sampling rules
+-->
+
+## AI / LLM integration
+
+<!-- Delete this whole section if the project does not embed any LLM / AI features. -->
+
+Per PHILOSOPHY §27. The five anchors:
+
+- **Evals are load-bearing.** Fixtures + accuracy thresholds, not pass/fail.
+  Evals run on every PR; not blocking in the inception phase, promoted to
+  blocking with a regression threshold once stable. This is the carve-out in
+  §24's "green CI is non-negotiable" rule.
+- **Eval improvement is a system** (manual labelling or self-healing) feeding
+  back into the suite, which feeds back into prompt / RAG / model improvements.
+- **Provider default: Anthropic + OpenAI via OpenRouter.** Self-hosted models
+  earn their keep only on regulatory / data-protection / extreme-cost reasons.
+- **Cost discipline is mandatory:** every metered call is logged to the
+  `api_calls` table (or equivalent), per user / request / model / time window.
+  See the Hard rule above.
+- **Provider fallback:** default is "if the provider is down, the feature is
+  down." Ordered fallback chains earn their keep only when the product is
+  commercial-ready and contractually must stay available.
+
+<!-- TODO: this project's AI providers + models, the OpenRouter setup, the eval
+suite location and thresholds, the cost-tracking table, the prompt
+storage strategy (code vs data), and the fallback chain (if any). Pattern:
+
+- Providers: Anthropic Claude 4.x via OpenRouter, with model alias rules.
+- Cost-tracking table: `api_calls(...)` — see §27 schema. Aggregations live
+  in materialized views (per §5 + §26 — caches of aggregates, not the data).
+- Eval suite: `evals/<feature>/{fixtures.json, run.ts, scorer.ts}` with a
+  per-feature accuracy threshold. CI runs all evals on every PR.
+- Eval improvement: manual labelling via `evals/labelling/` (a worker reviews
+  flagged outputs); promotion via PR that adds the fixture.
+- Prompts: code (`server/ai/prompts/<feature>.ts`) for stable prompts; a
+  `prompts` table for prompts that iterate per-customer.
+- Fallback: declared in `server/ai/router.ts` as an ordered list of providers
+  with breaker integration.
 -->
 
 ## Testing
