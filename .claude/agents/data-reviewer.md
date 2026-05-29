@@ -147,7 +147,71 @@ SaaS. Flag in a diff:
   `Promise<T>` return types where `ResultAsync<T, E>` was meant (per
   CLAUDE.md hard rules / PHILOSOPHY §14).
 
-### 6. Cache repository correctness
+### 6. Background job schemas (PHILOSOPHY §22)
+
+When the diff adds or modifies tables that jobs read or write:
+
+- **Idempotency markers.** A job that mutates a row should be able to tell
+  whether the work has been done — a `processed_at` timestamp, a status enum,
+  or an explicit `idempotency_key` column. Flag a new table that jobs will
+  touch without one. Jobs key off these to be safely re-runnable (PHILOSOPHY
+  §22 hard line).
+- **Queue infrastructure stays Postgres-backed.** Graphile Worker's
+  `graphile_worker.*` tables (or `pg-boss`'s tables) live in the project's
+  Postgres per §5. Flag a migration that drops a Redis-backed queue schema or
+  a separate-DB queue setup.
+- **Migrations affecting in-flight queues.** Migrations that drop or rename
+  queue-related columns without a phased plan are findings — active jobs are
+  mid-flight when migrations run.
+
+### 7. Media / file storage schemas (PHILOSOPHY §23)
+
+When the diff touches schema for user-uploaded files or generated media:
+
+- **`bytea` / `BLOB` / `LONGBLOB` columns storing file contents** are the §23
+  anti-pattern. Bytes live in R2; Postgres stores the R2 key plus metadata.
+  Flag any new such column unless the contents are genuinely small,
+  app-controlled, and frequently queried structurally (rare).
+- **Media metadata table shape.** A new `media` (or equivalent) table covers
+  at minimum: `id`, `r2_key`, `content_type`, `size_bytes`, `owner_id`,
+  `status` (lifecycle), `scan_status`, `scanned_at`, `created_at`. Flag
+  missing columns where the project will need the question they answer.
+- **Lifecycle status field.** `pending → scanned → processed → public` (or
+  the project's equivalent). Flag a media table that doesn't model the
+  lifecycle — that's how virus scanning and public-URL exposure get
+  serialised correctly per §23.
+- **R2-key uniqueness and stability.** The R2 key column has a uniqueness
+  constraint; it's stable for the lifetime of the row. Flag mutable R2-key
+  columns or schemas that allow duplicate keys.
+
+### 8. Metered API call schemas (PHILOSOPHY §27)
+
+When the diff introduces or modifies the cost-tracking table for AI / SMS /
+Maps / any per-request metered API:
+
+- **`api_calls` table shape.** Required attribution columns: `id`, `user_id`,
+  `request_id`, `provider`, `model` (or `endpoint`), `input_tokens`,
+  `output_tokens` (LLM-specific; equivalents for other meters), `cost_estimate`
+  (in minor units), `latency_ms`, `status`, `started_at`, `finished_at`.
+  Flag missing columns — each one is load-bearing for a real cost question
+  ("who spent $50 last week", "which model drives cost", "what's our p95 LLM
+  latency", "did this user have a runaway loop").
+- **Money in `bigint` minor units, not float.** Per §16, `cost_estimate_cents`
+  (or whatever the smallest unit is) is `bigint` or `numeric(p, s)`, never
+  `float`/`real`. Flag the wrong type loudly — money rounding errors in a
+  cost table are particularly bad because they compound across many calls.
+- **Indexes for the cost questions you'll ask.** At minimum:
+  `(user_id, started_at)` for per-user, `(provider, model, started_at)` for
+  per-model breakdown, `(request_id)` for correlating to logs. Flag a new
+  `api_calls` migration without these.
+- **Aggregation via materialized views or periodic rollups**, not full-table
+  scans on every dashboard refresh. Per §26, these are caches of aggregates
+  the app already knows how to compute — the right place.
+- **Retention.** The `api_calls` table grows quickly; flag a migration that
+  introduces it without a written retention plan (rolling 90 days raw,
+  monthly rollups indefinitely, etc.).
+
+### 9. Cache repository correctness
 
 If the project has a cache (PHILOSOPHY §5 — usually a Postgres `*_cache` table
 or materialized view), flag:

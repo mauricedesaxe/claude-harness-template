@@ -176,6 +176,63 @@ resource, action) triple it cares about**.
   there's a written §13 earn-its-keep reason. The "own the data" sub-rule
   says user records live in the project's own Postgres.
 
+### 10. File upload pipeline (PHILOSOPHY §23)
+
+When the diff touches file uploads:
+
+- **MIME type validated server-side**, not trusted from the browser.
+  Browser-supplied `content_type` is attacker-controlled. The upload pipeline
+  should sniff the actual bytes (magic numbers) and reject mismatches. Flag a
+  code path making security-relevant decisions on the client-supplied content
+  type.
+- **File size limits enforced at pre-signed URL generation.** R2 supports
+  `Content-Length` validation in pre-signed URLs. Flag a sign endpoint that
+  doesn't cap size to the use case (an avatar should not accept a 5 GB
+  upload).
+- **Authorization on the upload-URL endpoint.** Pre-signed URLs are bearer
+  credentials — anyone with the URL can upload. The endpoint that mints them
+  must enforce the same authorization (§19) as any other write. Flag a
+  `POST /uploads/sign` (or equivalent) route without explicit authz.
+- **Virus scanning runs before the file is exposed via a public URL.** Status
+  transitions gate the public URL emission. Flag a code path that emits a
+  public URL before `scan_status = clean`.
+- **Scan failure handling.** Files that fail scanning stay marked `infected`,
+  never expose the URL, and (commercial-ready) log to the audit table per
+  §19 item 4. Flag a code path that silently deletes the row or retries
+  scanning indefinitely without an alert.
+- **Tenant-isolated R2 prefixes.** Tenant-scoped uploads go in tenant-scoped
+  R2 prefixes (`{tenant_id}/uploads/...`); the metadata table enforces tenant
+  isolation. Flag a flat upload namespace for tenant-isolated data — a
+  forgotten authz check leaks across tenants.
+
+### 11. AI / LLM PII and prompt handling (PHILOSOPHY §27)
+
+When the diff adds or modifies an LLM call:
+
+- **PII redaction extends to LLM observability.** The §7 rules above (no PII
+  in logs, redact for error tracker) extend to prompt content captured for
+  evals, debugging, or eval-improvement labelling. Flag a debug log of a full
+  prompt that contains user data without redaction.
+- **The provider sees the prompt.** Sending data to Anthropic / OpenAI /
+  OpenRouter / any third-party model means that vendor processes it. For
+  commercial-ready projects (§19) handling sensitive data, the diff (or the
+  plan) must address which data is sent, vendor-side retention, and whether a
+  DPA is in place. Flag a new AI call site that sends PII or sensitive data
+  without this consideration.
+- **Prompt-as-data is privileged.** When prompts live in a `prompts` table
+  (per §27), the table is privileged: read access leaks how the system thinks;
+  write access changes behaviour. Flag a `prompts` table in a commercial-ready
+  project without RBAC + audit logging on its writes.
+- **Prompt injection.** User-supplied content interpolated directly into a
+  system prompt is the prompt-injection attack class. The OpenAI / Anthropic
+  message-array structure (system message + user message kept separate) is the
+  safe shape. Flag a code path that string-concatenates user input into the
+  system prompt.
+- **Cost-driven abuse.** Without rate limiting and the §27 cost-tracking
+  table, a single user can run up four-digit bills in hours. Flag a new LLM
+  endpoint without per-user rate limiting (PHILOSOPHY §11) tighter than the
+  rest of the API.
+
 ## How to report
 
 Per finding: file path, line number, the rule (PHILOSOPHY § + name), and a
