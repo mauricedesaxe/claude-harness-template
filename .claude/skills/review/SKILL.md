@@ -9,20 +9,37 @@ Run the project's reviewer agents in parallel against the current branch's diff 
 plus any uncommitted edits in the working tree. Collate their findings into a single chat
 report. Do not post to GitHub.
 
-The universal reviewers (shipped in `.claude/agents/`) are:
+The universal reviewers (shipped in `.claude/agents/`):
 
-- `code-reviewer` — engineering-quality concerns: module boundaries, ad-hoc env access,
-  swallowed errors, unbounded concurrency, type-system holes, missing tests, dependency
-  drift. Whether tests *exist* for new behaviour is its call; their *quality* it hands to
-  `test-reviewer`.
-- `test-reviewer` — adversarial reviewer for changed tests: do they pin the real behaviour
-  (not a mock or a proxy), are the failure/err branches and boundaries covered, should a
-  test climb the fidelity ladder toward end-to-end.
+**Unconditional — run on every `/review`:**
 
-**Project-specific reviewers** live alongside the universal ones in `.claude/agents/`. If
-the project ships a domain reviewer (e.g. `geo-scoring-reviewer`, `payments-reviewer`),
-run it here too — see the project's `CLAUDE.md` for what scope each one owns and what to
-note about cross-running.
+- `code-reviewer` — engineering-quality concerns: module boundaries, ad-hoc env
+  access, swallowed errors, unbounded concurrency stack (the five primitives of
+  PHILOSOPHY §11), type-system holes, branded types, observability discipline
+  (PHILOSOPHY §12), no-business-logic-in-DB, missing tests, dependency drift.
+- `test-reviewer` — adversarial reviewer for changed tests: do they pin the real
+  behaviour (not a mock or a proxy), are the failure / `err` branches and
+  boundaries covered, could the test climb one rung higher on the fidelity ladder
+  and stay deterministic (PHILOSOPHY §18).
+- `data-reviewer` — data layer: schema changes, migrations (reversible by
+  default; expand → backfill → contract for invasive changes), value types at
+  the storage boundary (`timestamptz`, `numeric`/`bigint` money, branded
+  identifiers — PHILOSOPHY §15 + §16), feature-flag plumbing in Postgres
+  (PHILOSOPHY §17), repository discipline.
+
+**Conditional — run when `CLAUDE.md` declares `Commercial readiness: yes`:**
+
+- `security-reviewer` — authorization (app-layer + RBAC + Postgres RLS as the
+  second layer), audit logging, role × resource matrix tests, tenant isolation,
+  PII handling, session/cookie discipline (PHILOSOPHY §19). The agent itself
+  self-checks the declaration; pass it the path to `CLAUDE.md` in the prompt so
+  it can confirm.
+
+**Project-specific reviewers** live alongside the universal ones in
+`.claude/agents/`. If the project ships a domain reviewer (e.g.
+`geo-scoring-reviewer`, `payments-reviewer`), run it here too — see the
+project's `CLAUDE.md` for what scope each one owns and what to note about
+cross-running.
 
 ## Step 1: gather the diff
 
@@ -35,21 +52,51 @@ git diff --name-only --staged          # staged
 Deduplicate into one list of changed paths. If the list is empty, say so and stop — there
 is nothing to review.
 
-## Step 2: spawn all agents in parallel
+## Step 2: check commercial readiness
 
-Each agent already knows its own scope. Send all the tool calls in a single message so
-they run concurrently. Each prompt should give the agent:
+The `security-reviewer` runs only when the project has declared itself
+commercial-ready. Read the `Commercial readiness` line in `CLAUDE.md`:
 
-1. The diff source — "the diff `main...HEAD` plus any uncommitted edits in the working
-   tree".
+```sh
+grep -E '^\*\*Commercial readiness:\*\* +(yes|no)' CLAUDE.md | head -1
+```
+
+- Matches `... yes` → set `RUN_SECURITY=1`. The security-reviewer joins the
+  parallel spawn in Step 3.
+- Matches `... no` → security-reviewer is skipped silently (the project has
+  explicitly opted out).
+- No match (the TODO placeholder is still in place, or the line is missing) →
+  security-reviewer is skipped, **and** a single meta-finding is added to the
+  report: *"`CLAUDE.md` does not declare commercial readiness; security review
+  was skipped. Set it explicitly (PHILOSOPHY §19) so this signal is
+  meaningful."*
+
+## Step 3: spawn all agents in parallel
+
+Each agent already knows its own scope. Send all the tool calls in a single
+message so they run concurrently. Each prompt should give the agent:
+
+1. The diff source — "the diff `main...HEAD` plus any uncommitted edits in the
+   working tree".
 2. The list of changed paths.
-3. A reminder that its output is collated into a single chat report, so it should be
-   concrete (file path, line number, fix) and skip restating its own scope.
+3. A reminder that its output is collated into a single chat report, so it
+   should be concrete (file path, line number, fix) and skip restating its own
+   scope.
 
-Don't pre-filter which agents to run based on which files changed. If a reviewer sees no
-files in its scope, it returns "no issues found" in seconds — that's the expected outcome.
+Always spawn: `code-reviewer`, `test-reviewer`, `data-reviewer`, plus any
+project-specific reviewers from `.claude/agents/` that this project's
+`CLAUDE.md` lists.
 
-## Step 3: collate the report
+Conditionally spawn `security-reviewer` when `RUN_SECURITY=1` from Step 2.
+When spawning it, include in the prompt: *"The project's `CLAUDE.md` is at
+`./CLAUDE.md`; confirm the commercial-readiness declaration before the full
+review."*
+
+Don't pre-filter the other reviewers by which files changed. If a reviewer
+sees no files in its scope, it returns "no issues found" in seconds — that's
+the expected outcome.
+
+## Step 4: collate the report
 
 Once all agents return, assemble a single chat report:
 
@@ -64,7 +111,14 @@ Changed files: <count> across <areas>.
 ## test-reviewer
 <findings, or "No issues found.">
 
-## <other reviewers, one section each>
+## data-reviewer
+<findings, or "No issues found.">
+
+## security-reviewer
+<findings, or "Skipped — non-commercial." / "Skipped — commercial-readiness
+not declared." / "No issues found.">
+
+## <project-specific reviewers, one section each>
 <findings, or "No issues found.">
 
 ## Summary

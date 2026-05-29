@@ -22,6 +22,8 @@ shared "Lemon Pie" UI vocabulary.
     code-reviewer.md        engineering-quality reviewer
     test-reviewer.md        adversarial test reviewer
     plan-reviewer.md        adversarial plan reviewer (run before code exists)
+    data-reviewer.md        schema, migrations, value types, feature flags
+    security-reviewer.md    authz/RBAC/RLS/audit/PII (commercial-ready only)
 docs/
   PHILOSOPHY.md             durable "why" doc — single-instance, Postgres-only,
                             no serverless, API-integration primitives, etc.

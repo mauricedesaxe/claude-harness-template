@@ -77,6 +77,10 @@ The universal manifest (kept in sync with what's in the template):
 - `code-reviewer`
 - `test-reviewer`
 - `plan-reviewer`
+- `data-reviewer`
+- `security-reviewer` (conditional at review time — runs only when the project's
+  `CLAUDE.md` declares `Commercial readiness: yes`; the agent itself self-checks
+  the declaration. Always installed regardless of project flavor.)
 
 **Docs** — top-level:
 - `docs/PHILOSOPHY.md` — durable "why" doc, always overwritten. See Step 3 for the
@@ -101,7 +105,7 @@ cp "$TMPDIR_HARNESS/.claude/skills/neobrutalist-pop/assets/brutpop.css" \
    .claude/skills/neobrutalist-pop/assets/brutpop.css
 
 # Universal agents
-for a in code-reviewer test-reviewer plan-reviewer; do
+for a in code-reviewer test-reviewer plan-reviewer data-reviewer security-reviewer; do
   cp "$TMPDIR_HARNESS/.claude/agents/$a.md" ".claude/agents/$a.md"
 done
 
@@ -168,6 +172,8 @@ Print a summary:
     .claude/agents/code-reviewer.md         (updated | added)
     .claude/agents/test-reviewer.md         (updated | added)
     .claude/agents/plan-reviewer.md         (updated | added)
+    .claude/agents/data-reviewer.md         (updated | added)
+    .claude/agents/security-reviewer.md     (updated | added)
 
   Docs (universal, overwritten):
     docs/PHILOSOPHY.md                      (updated | added)

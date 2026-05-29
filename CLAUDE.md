@@ -83,9 +83,14 @@ The harness lists them each session; this table is the durable "when to reach fo
 | `neobrutalist-pop` | Building or styling any UI — the neo-brutalist look (thick borders, hard shadows, candy accents). |
 
 The reviewer **agents** in `.claude/agents/` are run *by* skills, not invoked directly:
-`code-reviewer`, `test-reviewer`<!-- TODO: , and any project-specific reviewers like
-`payments-reviewer` --> are run by `review` against a diff; `plan-reviewer` is run by
-`work` against a plan, before any code exists.
+
+- **At plan time** (run by `work`): `plan-reviewer` against the plan text, before
+  any code exists.
+- **At diff time** (run by `review`): `code-reviewer`, `test-reviewer`,
+  `data-reviewer` always; `security-reviewer` conditionally, only when this file
+  declares `Commercial readiness: yes` above.
+<!-- TODO: , and any project-specific reviewers like `payments-reviewer` or
+`geo-scoring-reviewer` — list them here and note which skill runs them. -->
 
 ## Runtime
 
