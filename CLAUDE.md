@@ -150,10 +150,16 @@ long-running owned server. -->
 
 - **Earn its keep.** Any architectural complexity beyond the §3 / §5 / §6 / §7
   defaults must clear PHILOSOPHY §1's bar before it lands.
-- **Outsource the non-core** (PHILOSOPHY §13). When the problem is not the
-  project's core competency, pay for a managed solution. Building or self-hosting
-  earns its keep only on a current, felt cost or reliability problem with the paid
-  path. Applies to hosting, CDN, observability, auth, email, managed Postgres, etc.
+- **Outsource the non-core; own the data** (PHILOSOPHY §13). When the problem
+  is not the project's core competency, pay for a managed solution. When the
+  outsourced solution offers both a managed SaaS (vendor holds your data) and a
+  library you run on your own backend (data stays in your own Postgres), prefer
+  the library — see §13's "own the data" sub-rule. Canonical example: **BetterAuth**
+  (library, user records in your DB) over hosted-identity SaaS (Clerk, Auth0,
+  Descope, etc.). Building from scratch or self-hosting earns its keep only on a
+  current, felt cost or reliability problem with the paid path. Applies to
+  hosting, CDN, observability, auth, email, managed Postgres (Railway / DO,
+  *not* Postgres-plus-platform products), etc.
 - **Conventional commits.** Enforced by the `commit-msg` hook. Types:
   `feat|fix|refactor|chore|docs|test|style|perf|ci|build|revert`. One logical change
   per commit — **atomic**. Don't fold unrelated cleanup into a feature commit.

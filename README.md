@@ -81,9 +81,12 @@ template feeding many projects with different needs.
 
 - **Earn its keep.** Any complexity beyond the single-machine default needs a
   named, current problem and an articulated reason the simpler thing won't work.
-- **Outsource the non-core.** Pay for the managed solution unless the problem
-  *is* your core competency. Building / self-hosting earns its keep only on a
-  current cost or reliability problem.
+- **Outsource the non-core; own the data.** Pay for the managed solution unless
+  the problem *is* your core competency. When both exist, prefer a library that
+  runs on your own backend (e.g. **BetterAuth**) over a SaaS that holds your data
+  — vendor lock-in is much harder to escape once the data has lived elsewhere.
+  Building from scratch or self-hosting earns its keep only on a current cost or
+  reliability problem.
 - **TypeScript by default.** Python and Rust earn their keep.
 - **Single instance, one Postgres, modular monolith.** Replicas, queues like
   Kafka, Redis, k8s all earn their keep. Background queues on Postgres (Graphile,

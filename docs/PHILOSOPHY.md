@@ -520,17 +520,61 @@ problem, not toward becoming a platform team for your own infrastructure.
 - **Hosting (§6)** — managed Docker platforms over IaC and k8s.
 - **CDN (§9)** — Cloudflare's CDN over a homebrew edge cache.
 - **Observability (§12)** — Sentry + BetterStack over self-hosted Grafana stack.
-- **Data (§5)** — managed Postgres (Neon, Supabase, Railway Postgres, DO Managed
-  Postgres) is a reasonable default over operating your own instance.
-- **Auth** — Clerk, Auth0, Descope over rolling your own auth from scratch unless
-  identity is your product.
-- **Email / SMS** — Resend, Postmark, Twilio over running your own MTA.
+- **Data (§5)** — **Railway Postgres** or **DigitalOcean Managed Postgres**
+  (plain managed Postgres, no abstraction layer above it) over operating your own
+  instance. Avoid "Postgres-plus-platform" products (Supabase, etc.) that abstract
+  the database away and lock you to their surface — by the "own the data" rule
+  below, you want managed *Postgres*, not "a service backed by Postgres".
+- **Auth** — **BetterAuth** (open-source library that runs on your own backend; the
+  user records live in your own Postgres). Hosted-identity SaaS (Clerk, Auth0,
+  Descope, etc.) is a more aggressive form of outsourcing that gives up data
+  ownership — see the "own the data" rule below.
+- **Email / SMS** — Resend, Postmark, Twilio over running your own MTA. The data
+  here is transactional output, not durable identity, so the data-ownership rule
+  is less constraining.
+
+**Sub-rule: own the data.**
+
+When the outsourced solution offers both a **managed SaaS** (vendor holds your
+data on their infrastructure) and a **library or service you run on your own
+infrastructure** (data stays in your own Postgres / your own object store /
+your own process), prefer the library version. The running code is a short-term
+productivity gain; the data is a long-term asset. Vendor lock-in is much harder
+to escape after the data has lived in their system for years — and a vendor
+whose incentives, pricing, or product direction shift later can hold the data
+hostage in a way they can't hold an open-source library.
+
+This applies most strongly to **durable, identifying, or strategic data**:
+
+- **User identities and accounts** — BetterAuth (data in your DB) wins over
+  hosted-identity SaaS by this rule. If you ever migrate auth providers, having
+  the user table already on your side of the wall is the difference between
+  "swap the library" and "data migration project".
+- **Customer records, content, domain state** — these belong in your own DB
+  (per §5 Postgres only), not in a CMS-as-a-service or a Firestore-shaped
+  vendor lock-in.
+- **Anything that's a moat** — proprietary data, scores, recommendations,
+  curated content — stays on your side, period.
+
+It applies less to **transactional output and ephemeral context**:
+
+- Sent emails (Resend / Postmark), sent SMS (Twilio), pushed notifications.
+- CDN cache contents, edge logs.
+- Observability ingest (§12) — though even there, prefer vendors with clean
+  export paths so you can leave with the historical data.
+
+When you can't have both ("there is no library version of this problem"), §13's
+outer rule still applies: pay for the SaaS. But check first. The library version
+often exists and is the better choice on the data-ownership axis.
 
 **Where you do NOT outsource:**
 
 - **The domain core.** If you're building a scoring engine, the scoring engine is
   yours; you don't pay a vendor for "scoring as a service." The product *is* the way
   you do that one thing.
+- **Durable user / customer / domain data.** The "own the data" sub-rule above is
+  the operational form of this: even when you outsource the *solution*, keep the
+  *data* on your side of the wall whenever the library form lets you.
 - **Anything that exposes proprietary data or a strategic moat** to a vendor whose
   incentives could turn against you.
 
