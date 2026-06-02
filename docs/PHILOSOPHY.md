@@ -808,6 +808,27 @@ mock-heavy unit world hides exactly the seam bugs that production exercises.
 - **Drive `Result` to its `err` branch in tests.** A `Result`-returning function
   whose tests only ever assert `isOk()` isn't tested.
 
+**UI components: stories are the test layer for the view.** A UI component's
+behaviour is mostly *how it renders in a given state* — and the right tool for
+pinning that is **Storybook**. Virtually any non-trivial UI component ships
+with at least a few stories, one per meaningful state:
+
+- **Default** — realistic happy-path data.
+- **Loading** — what renders while data is on its way.
+- **Empty** — a legitimate "genuinely nothing there" result.
+- **Error / unavailable** — the upstream failed. Empty and unavailable get
+  *separate* stories; this is the "two zeros" distinction (§11) made visible.
+- **Edge fullness**, where relevant — overflow content, long names, many items.
+
+Light interactions in a story are fine (a play function that opens the
+dropdown). Asserting a multi-step user *flow* is not what stories are for —
+that's an E2E test, the top rung of the ladder. Stories answer "does this UI
+look right in state X?"; E2E answers "can the user get from A to B?".
+
+Stories also double as a living catalog: a designer or product owner can
+browse every state of every component without running the app or reproducing
+an error by hand.
+
 **Earn-its-keep.** Heavy mocking earns its keep only when the alternative is
 genuinely non-deterministic and no recording strategy works (a third-party
 system that doesn't replay sensibly, time-sensitive logic with no clock
