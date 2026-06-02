@@ -246,16 +246,40 @@ domain key (category, band, role, etc.) should use the `as const` union from the
 domain module, not a bare `string`. Don't demand narrowing for genuinely free-form text
 (place names, raw addresses, user input).
 
-**Branded types where domain values live** (PHILOSOPHY §14 + §16). A `string`
-parameter that means a `UserId`, a `number` parameter that means Unix seconds, or
-a `bigint` parameter that means cents — flag the bare type. The project's domain
-modules should expose branded aliases (`type UserId = string & { __brand: "UserId" }`
-or equivalent); call sites should use them. The compiler then refuses to confuse a
-`BookingId` with a `UserId`, or seconds with milliseconds. Don't flag bare
-primitives where the value is genuinely free-form (a parsed input that's about to
-be used and discarded). Do flag them at module boundaries, function signatures,
-DB-derived types, and anywhere two values of the same primitive type could be
-swapped without the type system complaining.
+**Branded types where domain values live** (PHILOSOPHY §14 + §16). This is a
+**top-priority finding class** — same weight as a swallowed error. A missing brand
+is a whole category of bug (swapped IDs, seconds-vs-milliseconds, cents-vs-dollars)
+that the compiler was prevented from catching. A `string` parameter that means a
+`UserId`, a `number` parameter that means Unix seconds, or a `bigint` parameter
+that means cents — flag the bare type. The project's domain modules should expose
+branded aliases (`type UserId = string & { __brand: "UserId" }` or equivalent);
+call sites should use them.
+
+Flag, concretely:
+
+- **A function signature with two or more parameters of the same bare primitive
+  type** (`(userId: string, bookingId: string)`, `(amountCents: number, taxCents:
+  number)`). This is the exact call-site swap the brand exists to prevent — the
+  finding stands even if every current caller passes the right values.
+- **A new domain identifier, quantity, or unit introduced as a bare primitive**
+  at a module boundary, function signature, or DB-derived type — even when only
+  one such value exists today. "We'll brand it when a second ID type shows up"
+  is the same deferral as "tests are a follow-up": a violation.
+- **A brand applied by `as` cast at arbitrary call sites** (`input as UserId`)
+  instead of constructed through the brand's single constructor/parser. A brand
+  you can cast into from anywhere is decoration, not a guarantee. The cast is
+  legitimate in exactly two places: the brand's own constructor module, and
+  test fixtures.
+- **A branded value unwrapped to its raw primitive mid-flow** and re-branded
+  later. The brand should travel end to end; round-tripping through the bare
+  type reopens the swap window.
+- **Arithmetic or comparison mixing two differently-united values** (seconds
+  with milliseconds, cents with a float of dollars, meters with minutes) where
+  neither side is branded. Both sides get brands so the compiler rejects the
+  mix.
+
+Don't flag bare primitives where the value is genuinely free-form (a parsed input
+that's about to be used and discarded, display-only text).
 
 **Purity leaks into the pure core.** If the project has a pure functional core (scoring,
 pricing, routing math, etc. — `CLAUDE.md` names it), flag any import of an integration,

@@ -142,6 +142,11 @@ test layer — how it renders in each state *is* the behaviour to pin.
   channel.
 - **Determinism in the unit lane** — no `Date.now()`/`Math.random()`/network/filesystem-
   order reliance. A domain test must be reproducible from its fixtures alone.
+- **Branded-type constructors get their reject branch tested.** Casting into a brand
+  (`"u_1" as UserId`) is acceptable for fixture brevity, but when a brand ships a
+  validating constructor/parser, at least one test drives it to rejection (malformed
+  ID, negative cents, out-of-range timestamp). A brand whose validation is never
+  exercised is decoration — same rule as a `Result` whose `err` branch is never hit.
 
 ## Eval suites (PHILOSOPHY §27)
 

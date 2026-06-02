@@ -15,8 +15,10 @@ The universal reviewers (shipped in `.claude/agents/`):
 
 - `code-reviewer` — engineering-quality concerns: module boundaries, ad-hoc env
   access, swallowed errors, unbounded concurrency stack (the five primitives of
-  PHILOSOPHY §11), type-system holes, branded types, observability discipline
-  (PHILOSOPHY §12), no-business-logic-in-DB, missing tests, dependency drift.
+  PHILOSOPHY §11), type-system holes, branded types (a top-priority class —
+  bare primitives standing in for domain values, same-primitive parameter
+  swaps), observability discipline (PHILOSOPHY §12), no-business-logic-in-DB,
+  missing tests, dependency drift.
 - `test-reviewer` — adversarial reviewer for changed tests: do they pin the real
   behaviour (not a mock or a proxy), are the failure / `err` branches and
   boundaries covered, could the test climb one rung higher on the fidelity ladder
