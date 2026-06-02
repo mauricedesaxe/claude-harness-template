@@ -110,6 +110,23 @@ Things to specifically flag:
   enqueues the right job; worker produces the right outcome) — *both*, not
   just the second.
 
+## UI components: stories (PHILOSOPHY §18)
+
+When the diff adds or changes a non-trivial UI component, Storybook stories are its
+test layer — how it renders in each state *is* the behaviour to pin.
+
+- **A non-trivial component with no stories is a finding** — same weight as a
+  `Result` function with no `err`-branch test. Name the missing states concretely,
+  not "add stories".
+- **The state set is the coverage bar:** default, loading, empty, error/unavailable.
+  Empty and unavailable are *separate* stories — the "two zeros" made visible. Flag
+  stories that only show the happy path.
+- **Stories stay light on interaction.** A play function that opens a menu is fine;
+  a story that walks a multi-step user flow is an E2E test wearing a story's clothes
+  — flag it and propose the move to the E2E lane.
+- **Stories render deterministically from fixtures** — no live network in a story;
+  data is mocked at the boundary, same rule as the unit lane.
+
 ## Patterns & hygiene (fast checks)
 
 - **Placement** — follow the project's lanes (`__tests__/` unit, `__integration__/`

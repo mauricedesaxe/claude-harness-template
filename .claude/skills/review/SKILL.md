@@ -20,7 +20,8 @@ The universal reviewers (shipped in `.claude/agents/`):
 - `test-reviewer` — adversarial reviewer for changed tests: do they pin the real
   behaviour (not a mock or a proxy), are the failure / `err` branches and
   boundaries covered, could the test climb one rung higher on the fidelity ladder
-  and stay deterministic (PHILOSOPHY §18).
+  and stay deterministic, do non-trivial UI components ship Storybook stories for
+  their default / loading / empty / error states (PHILOSOPHY §18).
 - `data-reviewer` — data layer: schema changes, migrations (reversible by
   default; expand → backfill → contract for invasive changes), value types at
   the storage boundary (`timestamptz`, `numeric`/`bigint` money, branded
