@@ -111,6 +111,11 @@ done
 
 # Universal docs
 cp "$TMPDIR_HARNESS/docs/PHILOSOPHY.md" docs/PHILOSOPHY.md
+
+# Worktree-first workflow (PHILOSOPHY §14): the work/ship skills create worktrees
+# under .claude/worktrees/ — make sure they never show up as untracked noise
+grep -qxF '.claude/worktrees/' .gitignore 2>/dev/null || \
+  echo '.claude/worktrees/' >> .gitignore
 ```
 
 Track what was written vs already-existed (for the Step 5 summary): a file that existed
@@ -177,6 +182,8 @@ Print a summary:
 
   Docs (universal, overwritten):
     docs/PHILOSOPHY.md                      (updated | added)
+
+  .gitignore: .claude/worktrees/            (added | already present)
 
   CLAUDE.md: <added skeleton | preserved existing>
 

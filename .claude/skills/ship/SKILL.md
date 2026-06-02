@@ -54,11 +54,18 @@ auto-create another PR — the user pointed at this one.
 ```sh
 git branch --show-current
 git status --short
+git rev-parse --git-dir --git-common-dir       # differ → we're in a linked worktree
 git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null
 git log --oneline @{u}..HEAD 2>/dev/null
 env -u GITHUB_TOKEN gh pr view \
   --json number,title,headRefName,baseRefName,state,mergeable,mergeStateStatus 2>/dev/null
 ```
+
+Note whether you're standing in a **linked worktree** (`--git-dir` ≠ `--git-common-dir`)
+— the `work` skill's default. Everything below runs the same from inside a worktree;
+only the Step 7 local cleanup differs. Stay in the worktree for every git/`gh`
+operation — never `cd` into the main checkout to run a step, its HEAD belongs to
+another run.
 
 Decide which steps need to run:
 
@@ -86,10 +93,17 @@ slug. Convention is `<type>/<short-slug>`: `feat/parser-rewrite`,
 Show the proposed name and changed-files summary; proceed unless the user renames:
 
 ```sh
+git fetch origin main
 git switch -c <branch-name>
 ```
 
 `git switch -c` carries the uncommitted changes onto the new branch — no stashing.
+(A worktree can't do that — `git worktree add` starts clean — which is why this
+recovery path branches in place. Starting *new* work is different: that goes through
+the `work` skill, which creates a worktree off `origin/main` before any edits exist.)
+
+After committing (Step 3), if the fetch showed local `main` was behind `origin/main`,
+rebase the new branch onto `origin/main` before pushing so the PR isn't born stale.
 
 ## Step 3: commit the dirty tree (only if uncommitted changes)
 
@@ -206,7 +220,25 @@ env -u GITHUB_TOKEN gh pr checks <#>
 env -u GITHUB_TOKEN gh pr merge <#> --rebase --delete-branch
 ```
 
-Local cleanup once the merge succeeds:
+Local cleanup once the merge succeeds — the shape depends on where you're standing
+(detected in Step 1):
+
+**In a linked worktree** (the `work` skill's default):
+
+```sh
+# a worktree can't be removed from inside itself — step out to the repo root first
+cd "$(dirname "$(git rev-parse --git-common-dir)")"
+git worktree remove .claude/worktrees/<slug>
+git branch -D <branch>     # remote already deleted by --delete-branch
+```
+
+Stepping out to the repo root is only for `git worktree remove` / `git branch -D` —
+both are shared-metadata operations that don't touch the main checkout's HEAD. Do
+**not** `git checkout main` or `git pull` there: that checkout may belong to another
+agent mid-run, and the merged commits are already on `origin/main` for the next
+worktree to base off.
+
+**In the main checkout** (recovery path, no worktree):
 
 ```sh
 git checkout main
@@ -243,13 +275,17 @@ Print a summary reflecting only the steps that fired:
 ✓ Pushed branch <branch>              (only if Step 4 ran)
 ✓ Opened PR #<number>: <title>        (only if Step 5 ran)
 ✓ Merged PR #<number>: <title>        (--rebase → N commit(s) fast-forwarded onto main)
-✓ Local main fast-forwarded to <sha>
+✓ Removed worktree <path>             (only if shipping from a worktree)
+✓ Local main fast-forwarded to <sha>  (only if shipping from the main checkout)
 ✓ <K> follow-up issue(s) filed        (only if Step 8 filed any)
 ```
 
 ## Don't
 
 - **Don't** plain `--force` push. `--force-with-lease`, only with explicit consent.
+- **Don't** `git checkout main` or `git pull` in the main checkout when shipping from a
+  worktree — that checkout's HEAD may belong to another agent. Remove the worktree and
+  stop; `origin/main` already has the merge.
 - **Don't** merge with `mergeStateStatus: BLOCKED` or a failing required check.
 - **Don't** silently bundle pre-staged unrelated files into Step 3. Stop and ask.
 - **Don't** auto-file follow-up issues without confirmation.

@@ -76,7 +76,7 @@ The harness lists them each session; this table is the durable "when to reach fo
 
 | Skill | Reach for it when |
 |---|---|
-| `work` | Picking up a GitHub issue — branch → rough plan → adversarial plan review → user approval → implement → `/review` → triage → `/ship`. The default end-to-end workflow. |
+| `work` | Picking up a GitHub issue — worktree off latest main → rough plan → adversarial plan review → user approval → implement → `/review` → triage → `/ship`. The default end-to-end workflow. |
 | `commit` | A logical chunk of work is done — record it as atomic conventional commits (as you go, not all at once). |
 | `review` | Before commit/push/merge — runs the reviewer agents against the diff and reports in chat. Never posts to GitHub. |
 | `capture` | An idea, feature, or bug surfaces mid-flow — file it as a GitHub issue, but **only if it clears the felt-product-value bar**. |
@@ -600,6 +600,15 @@ backlinks. When an issue is genuinely waiting on something, apply the `blocked` 
 
 ## Git workflow
 
+- **Worktree-first** (PHILOSOPHY §14). Each work stream runs in its own git worktree
+  under `.claude/worktrees/<branch-slug>`, created from **freshly fetched
+  `origin/main`** — never by switching branches in the main checkout, and never
+  based on the possibly-stale local `main` ref:
+  `git fetch origin main && git worktree add .claude/worktrees/<slug> -b <branch> origin/main`.
+  Multiple agents work this repo concurrently; the main checkout's HEAD belongs to
+  no one. Keep `.claude/worktrees/` gitignored. Stay in your worktree for every
+  git/`gh` operation; after merge, remove the worktree — don't pull `main` in the
+  main checkout.
 - **Conventional commits**, atomic, per logical change. See `.claude/skills/commit/SKILL.md`.
 - **Branch names** are `<type>/<short-slug>`: `feat/<feature>`, `fix/<bug>`,
   `chore/<scope>`. When started from an issue, include the number:
