@@ -628,6 +628,15 @@ compile time or commit time, when fixing them is cheap.
   useful — reach for them by default.
 - **Atomic conventional commits.** One logical change per commit. The
   `commit-msg` hook enforces the type prefix; the atomic discipline is on you.
+- **Worktree-first concurrent work.** Multiple agents (human or AI) routinely
+  work the same repo at the same time. Each work stream runs in its own git
+  worktree (`.claude/worktrees/<slug>`), created from **freshly fetched
+  `origin/main`** — never by switching branches in a shared checkout, and never
+  based on a possibly-stale local `main` ref. The worktree isolates the code;
+  `.git` metadata, PR numbers, and board state stay shared — those remain the
+  genuinely-shared steps to slow down on. A worktree costs one command to
+  create and one to remove; a branch switch under another agent's feet costs
+  their whole run.
 - **Plan first, attack the plan, gate on the user, then write code.** The `work`
   skill encodes the workflow; this is the underlying habit. Designing in prose
   where the cost of being wrong is a paragraph is cheaper than designing in code.
