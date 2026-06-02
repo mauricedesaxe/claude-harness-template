@@ -189,6 +189,8 @@ or a single-form landing page — per PHILOSOPHY §20, simplicity is tier-1):
   component-scoped.
 - **Styling:** Tailwind + the `neobrutalist-pop` skill.
 - **Forms:** TanStack Form.
+- **Component states:** Storybook — every non-trivial component has stories
+  (see Testing below).
 
 **Local-first feel** is the product target — interactions under the Doherty
 threshold (~400 ms) so the UI feels alive:
@@ -541,6 +543,12 @@ code correctness), `__integration__/` (live, keyed, pipeline drift), and any oth
 - **New behaviour ships with tests in the same commit.** A new mapping, a curve
   change, a new integration parser — all land with coverage, including the failure
   branch (the `unavailable` path).
+- **Non-trivial UI components ship with Storybook stories** (PHILOSOPHY §18) —
+  at minimum the default, loading, empty, and error/`unavailable` states; empty
+  and unavailable are *separate* stories (the "two zeros"). Light interactions
+  in a story are fine; asserting a user *flow* is E2E's job. Stories pin how
+  the UI looks in a given state and double as a browsable catalog of every
+  component state.
 
 ## Issue triage
 
