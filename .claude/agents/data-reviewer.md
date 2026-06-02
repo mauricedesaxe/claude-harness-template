@@ -108,6 +108,20 @@ itself a finding — name it what it does.
 - Cross-table FK columns use the **branded type of the referenced table's ID**,
   not the bare primitive. The compiler then refuses "you passed a `BookingId`
   where `UserId` was expected."
+- **Every new ID column and FK gets this treatment** — there is no "we'll brand
+  it when a second table shows up". One unbranded ID column makes every join,
+  repo signature, and caller that touches it unbrandable too; the cost
+  compounds with each new call site. Treat a missing brand as a top-priority
+  finding, not a style nit.
+- **The schema-derived row type surfaces the brand**, not the raw primitive.
+  Drizzle's `$inferSelect`, Prisma's generated types, sqlx derives — if the
+  framework's derived type exposes `string`/`number` for a branded column, the
+  column definition gets an explicit transform/`$type<Brand>()` so the brand is
+  applied in exactly one place and travels from there. Flag a repo method that
+  selects a branded column but returns it bare.
+- **Repo method signatures take and return branded types**
+  (`findUserById(id: UserId)`, never `findUserById(id: string)`). A repo that
+  accepts bare primitives forces every caller to cast, which defeats the brand.
 
 **Durations.**
 

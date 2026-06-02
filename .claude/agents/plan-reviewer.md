@@ -200,7 +200,12 @@ the choice is the hard part. Flag plans that:
 ### 14. Value-type plans (PHILOSOPHY §14 + §16)
 
 Plans that introduce time, money, or domain-key values must say how they're
-typed. Flag plans that:
+typed — and the default answer is a **branded type**. The plan's **Type-system
+shape** section must name the brand for every new identifier, quantity, and
+unit it introduces; you should be able to list the brands the diff will add
+(`OrderId`, `Cents`, `WalkMinutes`) from the plan alone. A plan that introduces
+domain values and names no brands is incomplete the same way a plan with no
+Tests section is incomplete. Flag plans that:
 
 - **Store or transmit moments-in-time as numeric Unix timestamps** without
   branding (`type UnixSeconds = number & { __brand: "UnixSeconds" }`). UTC
@@ -213,6 +218,14 @@ typed. Flag plans that:
 - **Mix durations and instants in the same type** ("we pass `delay: number`")
   without branding units. `delayMs` vs `delaySec` should be distinct branded
   types or a `Duration` value.
+- **Describe a function taking two or more values of the same primitive type**
+  ("takes the user id and the booking id") without naming their brands — the
+  call-site swap is exactly what branding prevents, and plan time is the
+  cheapest place to demand it.
+- **Plan brands without a constructor story.** A brand needs exactly one place
+  that creates it — a parser/constructor that validates and brands. A plan
+  that says "we'll cast where needed" defeats the brand; flag it and name the
+  module the constructor should live in.
 
 ### 15. Commercial-readiness gating (PHILOSOPHY §19)
 
