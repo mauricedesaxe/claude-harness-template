@@ -5,9 +5,9 @@ description: Run the project's reviewer agents in parallel against the current d
 
 # Review Skill
 
-Run the project's reviewer agents in parallel against the current branch's diff vs `main`,
-plus any uncommitted edits in the working tree. Collate their findings into a single chat
-report. Do not post to GitHub.
+Run the project's reviewer agents in parallel against the current branch's diff vs the
+latest `origin/main`, plus any uncommitted edits in the working tree. Collate their
+findings into a single chat report. Do not post to GitHub.
 
 The universal reviewers (shipped in `.claude/agents/`):
 
@@ -46,10 +46,15 @@ cross-running.
 
 ## Step 1: gather the diff
 
+The diff base is **freshly fetched `origin/main`**, not the local `main` ref — when
+working in a worktree (the `work` skill's default), local `main` may be stale or
+checked out elsewhere by another agent.
+
 ```sh
-git diff --name-only main...HEAD       # committed branch changes
-git diff --name-only                   # unstaged
-git diff --name-only --staged          # staged
+git fetch origin main
+git diff --name-only origin/main...HEAD  # committed branch changes
+git diff --name-only                     # unstaged
+git diff --name-only --staged            # staged
 ```
 
 Deduplicate into one list of changed paths. If the list is empty, say so and stop — there
@@ -79,8 +84,8 @@ grep -E '^\*\*Commercial readiness:\*\* +(yes|no)' CLAUDE.md | head -1
 Each agent already knows its own scope. Send all the tool calls in a single
 message so they run concurrently. Each prompt should give the agent:
 
-1. The diff source — "the diff `main...HEAD` plus any uncommitted edits in the
-   working tree".
+1. The diff source — "the diff `origin/main...HEAD` plus any uncommitted edits in
+   the working tree".
 2. The list of changed paths.
 3. A reminder that its output is collated into a single chat report, so it
    should be concrete (file path, line number, fix) and skip restating its own

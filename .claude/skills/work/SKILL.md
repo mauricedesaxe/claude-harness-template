@@ -1,6 +1,6 @@
 ---
 name: work
-description: Start working on a GitHub issue end-to-end — branch, plan, adversarially review the plan, gate on the user, implement, run the reviewer agents, triage findings, then ship. Use when the user says "/work", "/work #12", "work on this issue", "start working on #12", "let's implement #12", or otherwise wants to take an issue from "picked up" to "merged" via the default workflow.
+description: Start working on a GitHub issue end-to-end — worktree off latest main, plan, adversarially review the plan, gate on the user, implement, run the reviewer agents, triage findings, then ship. Use when the user says "/work", "/work #12", "work on this issue", "start working on #12", "let's implement #12", or otherwise wants to take an issue from "picked up" to "merged" via the default workflow.
 ---
 
 # Work Skill
@@ -19,7 +19,7 @@ touched.
 ```
 0. parse arg + sanity-check     5. user approval gate (plan)
 1. resolve the issue            6. implement
-2. branch off main              7. /review
+2. worktree off latest main     7. /review
 3. draft the plan               8. user triage gate (findings)
 4. plan-reviewer agent          9. /ship
 ```
@@ -45,8 +45,11 @@ git branch --show-current
 git status --short
 ```
 
-If the tree is dirty on `main`, or we're on a feature branch with unrelated work, stop
-and ask. Don't sweep someone else's in-progress changes into a new branch.
+Because Step 2 creates a fresh worktree off `origin/main`, a dirty tree or a checked-out
+feature branch in the current checkout is **not** a blocker — the worktree starts clean
+and can't sweep anything in. But surface what you see: if the dirty files look like they
+were meant to be part of *this* issue's work, ask before continuing (they won't follow
+you into the worktree).
 
 ## Step 1: resolve the issue
 
@@ -66,20 +69,46 @@ without prompting; Backlog items haven't been scoped yet. Skip items carrying th
 project number, owner, and field IDs live in the project's `CLAUDE.md` "Issue triage"
 section (set them up once after the repo's GitHub Project is created).
 
-## Step 2: branch off main
+## Step 2: create a worktree off the latest main
 
-Generate a name from the issue: `<type>/<#>-<short-slug>`. Pick the conventional-commit
-type that fits the work (`feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `perf`,
-`ci`, `build`). Examples: `feat/12-parser-rewrite`, `fix/47-decay-boundary`.
+Work happens in a **dedicated git worktree**, not by switching branches in the main
+checkout. Multiple agents (and the user) routinely work this repo concurrently
+(PHILOSOPHY §14, worktree-first): the main checkout's HEAD belongs to no one, and
+switching it under another agent corrupts their run. The worktree isolates the code;
+`.git` metadata and GitHub state stay shared.
+
+Generate a branch name from the issue: `<type>/<#>-<short-slug>`. Pick the
+conventional-commit type that fits the work (`feat`, `fix`, `refactor`, `chore`,
+`docs`, `test`, `perf`, `ci`, `build`). Examples: `feat/12-parser-rewrite`,
+`fix/47-decay-boundary`.
 
 Including the issue number in the slug means the `ship` skill auto-detects the
 `Closes #N` reference later (see `ship` Step 5a).
 
+Base the worktree on **freshly fetched `origin/main`** — never the local `main` ref,
+which may be stale or mid-update by another agent:
+
 ```sh
-git switch -c <branch-name>
+git fetch origin main
+git worktree add .claude/worktrees/<#>-<short-slug> -b <branch-name> origin/main
+cd .claude/worktrees/<#>-<short-slug>
 ```
 
-Show the proposed name; proceed unless the user renames.
+If `.claude/worktrees/` isn't in `.gitignore`, add it as part of this work's first
+commit — otherwise every worktree shows up as untracked noise in everyone's
+`git status`.
+
+From here on, **every command in this workflow runs inside the worktree** — the
+implement step, `/review`, `/ship`, every git and `gh` operation. Don't `cd` back
+into the main checkout to run something "real quick"; its branch and working tree
+belong to another run.
+
+Show the proposed branch name and worktree path; proceed unless the user renames.
+
+Fallback: when worktrees genuinely can't be used (tooling that breaks on linked
+worktrees, or the user explicitly opts out), branch in place — but still off the
+fetched remote ref: `git fetch origin main && git switch -c <branch-name> origin/main`.
+The "base on the latest main" half of the rule holds either way.
 
 If the project has a board configured in `CLAUDE.md`, move the issue's board item from
 **Ready → In progress** so the board reflects what's actually being worked. Field/option
@@ -215,7 +244,7 @@ what the gate is for — but don't quietly delete the finding from the table; ma
 
 Invoke the `ship` skill (`.claude/skills/ship/SKILL.md`). It handles the rest end-to-end
 — push, PR (with `Closes #<N>` auto-detected from the branch name), CI wait, rebase-merge,
-local fast-forward, follow-up prompt.
+worktree cleanup, follow-up prompt.
 
 If the user wants to pause before merging (e.g. for a manual verification on a preview
 deploy), stop at PR-open and let them resume `ship` later. The `ship` skill already
@@ -223,6 +252,10 @@ handles "resume from wherever we are".
 
 ## Don't
 
+- **Don't** switch branches in the main checkout. Work happens in a worktree off
+  freshly fetched `origin/main` (Step 2); the main checkout's HEAD belongs to no one.
+- **Don't** base a worktree or branch on the local `main` ref. Fetch first; base on
+  `origin/main`.
 - **Don't** start coding before Step 5 (user approval of the plan). The plan-first beat
   is the whole point.
 - **Don't** skip the adversarial review just because the change "feels small". The
