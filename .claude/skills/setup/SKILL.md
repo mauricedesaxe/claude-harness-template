@@ -102,7 +102,7 @@ bypasses any narrower env-var token (`gh` prefers env over keyring).
 
 ```sh
 claude mcp list                   # expect 'github' as ✓ Connected if installed
-git status                        # expect clean tree
+jj st                             # expect an empty @ (clean working copy)
 ```
 
 ## Don't
@@ -111,7 +111,7 @@ git status                        # expect clean tree
   pnpm, `uv` for Python projects). Lockfile drift is silent and painful.
 - Don't put MCP credentials or API keys in `.claude/settings.json` or any repo-tracked
   file. User scope / `.env` only.
-- Don't commit `node_modules/`, build output, or `.env*`. The `commit` skill stages
-  files explicitly for this reason.
+- Don't commit `node_modules/`, build output, or `.env*`. The `commit` skill commits
+  explicit paths (`jj commit <paths>`) for this reason — and jj honours `.gitignore`.
 - Don't disable supply-chain policies (`.npmrc` cooldown, package-lock integrity) to
   install a fresh package faster — they're policy, not obstacles.

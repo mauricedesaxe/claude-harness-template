@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Land work on `main` end-to-end. Detect current state (branch, tree, remote, PR) and run only the steps still missing — branch off `main` if needed, commit the dirty tree atomically (via the `commit` skill), push, open a PR with a structured body and `Closes #N`, wait for CI, merge via `gh pr merge --rebase --delete-branch`, then fast-forward `main` locally. Finishes with a post-merge prompt for follow-up issues. Use when the user says "ship", "/ship", "ship this", "ship it", "land this", "merge this", "merge this PR", or otherwise wants the work landed on `main` without thinking about which intermediate step is missing.
+description: Land work on `main` end-to-end. jj-native (Jujutsu, colocated with git). Detect current state (uncommitted @, branch commits, bookmark, PR) and run only the steps still missing — name a bookmark if needed, commit the working copy atomically (via the `commit` skill), `jj git push --bookmark`, open a PR with a structured body and `Closes #N`, wait for CI, merge via `gh pr merge --rebase --delete-branch`, then forget the workspace and `jj git fetch` so trunk picks up the merge. Finishes with a post-merge prompt for follow-up issues. Use when the user says "ship", "/ship", "ship this", "ship it", "land this", "merge this", "merge this PR", or otherwise wants the work landed on `main` without thinking about which intermediate step is missing.
 ---
 
 # Ship Skill
@@ -10,12 +10,16 @@ End-to-end "land this on `main`". The user may be anywhere in the flow — fresh
 out where they are and runs only the missing steps. It composes the `commit` skill for the
 atomic-commit step; everything else (push, PR, merge, follow-ups) is inlined.
 
+This skill is **jj-native** (PHILOSOPHY §28): the working copy is Jujutsu, colocated with
+git. Local version control is jj (workspaces, `jj commit`, bookmarks, `jj git push`); the
+PR and merge stay on `gh`, and git stays underneath only as the remote those talk to.
+
 **Merge style: `--rebase`** (linear history, no merge commit). Every commit on the branch
 lands on `main` exactly as written, so the branch's commit messages are the durable record
-— if the per-commit subjects would read badly in `git log` on `main`, fix them on the
-branch before merging. Squash is acceptable only when the branch's per-commit history is
-genuinely throwaway (one logical change spread across "wip" commits) AND the user
-explicitly OKs the collapse. Never `--merge`.
+— if the per-commit subjects would read badly in `jj log` / `git log` on `main`, fix them
+on the branch before merging. Squash is acceptable only when the branch's per-commit
+history is genuinely throwaway (one logical change spread across "wip" commits) AND the
+user explicitly OKs the collapse. Never `--merge`.
 
 There is **no auto-release workflow** by default. The flow ends when the merge succeeds,
 the branch is deleted, and the user is prompted for follow-up issues.
@@ -52,58 +56,61 @@ auto-create another PR — the user pointed at this one.
 **If no ref was passed**, gather the local picture:
 
 ```sh
-git branch --show-current
-git status --short
-git rev-parse --git-dir --git-common-dir       # differ → we're in a linked worktree
-git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null
-git log --oneline @{u}..HEAD 2>/dev/null
+jj git fetch
+jj st                                          # is @ non-empty? (uncommitted work)
+jj log -r 'trunk()..@'                          # commits on this branch beyond trunk
+jj bookmark list -r '::@'                        # the branch bookmark, if any — and whether it shows an @origin counterpart (pushed)
+jj workspace root                                # which workspace we're standing in
 env -u GITHUB_TOKEN gh pr view \
   --json number,title,headRefName,baseRefName,state,mergeable,mergeStateStatus 2>/dev/null
 ```
 
-Note whether you're standing in a **linked worktree** (`--git-dir` ≠ `--git-common-dir`)
-— the `work` skill's default. Everything below runs the same from inside a worktree;
-only the Step 7 local cleanup differs. Stay in the worktree for every git/`gh`
-operation — never `cd` into the main checkout to run a step, its HEAD belongs to
-another run.
+Note which **workspace** you're standing in (`jj workspace root` — the `work` skill's
+default is `.jj/ws/<slug>`). Everything below runs the same from inside a workspace; only
+the Step 7 cleanup differs. Stay in your workspace for every jj/`gh` operation — never
+`cd` into the default workspace to run a step, its `@` belongs to another run.
 
-Decide which steps need to run:
+In jj there's no "current branch": the working copy is always some `@`, with or without a
+bookmark naming it. So the state is just (a) does `@` hold uncommitted work, (b) are there
+commits in `trunk()..@`, (c) is there a bookmark for them and is it pushed, (d) is there an
+open PR. Decide which steps need to run:
 
-| If…                                              | Run step(s)            |
-| ------------------------------------------------ | ---------------------- |
-| On `main`, tree clean                            | Stop — nothing to ship |
-| On `main`, tree dirty                            | 2 → 3 → 4 → 5 → 6 → 7 → 8 |
-| On feature branch, tree dirty                    | 3 → 4 → 5 → 6 → 7 → 8 |
-| On feature branch, clean, unpushed               | 4 → 5 → 6 → 7 → 8 |
-| On feature branch, clean, pushed, no PR          | 5 → 6 → 7 → 8 |
-| On feature branch, clean, pushed, PR open        | 6 → 7 → 8 |
-| Detached HEAD, or PR state ≠ OPEN                | Stop and explain |
+| If…                                                          | Run step(s)            |
+| ------------------------------------------------------------ | ---------------------- |
+| `@` empty, no commits in `trunk()..@`, no bookmark           | Stop — nothing to ship |
+| `@` has uncommitted work, no bookmark yet (worked outside `work`) | 2 → 3 → 4 → 5 → 6 → 7 → 8 |
+| `@` has uncommitted work, bookmark exists (the `work` default) | 3 → 4 → 5 → 6 → 7 → 8 |
+| commits exist, `@` clean, no bookmark yet                    | 2 → 4 → 5 → 6 → 7 → 8 |
+| commits exist, bookmark set, not pushed                      | 4 → 5 → 6 → 7 → 8 |
+| bookmark pushed, no PR                                        | 5 → 6 → 7 → 8 |
+| bookmark pushed, PR open                                      | 6 → 7 → 8 |
+| PR state ≠ OPEN                                               | Stop and explain |
 
-State the plan in one line before acting — e.g. "you're on main with uncommitted changes;
-I'll branch, commit, push, open a PR, wait for CI, then merge". The user can redirect
-early.
+State the plan in one line before acting — e.g. "you've got uncommitted work and no
+branch yet; I'll commit, name a bookmark, push, open a PR, wait for CI, then merge". The
+user can redirect early.
 
-## Step 2: create a feature branch (only if currently on `main`)
+## Step 2: name a bookmark for the work (only if none exists yet)
 
-Auto-generate a branch name from the dirty changes — pick the conventional-commit type
-that fits (`git diff --stat` + a glance at the changed files), and a short hyphenated
-slug. Convention is `<type>/<short-slug>`: `feat/parser-rewrite`,
-`fix/decay-boundary`, `chore/claude-skills`.
+The `work` skill already created a bookmark at workspace setup, so this step usually only
+fires on the recovery path — you did work directly in a workspace with no bookmark. Unlike
+git, jj needs no branch switch: the changes already live in `@` regardless of any
+bookmark, so there's nothing to carry.
 
-Show the proposed name and changed-files summary; proceed unless the user renames:
+Auto-generate a name from the changes — pick the conventional-commit type that fits
+(`jj diff --stat` + a glance at the changed files), and a short hyphenated slug.
+Convention is `<type>/<short-slug>`: `feat/parser-rewrite`, `fix/decay-boundary`,
+`chore/claude-skills`.
+
+Show the proposed name and changed-files summary; proceed unless the user renames. Create
+the bookmark after committing (Step 3) so it can point at the real tip:
 
 ```sh
-git fetch origin main
-git switch -c <branch-name>
+jj bookmark create <branch-name> -r @-     # @- is the tip commit after `jj commit` leaves an empty @
 ```
 
-`git switch -c` carries the uncommitted changes onto the new branch — no stashing.
-(A worktree can't do that — `git worktree add` starts clean — which is why this
-recovery path branches in place. Starting *new* work is different: that goes through
-the `work` skill, which creates a worktree off `origin/main` before any edits exist.)
-
-After committing (Step 3), if the fetch showed local `main` was behind `origin/main`,
-rebase the new branch onto `origin/main` before pushing so the PR isn't born stale.
+Because Step 1 already ran `jj git fetch`, if your commits sit on a now-stale trunk,
+rebase before pushing so the PR isn't born stale: `jj rebase -d 'trunk()'` (see Step 6).
 
 ## Step 3: commit the dirty tree (only if uncommitted changes)
 
@@ -114,25 +121,32 @@ here. Two things specific to running it inside `ship`:
   subject and the files. Proceed once the user OKs. The standalone `commit` skill commits
   proactively; inside `ship`, the preview gate is worth the extra beat because the user is
   about to ship the result.
-- **Pre-staged files that aren't ours.** If `git diff --cached --name-only` returned
-  anything at the start of the run that doesn't belong to this work, stop and ask.
+- **Foreign changes in `@`.** jj has no staging area — `@` already holds everything in
+  the working copy. If Step 1's `jj st` showed changes that predate this work and aren't
+  ours, don't sweep them in: commit only our paths (`jj commit <paths>`), or stop and ask.
 
-The `commit` skill runs the verification gate (the `pre-commit` hook, or the project's
-check commands). If it fails, the commit doesn't happen — fix and retry before Step 4.
+The `commit` skill runs the verification gate (the project's check commands — no git hook
+fires under jj). If it fails, don't commit — fix and retry before Step 4.
 
 If the dirty tree spans multiple unrelated logical changes, split into multiple commits in
 dependency order so each commit leaves the tree buildable.
 
 ## Step 4: push the branch (only if needed)
 
+First make the bookmark point at your tip commit, then push it. After `jj commit` leaves an
+empty `@`, the tip is `@-`; if your latest work is still uncommitted in `@`, commit it
+first (Step 3):
+
 ```sh
-git push -u origin "$(git branch --show-current)"   # no upstream → first push
-git push                                            # has upstream, ahead
+jj bookmark set <branch-name> -r @-           # advance the bookmark to the tip (create with `jj bookmark create` if new)
+jj git push --bookmark <branch-name>          # first push auto-tracks the remote; later pushes are safe force-with-lease by default
 ```
 
-If the upstream is behind a local rebase that hasn't been force-pushed, `git push` will
-reject. Surface the conflict; offer `git push --force-with-lease` only if the user
-explicitly asked for the rebase. Never plain `--force`, never silently force-push.
+Unlike git, `jj git push` is **force-with-lease by default** — it updates the remote only
+if it still matches what jj last fetched, so a clean rebase pushes without ceremony and no
+`--force` flag is ever needed. If the push reports the remote moved underneath you (someone
+else advanced the branch), surface it and re-fetch rather than forcing past the safety
+check.
 
 ## Step 5: open a PR (only if no PR exists)
 
@@ -140,9 +154,9 @@ explicitly asked for the rebase. Never plain `--force`, never silently force-pus
 
 Scan for an issue reference, in order:
 
-1. **Branch name** — e.g. `feat/12-parser-rewrite` → `#12`. Match `\b\d+\b` segments.
-2. **Commit subjects + bodies** — `git log main..HEAD --pretty=format:'%s%n%n%b'`. Look
-   for `#N` and `Closes #N` / `Fixes #N` / `Refs #N`.
+1. **Bookmark name** — e.g. `feat/12-parser-rewrite` → `#12`. Match `\b\d+\b` segments.
+2. **Commit descriptions** — `jj log -r 'trunk()..@' --no-graph -T 'description ++ "\n"'`.
+   Look for `#N` and `Closes #N` / `Fixes #N` / `Refs #N`.
 
 Resolve to one closing issue: single match → use it; multiple → ask which to close (others
 become `Refs #N`); zero → ask once whether this PR should close one. Don't fabricate a
@@ -190,7 +204,7 @@ Capture the new PR number from the output URL. Don't `--draft` unless asked.
 ## Step 6: pre-flight — CI green and branch mergeable
 
 ```sh
-git fetch origin main
+jj git fetch
 env -u GITHUB_TOKEN gh pr view <#> --json mergeStateStatus,mergeable
 env -u GITHUB_TOKEN gh pr checks <#>
 ```
@@ -210,9 +224,10 @@ env -u GITHUB_TOKEN gh pr checks <#>
 
 - `mergeStateStatus: BEHIND` → the branch is behind `main`. Since we rebase-merge, update
   by rebasing: `env -u GITHUB_TOKEN gh pr update-branch <#> --rebase`, or locally
-  `git fetch origin main && git rebase origin/main && <project check> && <project test> &&
-  git push --force-with-lease`. Don't use plain `gh pr update-branch <#>` — that creates a
-  merge commit on the branch.
+  `jj git fetch && jj rebase -d 'trunk()' && <project check> && <project test> &&
+  jj bookmark set <branch> -r @- && jj git push --bookmark <branch>`. jj's push is
+  force-with-lease by default — no force flag needed. Don't use plain
+  `gh pr update-branch <#>` — that creates a merge commit on the branch.
 
 ## Step 7: merge
 
@@ -223,32 +238,32 @@ env -u GITHUB_TOKEN gh pr merge <#> --rebase --delete-branch
 Local cleanup once the merge succeeds — the shape depends on where you're standing
 (detected in Step 1):
 
-**In a linked worktree** (the `work` skill's default):
+**In a jj workspace** (the `work` skill's default):
 
 ```sh
-# a worktree can't be removed from inside itself — step out to the repo root first
-cd "$(dirname "$(git rev-parse --git-common-dir)")"
-git worktree remove .claude/worktrees/<slug>
-git branch -D <branch>     # remote already deleted by --delete-branch
+jj git fetch                              # pick up the merge + the deleted remote branch
+# a workspace can't be forgotten from inside itself — step out to the repo root first
+cd "$(jj workspace root)/../../.."        # out of .jj/ws/<slug> (three levels) to the repo root
+jj workspace forget <slug>
+rm -rf .jj/ws/<slug>
+jj bookmark delete <branch> 2>/dev/null || true   # drop the local bookmark; the remote is already gone
 ```
 
-Stepping out to the repo root is only for `git worktree remove` / `git branch -D` —
-both are shared-metadata operations that don't touch the main checkout's HEAD. Do
-**not** `git checkout main` or `git pull` there: that checkout may belong to another
-agent mid-run, and the merged commits are already on `origin/main` for the next
-worktree to base off.
+`jj git fetch` advances `trunk()` to include the merge, so the next workspace bases off it
+— there's nothing to `pull` and no default-workspace `@` to disturb. Don't `cd` into
+another workspace's `@`: it may belong to another agent mid-run.
 
-**In the main checkout** (recovery path, no worktree):
+**In the default workspace** (recovery path, no dedicated workspace):
 
 ```sh
-git checkout main
-git pull --ff-only
-git branch -D <branch>     # remote already deleted by --delete-branch
+jj git fetch                              # trunk() now includes the merge
+jj bookmark delete <branch> 2>/dev/null || true
 ```
 
-Don't delete the local branch before confirming the remote was deleted. Pass `--squash`
-instead of `--rebase` only for genuinely throwaway "wip" history with explicit user OK.
-Never `--merge`.
+There's no `git checkout main` / `git pull` equivalent to run — jj has no checked-out
+branch to fast-forward; `jj git fetch` already moved `trunk()`, and your `@` rebases onto
+it whenever you start the next change. Pass `--squash` instead of `--rebase` only for
+genuinely throwaway "wip" history with explicit user OK. Never `--merge`.
 
 ## Step 8: post-merge follow-ups
 
@@ -275,17 +290,18 @@ Print a summary reflecting only the steps that fired:
 ✓ Pushed branch <branch>              (only if Step 4 ran)
 ✓ Opened PR #<number>: <title>        (only if Step 5 ran)
 ✓ Merged PR #<number>: <title>        (--rebase → N commit(s) fast-forwarded onto main)
-✓ Removed worktree <path>             (only if shipping from a worktree)
-✓ Local main fast-forwarded to <sha>  (only if shipping from the main checkout)
+✓ Forgot workspace <path>             (only if shipping from a jj workspace)
+✓ trunk() advanced to <change-id>     (jj git fetch picked up the merge)
 ✓ <K> follow-up issue(s) filed        (only if Step 8 filed any)
 ```
 
 ## Don't
 
-- **Don't** plain `--force` push. `--force-with-lease`, only with explicit consent.
-- **Don't** `git checkout main` or `git pull` in the main checkout when shipping from a
-  worktree — that checkout's HEAD may belong to another agent. Remove the worktree and
-  stop; `origin/main` already has the merge.
+- **Don't** force past jj's lease. `jj git push` is force-with-lease by default; if it
+  reports the remote moved, re-fetch — don't reach for a raw `git push --force`.
+- **Don't** touch the default workspace's `@` (`jj edit`, `jj new` there, or any mutation)
+  when shipping from a dedicated workspace — it may belong to another agent. Forget your
+  workspace and stop; `jj git fetch` already advanced `trunk()` with the merge.
 - **Don't** merge with `mergeStateStatus: BLOCKED` or a failing required check.
 - **Don't** silently bundle pre-staged unrelated files into Step 3. Stop and ask.
 - **Don't** auto-file follow-up issues without confirmation.
