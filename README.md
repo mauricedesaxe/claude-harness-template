@@ -137,6 +137,10 @@ template feeding many projects with different needs.
 - **Frontend (when app-shaped):** TanStack Query + Zustand + Tailwind +
   `neobrutalist-pop` + TanStack Form. Local-first feel under the Doherty
   threshold; keyboard-first. Skip the stack on small surfaces — simplicity wins.
+- **Version control is jj (Jujutsu), colocated with git.** Isolated work happens in a
+  jj **workspace** (not a git worktree — the workspace is jj's isolation unit); commits
+  are `jj commit`, branches are bookmarks, `jj git push` / `gh` handle the remote. The
+  skills are jj-native.
 - **Atomic conventional commits**, no `--no-verify`, no `Co-Authored-By`. Rebase-merge.
 - **Plan first, attack the plan, gate on the user, then write code.**
 - **Comments and commits say *why*, not *what*.** Default to no comments.

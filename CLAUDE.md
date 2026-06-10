@@ -43,7 +43,8 @@ file is silent or ambiguous. Specific sections referenced inline: §1 Earn its k
 §18 Testing philosophy, §19 Commercial readiness & authorization,
 §20 Frontend defaults & local-first, §21 Documentation discipline,
 §22 Background jobs, §23 File and blob storage, §24 CI/CD discipline,
-§25 Realtime — polling first, §26 Avoid double state, §27 AI/LLM integration.
+§25 Realtime — polling first, §26 Avoid double state, §27 AI/LLM integration,
+§28 Version control (jj, colocated).
 
 Where this file overrides PHILOSOPHY.md, the override must name a specific project
 reason that clears §1's earn-its-keep bar.
@@ -76,7 +77,7 @@ The harness lists them each session; this table is the durable "when to reach fo
 
 | Skill | Reach for it when |
 |---|---|
-| `work` | Picking up a GitHub issue — worktree off latest main → rough plan → adversarial plan review → user approval → implement → `/review` → triage → `/ship`. The default end-to-end workflow. |
+| `work` | Picking up a GitHub issue — jj workspace off latest main → rough plan → adversarial plan review → user approval → implement → `/review` → triage → `/ship`. The default end-to-end workflow. |
 | `commit` | A logical chunk of work is done — record it as atomic conventional commits (as you go, not all at once). |
 | `review` | Before commit/push/merge — runs the reviewer agents against the diff and reports in chat. Never posts to GitHub. |
 | `capture` | An idea, feature, or bug surfaces mid-flow — file it as a GitHub issue, but **only if it clears the felt-product-value bar**. |
@@ -598,25 +599,37 @@ Pattern:
 backlinks. When an issue is genuinely waiting on something, apply the `blocked` label
 *and* move it to the Blocked column so it's both filterable and visible on the board.
 
-## Git workflow
+## Version control (jj, colocated)
 
-- **Worktree-first** (PHILOSOPHY §14). Each work stream runs in its own git worktree
-  under `.claude/worktrees/<branch-slug>`, created from **freshly fetched
-  `origin/main`** — never by switching branches in the main checkout, and never
-  based on the possibly-stale local `main` ref:
-  `git fetch origin main && git worktree add .claude/worktrees/<slug> -b <branch> origin/main`.
-  Multiple agents work this repo concurrently; the main checkout's HEAD belongs to
-  no one. Keep `.claude/worktrees/` gitignored. Stay in your worktree for every
-  git/`gh` operation; after merge, remove the worktree — don't pull `main` in the
-  main checkout.
-- **Conventional commits**, atomic, per logical change. See `.claude/skills/commit/SKILL.md`.
-- **Branch names** are `<type>/<short-slug>`: `feat/<feature>`, `fix/<bug>`,
-  `chore/<scope>`. When started from an issue, include the number:
-  `<type>/<#>-<slug>` (the `ship` skill auto-detects this for `Closes #N`).
-- **Rebase-merge PRs.** `gh pr merge <#> --rebase --delete-branch` — linear history,
-  no merge commits. Each branch commit lands on `main` as written, so write commits
-  good enough to live there. Squash only for genuinely throwaway "wip" history, with
-  explicit OK. Never `--merge`.
+The working copy is **Jujutsu (jj)**, colocated with git (PHILOSOPHY §28). git stays
+underneath only as the remote/interop layer (GitHub, `origin`, shared history that
+teammates see); jj drives every local VC step. The skills (`work`, `commit`, `ship`,
+`review`) are jj-native.
+
+- **Workspace-first** (PHILOSOPHY §14 + §28). Each work stream runs in its own **jj
+  workspace** under `.jj/ws/<slug>`, created off **freshly fetched trunk** — never by
+  moving the shared working copy's `@`, never based on a stale local trunk ref:
+  `jj git fetch && mkdir -p .jj/ws && jj workspace add --name <slug> --revision 'trunk()' .jj/ws/<slug>`
+  (`jj workspace add` won't create the parent dir).
+  The isolation unit is the **workspace, not a git worktree** — a git worktree doesn't
+  isolate jj's single `@`, so concurrent agents would collide. Keep `.jj/ws/`
+  gitignored. Stay in your workspace for every jj/`gh` operation; after merge,
+  `jj workspace forget <slug>` and remove the dir — don't touch the default workspace.
+- **Snapshot model, no staging.** jj auto-snapshots the working dir into `@`; there is
+  no `git add`. A commit is `jj commit [paths] -m "..."`; fold a fix with
+  `jj squash --from/--into`. See `.claude/skills/commit/SKILL.md`.
+- **Conventional commits**, atomic, per logical change. **jj does not fire git hooks**,
+  so the `commit` skill validates the message shape and runs the project's checks
+  itself; CI re-enforces both server-side.
+- **Bookmarks are branches.** Name `<type>/<short-slug>`: `feat/<feature>`, `fix/<bug>`,
+  `chore/<scope>`. From an issue, include the number: `<type>/<#>-<slug>` (the `ship`
+  skill auto-detects this for `Closes #N`). Push with
+  `jj bookmark set <branch> -r @- && jj git push --bookmark <branch>` (auto-tracks,
+  safe force-with-lease by default).
+- **Rebase-merge PRs.** PR via `gh pr create`; merge via
+  `gh pr merge <#> --rebase --delete-branch` — linear history, no merge commits. Each
+  commit lands on `main` as written, so write commits good enough to live there. Squash
+  only for genuinely throwaway "wip" history, with explicit OK. Never `--merge`.
 - **No `Co-Authored-By` trailer** (repeated because it's easy to forget): commits
   carry no AI attribution lines.
 - Self-review with the `review` skill before merge.
