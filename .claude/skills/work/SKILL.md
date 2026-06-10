@@ -1,6 +1,6 @@
 ---
 name: work
-description: Start working on a GitHub issue end-to-end — worktree off latest main, plan, adversarially review the plan, gate on the user, implement, run the reviewer agents, triage findings, then ship. Use when the user says "/work", "/work #12", "work on this issue", "start working on #12", "let's implement #12", or otherwise wants to take an issue from "picked up" to "merged" via the default workflow.
+description: Start working on a GitHub issue end-to-end — jj workspace off latest main, plan, adversarially review the plan, gate on the user, implement, run the reviewer agents, triage findings, then ship. Use when the user says "/work", "/work #12", "work on this issue", "start working on #12", "let's implement #12", or otherwise wants to take an issue from "picked up" to "merged" via the default workflow.
 ---
 
 # Work Skill
@@ -19,10 +19,14 @@ touched.
 ```
 0. parse arg + sanity-check     5. user approval gate (plan)
 1. resolve the issue            6. implement
-2. worktree off latest main     7. /review
+2. jj workspace off latest main 7. /review
 3. draft the plan               8. user triage gate (findings)
 4. plan-reviewer agent          9. /ship
 ```
+
+This skill is **jj-native** (PHILOSOPHY §28): the working copy is Jujutsu, colocated
+with git. git stays underneath only as the remote (GitHub, `origin`) that `jj git push`
+and `gh` talk to; every local version-control step is jj.
 
 Steps 7 and 9 are not reimplemented here — they invoke the existing
 `.claude/skills/review/SKILL.md` and `.claude/skills/ship/SKILL.md` and inherit their
@@ -41,15 +45,16 @@ rules (decision table, rebase-merge, `Closes #N`, no `--no-verify`, etc.).
 Sanity-check the local state before doing anything mutating:
 
 ```sh
-git branch --show-current
-git status --short
+jj st                       # working-copy status: what's in @, which commit it sits on
+jj log -r 'trunk()..@'      # any local commits in this workspace not yet on trunk
 ```
 
-Because Step 2 creates a fresh worktree off `origin/main`, a dirty tree or a checked-out
-feature branch in the current checkout is **not** a blocker — the worktree starts clean
-and can't sweep anything in. But surface what you see: if the dirty files look like they
-were meant to be part of *this* issue's work, ask before continuing (they won't follow
-you into the worktree).
+Because Step 2 creates a fresh **workspace** with its own `@` off freshly-fetched
+trunk, uncommitted changes in the current workspace's `@` (or local commits sitting on
+it) are **not** a blocker — the new workspace starts off trunk and can't sweep anything
+in. But surface what you see: if those changes look like they were meant to be part of
+*this* issue's work, ask before continuing (they won't follow you into the new
+workspace).
 
 ## Step 1: resolve the issue
 
@@ -69,15 +74,17 @@ without prompting; Backlog items haven't been scoped yet. Skip items carrying th
 project number, owner, and field IDs live in the project's `CLAUDE.md` "Issue triage"
 section (set them up once after the repo's GitHub Project is created).
 
-## Step 2: create a worktree off the latest main
+## Step 2: create a jj workspace off the latest main
 
-Work happens in a **dedicated git worktree**, not by switching branches in the main
-checkout. Multiple agents (and the user) routinely work this repo concurrently
-(PHILOSOPHY §14, worktree-first): the main checkout's HEAD belongs to no one, and
-switching it under another agent corrupts their run. The worktree isolates the code;
-`.git` metadata and GitHub state stay shared.
+Work happens in a **dedicated jj workspace**, not by moving the shared working copy's
+`@`. Multiple agents (and the user) routinely work this repo concurrently (PHILOSOPHY
+§14 + §28): the default workspace's `@` belongs to no one in particular, and jj has a
+single `@` per workspace — so the isolation unit is a **workspace, not a git worktree**
+(a git worktree wouldn't isolate jj's `@`; running jj from it still snapshots the
+default workspace and concurrent agents collide). The workspace isolates the code; the
+shared repo, `.git`/`.jj` metadata, and GitHub state stay shared.
 
-Generate a branch name from the issue: `<type>/<#>-<short-slug>`. Pick the
+Generate a branch (bookmark) name from the issue: `<type>/<#>-<short-slug>`. Pick the
 conventional-commit type that fits the work (`feat`, `fix`, `refactor`, `chore`,
 `docs`, `test`, `perf`, `ci`, `build`). Examples: `feat/12-parser-rewrite`,
 `fix/47-decay-boundary`.
@@ -85,30 +92,32 @@ conventional-commit type that fits the work (`feat`, `fix`, `refactor`, `chore`,
 Including the issue number in the slug means the `ship` skill auto-detects the
 `Closes #N` reference later (see `ship` Step 5a).
 
-Base the worktree on **freshly fetched `origin/main`** — never the local `main` ref,
-which may be stale or mid-update by another agent:
+Base the workspace on **freshly fetched trunk** — `jj git fetch` first so `trunk()`
+resolves to the current `main@origin`, never a stale local ref:
 
 ```sh
-git fetch origin main
-git worktree add .claude/worktrees/<#>-<short-slug> -b <branch-name> origin/main
-cd .claude/worktrees/<#>-<short-slug>
+jj git fetch
+mkdir -p .jj/ws                           # jj workspace add won't create parent dirs
+jj workspace add --name <#>-<short-slug> --revision 'trunk()' .jj/ws/<#>-<short-slug>
+cd .jj/ws/<#>-<short-slug>
+jj bookmark create <branch-name> -r @     # reserve the branch name; ship advances it to the tip at push
 ```
 
-If `.claude/worktrees/` isn't in `.gitignore`, add it as part of this work's first
-commit — otherwise every worktree shows up as untracked noise in everyone's
-`git status`.
+The new workspace's `@` is a fresh empty commit on top of trunk. The bookmark is jj's
+branch; it's created here so the name is reserved and discoverable (`jj bookmark
+list`), and `ship` moves it forward to your tip commit right before pushing — jj
+bookmarks don't auto-follow new commits.
 
-From here on, **every command in this workflow runs inside the worktree** — the
-implement step, `/review`, `/ship`, every git and `gh` operation. Don't `cd` back
-into the main checkout to run something "real quick"; its branch and working tree
-belong to another run.
+If `.jj/ws/` isn't in `.gitignore`, add it as part of this work's first commit
+(colocated jj already excludes `.jj/`, but the explicit entry documents intent and
+survives a non-colocated checkout).
 
-Show the proposed branch name and worktree path; proceed unless the user renames.
+From here on, **every command in this workflow runs inside the workspace** — the
+implement step, `/review`, `/ship`, every jj and `gh` operation. Don't `cd` back into
+the main checkout or another workspace to run something "real quick"; that `@` belongs
+to another run.
 
-Fallback: when worktrees genuinely can't be used (tooling that breaks on linked
-worktrees, or the user explicitly opts out), branch in place — but still off the
-fetched remote ref: `git fetch origin main && git switch -c <branch-name> origin/main`.
-The "base on the latest main" half of the rule holds either way.
+Show the proposed branch name and workspace path; proceed unless the user renames.
 
 If the project has a board configured in `CLAUDE.md`, move the issue's board item from
 **Ready → In progress** so the board reflects what's actually being worked. Field/option
@@ -244,7 +253,7 @@ what the gate is for — but don't quietly delete the finding from the table; ma
 
 Invoke the `ship` skill (`.claude/skills/ship/SKILL.md`). It handles the rest end-to-end
 — push, PR (with `Closes #<N>` auto-detected from the branch name), CI wait, rebase-merge,
-worktree cleanup, follow-up prompt.
+workspace cleanup, follow-up prompt.
 
 If the user wants to pause before merging (e.g. for a manual verification on a preview
 deploy), stop at PR-open and let them resume `ship` later. The `ship` skill already
@@ -252,10 +261,11 @@ handles "resume from wherever we are".
 
 ## Don't
 
-- **Don't** switch branches in the main checkout. Work happens in a worktree off
-  freshly fetched `origin/main` (Step 2); the main checkout's HEAD belongs to no one.
-- **Don't** base a worktree or branch on the local `main` ref. Fetch first; base on
-  `origin/main`.
+- **Don't** move the default workspace's `@` or use a git worktree in a jj repo. Work
+  happens in a dedicated **jj workspace** off freshly fetched trunk (Step 2); a git
+  worktree wouldn't isolate jj's single `@`.
+- **Don't** base a workspace on a stale local trunk ref. `jj git fetch` first; base on
+  `trunk()`.
 - **Don't** start coding before Step 5 (user approval of the plan). The plan-first beat
   is the whole point.
 - **Don't** skip the adversarial review just because the change "feels small". The
