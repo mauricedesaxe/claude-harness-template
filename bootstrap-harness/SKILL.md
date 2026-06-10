@@ -35,10 +35,12 @@ The skill lives in two places:
 git rev-parse --show-toplevel        # must be inside a git repo
 ```
 
-- **Not a git repo** → refuse. The harness presumes a git workflow; offer to run
-  `git init` if the user explicitly wants to start one.
-- **Inside a worktree of a repo we don't own** → ask before installing into someone
-  else's submodule / vendored copy.
+- **Not a git repo** → refuse. The harness presumes a git repo underneath; offer to run
+  `git init` if the user explicitly wants to start one. The skills drive version control
+  through **Jujutsu, colocated** (PHILOSOPHY §28) — if the repo isn't jj yet, mention the
+  user can run `jj git init --colocate` to opt in, but don't do it for them.
+- **Inside a workspace / worktree of a repo we don't own** → ask before installing into
+  someone else's submodule / vendored copy.
 
 The template repo:
 ```
@@ -112,10 +114,10 @@ done
 # Universal docs
 cp "$TMPDIR_HARNESS/docs/PHILOSOPHY.md" docs/PHILOSOPHY.md
 
-# Worktree-first workflow (PHILOSOPHY §14): the work/ship skills create worktrees
-# under .claude/worktrees/ — make sure they never show up as untracked noise
-grep -qxF '.claude/worktrees/' .gitignore 2>/dev/null || \
-  echo '.claude/worktrees/' >> .gitignore
+# Workspace-first workflow (PHILOSOPHY §14 + §28): the work/ship skills create jj
+# workspaces under .jj/ws/ — make sure they never show up as untracked noise
+grep -qxF '.jj/ws/' .gitignore 2>/dev/null || \
+  echo '.jj/ws/' >> .gitignore
 ```
 
 Track what was written vs already-existed (for the Step 5 summary): a file that existed
@@ -183,7 +185,7 @@ Print a summary:
   Docs (universal, overwritten):
     docs/PHILOSOPHY.md                      (updated | added)
 
-  .gitignore: .claude/worktrees/            (added | already present)
+  .gitignore: .jj/ws/                       (added | already present)
 
   CLAUDE.md: <added skeleton | preserved existing>
 
