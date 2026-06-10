@@ -626,17 +626,22 @@ compile time or commit time, when fixing them is cheap.
   then refuses "you passed a `BookingId` where `UserId` was expected" or "you
   compared seconds to milliseconds." They are nearly free and *infinitely*
   useful — reach for them by default.
-- **Atomic conventional commits.** One logical change per commit. The
-  `commit-msg` hook enforces the type prefix; the atomic discipline is on you.
-- **Worktree-first concurrent work.** Multiple agents (human or AI) routinely
-  work the same repo at the same time. Each work stream runs in its own git
-  worktree (`.claude/worktrees/<slug>`), created from **freshly fetched
-  `origin/main`** — never by switching branches in a shared checkout, and never
-  based on a possibly-stale local `main` ref. The worktree isolates the code;
-  `.git` metadata, PR numbers, and board state stay shared — those remain the
-  genuinely-shared steps to slow down on. A worktree costs one command to
-  create and one to remove; a branch switch under another agent's feet costs
-  their whole run.
+- **Atomic conventional commits.** One logical change per commit. The atomic
+  discipline is on you; the type prefix is enforced in CI (and by a
+  `commit-msg` hook on git-native repos — see §28 for why jj doesn't fire it).
+- **Isolated-working-copy concurrent work.** Multiple agents (human or AI)
+  routinely work the same repo at the same time. Each work stream runs in its
+  own **isolated working copy** — a **jj workspace** (the default; see §28) or
+  a git worktree in a non-jj repo — created off **freshly fetched trunk**,
+  never by switching the shared checkout and never based on a possibly-stale
+  local `main`/trunk ref. The isolated copy covers the *code*; repo metadata,
+  PR numbers, and board state stay shared — those remain the genuinely-shared
+  steps to slow down on. Spinning one up costs a command or two; mutating
+  another agent's working copy under their feet costs their whole run. **The
+  isolation unit matters:** in a jj repo it's the workspace, not the git
+  worktree — a git worktree isolates files but not jj's single working-copy
+  commit `@`, so jj run from a worktree still snapshots the *default*
+  workspace and concurrent agents collide.
 - **Plan first, attack the plan, gate on the user, then write code.** The `work`
   skill encodes the workflow; this is the underlying habit. Designing in prose
   where the cost of being wrong is a paragraph is cheaper than designing in code.
@@ -1396,6 +1401,75 @@ versions, A/B-tested, possibly self-healed by the eval loop).
 
 Pick based on how the prompt actually evolves in your product. Both can be
 right; neither has a default.
+
+---
+
+## §28. Version control — jj (colocated)
+
+**Rule.** The working copy is **Jujutsu (jj)**, colocated with git (there's a
+`.jj` directory alongside `.git` at the repo root). git stays underneath as the
+*interop and remote* layer — GitHub, `origin`, the shared history teammates see
+— and jj drives all local version-control work on top of it. This holds even
+when the wider team is on plain git: the shared history is git, the local
+working copy is jj, and `jj git push` / `jj git fetch` bridge the two. Most
+single-author projects can be jj end to end.
+
+**The isolation unit is the workspace, not the worktree** (this is the load-
+bearing reason jj changes §14). jj has a *single* working-copy commit `@` per
+workspace. A git worktree gives you a second checkout of the files but it does
+**not** give you a second `@` — run jj from inside a git worktree and it
+snapshots and mutates the *default* workspace's `@`. So concurrent agents
+sharing one jj repo must each get their own **`jj workspace`**, not a git
+worktree:
+
+- `jj workspace add --name <slug> --revision 'trunk()' <path>` — new workspace
+  with its own `@` based on freshly-fetched trunk (run `jj git fetch` first;
+  `mkdir -p` the parent, since `jj workspace add` won't create it).
+- Work there, then `jj workspace forget <slug>` and remove the directory when
+  done. All workspaces share one repository, so a jj GUI (e.g. GG) still shows
+  every workspace's `@` in a single graph.
+
+**Snapshot model, not staging.** jj auto-snapshots the working directory into
+`@` on every command — there is no index, no `git add`. The consequences ripple
+through the skills:
+
+- A commit is `jj commit [paths] -m "..."` (finalizes `@`, or just the named
+  paths, into a commit and leaves a fresh `@` on top). No staging step to get
+  wrong, and atomic splitting is `jj commit <paths>` per logical unit.
+- Folding a fix into an earlier commit is `jj squash --from <rev> --into <rev>`,
+  never a git `--fixup` dance.
+- The reviewable diff of a branch — committed *and* uncommitted at once — is
+  `jj diff --from 'trunk()' --to @`, because uncommitted edits already live in
+  `@`. One command replaces git's staged/unstaged/committed three-way gather.
+
+**Bookmarks are branches.** jj's named pointers are *bookmarks*. The branch you
+open a PR from is a bookmark pointing at your tip commit: `jj bookmark set
+<branch> -r @-` then `jj git push --bookmark <branch>` (auto-tracks the remote,
+does the safe force-with-lease). Rebasing onto advanced trunk is
+`jj git fetch && jj rebase -d 'trunk()'` then a plain `jj git push` — jj's push
+is force-with-lease by default, so there is no `--force` to fumble. The PR
+itself is still `gh` (jj has no PR concept), and the merge is still
+`gh pr merge --rebase` on the pushed git commits.
+
+**jj does not fire git hooks.** A colocated repo's `pre-commit` / `commit-msg`
+hooks do **not** run under `jj commit`. So the two guarantees those hooks
+normally give — conventional-commit format and a green lint/typecheck/test gate
+— move into the workflow itself: the `commit` skill validates the message shape
+and runs the project's checks before finalizing, and CI re-enforces both
+server-side (§24). Don't assume a hook caught what jj silently skipped.
+
+**Why.** jj makes the §14 habits (small atomic commits, isolated concurrent
+work, fearless rebasing) cheap enough that they actually happen. The cost is one
+sharp edge — the single-`@`-per-workspace model — and getting it wrong (a git
+worktree where a workspace was needed) corrupts concurrent runs silently. Naming
+the workspace-not-worktree rule here, once, is what keeps every skill downstream
+correct.
+
+**Earn-its-keep.** A repo with no jj (`.jj` absent) falls back to git worktrees
+and plain git — the skills are jj-native by default, so a non-jj repo is the
+deviation, not the rule. Reach for raw `git` mutations inside a jj repo only for
+something jj genuinely can't express; nearly everything has a jj verb, and
+mixing the two is how divergent duplicate commits appear.
 
 ---
 
