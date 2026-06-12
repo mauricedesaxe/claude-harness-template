@@ -68,6 +68,7 @@ The universal manifest (kept in sync with what's in the template):
 
 **Skills** — `.claude/skills/<name>/SKILL.md`:
 - `work`
+- `research`
 - `commit`
 - `review`
 - `capture`
@@ -97,7 +98,7 @@ project. Leave any sibling docs in `docs/` untouched.
 mkdir -p .claude/skills .claude/agents docs
 
 # Universal skills
-for s in work commit review capture ship setup neobrutalist-pop; do
+for s in work research commit review capture ship setup neobrutalist-pop; do
   mkdir -p ".claude/skills/$s"
   cp "$TMPDIR_HARNESS/.claude/skills/$s/SKILL.md" ".claude/skills/$s/SKILL.md"
 done

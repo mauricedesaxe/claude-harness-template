@@ -77,13 +77,21 @@ The harness lists them each session; this table is the durable "when to reach fo
 
 | Skill | Reach for it when |
 |---|---|
-| `work` | Picking up a GitHub issue — jj workspace off latest main → rough plan → adversarial plan review → user approval → implement → `/review` → triage → `/ship`. The default end-to-end workflow. |
+| `work` | Picking up a GitHub issue — jj workspace off latest main → rough plan → adversarial plan review → user approval → implement → `/review` → triage → `/ship`. The default end-to-end workflow. Supports `auto` (see *Autonomous mode* below). |
+| `research` | Exploring an issue's open questions **before** committing to an approach — deep open-web + codebase research, live probes/spikes, a cited verdict in `docs/research/`. The counterpart to `work`: it **never closes the issue** and writes only research-grade code (`scripts/`, never production). Supports `auto`. |
 | `commit` | A logical chunk of work is done — record it as atomic conventional commits (as you go, not all at once). |
 | `review` | Before commit/push/merge — runs the reviewer agents against the diff and reports in chat. Never posts to GitHub. |
 | `capture` | An idea, feature, or bug surfaces mid-flow — file it as a GitHub issue, but **only if it clears the felt-product-value bar**. |
 | `ship` | Land work on `main` end-to-end — branch/commit/push/PR/CI-wait/rebase-merge, running only the missing steps. |
 | `setup` | A fresh clone — install deps, bring up the stack, set keys, verify build + tests. |
 | `neobrutalist-pop` | Building or styling any UI — the neo-brutalist look (thick borders, hard shadows, candy accents). |
+
+**Autonomous mode (`auto`).** `work` and `research` each take an optional `auto` opt-in (the
+keyword — `/work 12 auto` — or clear "let it rip" / "review at the end" intent) that collapses
+the mid-flow user gates into self-decisions and keeps a **single review gate at the very end**,
+right before the outward step: the merge for `work`, the merge + issue comment for `research`.
+The reviewer agents still run and genuine blockers still stop. No opt-in → the normal gated
+flow; borderline wording → ask once. See each skill's *Autonomous mode* section.
 
 The reviewer **agents** in `.claude/agents/` are run *by* skills, not invoked directly:
 

@@ -32,6 +32,62 @@ Steps 7 and 9 are not reimplemented here — they invoke the existing
 `.claude/skills/review/SKILL.md` and `.claude/skills/ship/SKILL.md` and inherit their
 rules (decision table, rebase-merge, `Closes #N`, no `--no-verify`, etc.).
 
+## Autonomous mode (`auto`)
+
+By default this skill stops for the user at two **gates** — Step 5 (the plan) and Step 8
+(review findings). Autonomous mode keeps both decisions but makes them *yours*, collapsing
+to a **single load-bearing gate at the very end, right before the merge** — the first step
+that goes outward and is hard to walk back. Opening the PR is *not* that step: it's
+reversible and it's what runs CI (and any per-PR preview deploy) you'll review against.
+
+**When it's on — explicit opt-in only.** Either the `auto` keyword in the invocation
+(`/work <N> auto`) or unambiguous natural language ("let it rip", "yolo", "review at the
+end", "don't stop to ask"). No opt-in → run the normal gated flow. If the wording is
+borderline, **ask one line before Step 1** ("rip through and check in at the end, or gate
+along the way?"). Be *sure* which mode you're in before you start — never autonomous by
+accident.
+
+**What the two gates become:**
+
+- **Step 5 (plan)** → still draft the plan (Step 3) and run the plan-reviewer (Step 4),
+  then triage its findings *yourself*: fold the Fixes into the plan, record the Skips with
+  one-line reasons, and go straight to Step 6. The plan and its decision table are still
+  produced — they ride into the end report.
+- **Step 8 (review findings)** → after `/review`, triage the decision table *yourself*:
+  apply the Fixes, record the Skips with reasons, re-run `/review` if a fix changed
+  something substantial, then continue.
+- **Step 9 (/ship)** → run ship through commit → push → **PR open → CI green** (→ preview, if
+  the project has per-PR previews), then **stop before the merge**. Merge only on the user's go.
+
+**The end gate** presents one report and waits:
+
+```
+# <title> — ready to merge (#<N>)
+
+<TLDR: what shipped, in product terms>
+
+## Plan followed
+<the plan + the plan-review decisions: Fixed / Skipped (reason)>
+
+## Review
+<the /review decision table: Fixed / Skipped (reason)>
+
+## Checks
+typecheck · lint · unit · build · CI: <status>   PR: <link>   Preview: <link, if any>
+
+## Left for you / follow-ups
+<manual steps, deferred items, or "none">
+
+Merge?
+```
+
+**What never changes, in any mode:** the plan-reviewer and `/review` agents still run and
+you still address their findings — auto collapses the *user* gates, not the *quality*
+gates. And you still **stop mid-flow for a genuine blocker** (not a preference call): a
+vague issue with no clear outcome, an irreversible or destructive action the issue didn't
+imply, a review finding that's a real design fork you can't resolve confidently, or
+anything needing a credential/access decision. Surface it and wait.
+
 ## Step 0: parse arg + sanity-check
 
 `<arg>` is usually an issue ref. Forms:
@@ -41,6 +97,10 @@ rules (decision table, rebase-merge, `Closes #N`, no `--no-verify`, etc.).
 - Freeform description (no `#` and no URL) → proceed without an issue, but ask once
   whether to `/capture` it first. A linked issue is the default; freeform is a
   deliberate skip.
+
+A trailing `auto` keyword (`/work 12 auto`) or a clear "let it rip" intent selects
+**Autonomous mode** (see that section above); strip it from the ref before resolving, and
+settle which mode you're in here, at Step 0.
 
 Sanity-check the local state before doing anything mutating:
 
@@ -266,8 +326,9 @@ handles "resume from wherever we are".
   worktree wouldn't isolate jj's single `@`.
 - **Don't** base a workspace on a stale local trunk ref. `jj git fetch` first; base on
   `trunk()`.
-- **Don't** start coding before Step 5 (user approval of the plan). The plan-first beat
-  is the whole point.
+- **Don't** start coding before Step 5 (user approval of the plan) — *unless* you're in
+  Autonomous mode, where the plan gate is self-decided (you still draft + plan-review
+  first, you just don't wait). The plan-first beat is the whole point in either mode.
 - **Don't** skip the adversarial review just because the change "feels small". The
   load-bearing rules (Result-not-throw, two-zeros, boundary parsing) are exactly the
   things that look small in a plan and bite in implementation.
