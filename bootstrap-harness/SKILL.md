@@ -1,6 +1,6 @@
 ---
 name: bootstrap-harness
-description: Install the Claude harness (universal skills, reviewer agents, CLAUDE.md skeleton) from claude-harness-template into the current repo. Use when the user says "/bootstrap-harness", "set up the harness here", "install the skills + agents in this repo", or when starting a new project that should follow the standard workflow (work → review → ship, atomic conventional commits, plan-reviewer, code-reviewer, test-reviewer).
+description: Install the Claude + Codex harness (universal skills, reviewer agents, CLAUDE.md skeleton, AGENTS.md Codex bridge) from claude-harness-template into the current repo. Use when the user says "/bootstrap-harness", "set up the harness here", "install the skills + agents in this repo", or when starting a new project that should follow the standard workflow (work → review → ship, atomic conventional commits, plan-reviewer, code-reviewer, test-reviewer).
 ---
 
 # Bootstrap Harness
@@ -10,11 +10,17 @@ universal skills (`work`, `commit`, `review`, `capture`, `ship`, `setup`,
 `neobrutalist-pop`), reviewer agents (`code-reviewer`, `test-reviewer`,
 `plan-reviewer`), and the durable philosophy doc (`docs/PHILOSOPHY.md`) are overwritten
 with the template's versions on every run. Domain-specific skills and agents already in
-`.claude/` are left alone. `CLAUDE.md` is written only if missing.
+`.claude/` are left alone. `CLAUDE.md` is written only if missing. `AGENTS.md` is used
+to set up Codex: write the template bridge if missing, or append the bounded bridge to
+an existing `AGENTS.md` only when the bridge is not already present.
 
 `docs/PHILOSOPHY.md` is the canonical "why" doc behind the rules in `CLAUDE.md` —
 it travels with every bootstrap so the conventions land in the target repo even when
 an existing `CLAUDE.md` is preserved.
+
+Codex should not get a parallel rule set. `AGENTS.md` stays thin and delegates back to
+`CLAUDE.md`, `docs/PHILOSOPHY.md`, and the `.claude/skills/` workflows so Claude Code
+and Codex operate from the same project guidance.
 
 This skill is **opinionated** — it doesn't ask which skills you want or whether you've
 "customized" the universal ones. The bar is: "the standard workflow is the standard
@@ -89,6 +95,10 @@ The universal manifest (kept in sync with what's in the template):
 - `docs/PHILOSOPHY.md` — durable "why" doc, always overwritten. See Step 3 for the
   reason this travels independently of `CLAUDE.md`.
 
+**Agent entrypoints** — top-level:
+- `AGENTS.md` — Codex bridge. Written when missing; if already present, append the
+  bounded bridge only when no Claude-harness bridge is detected.
+
 For each, overwrite the file at the target path with the template's copy. Leave any
 sibling skill/agent in `.claude/` (e.g. `.claude/agents/payments-reviewer.md`,
 `.claude/skills/run-evals/`) untouched — those are domain-specific and belong to the
@@ -121,7 +131,7 @@ grep -qxF '.jj/ws/' .gitignore 2>/dev/null || \
   echo '.jj/ws/' >> .gitignore
 ```
 
-Track what was written vs already-existed (for the Step 5 summary): a file that existed
+Track what was written vs already-existed (for the Step 6 summary): a file that existed
 before this run and was overwritten is **updated**; one that did not exist is **added**.
 
 ## Step 3: handle CLAUDE.md
@@ -152,7 +162,45 @@ test -f CLAUDE.md && echo present || echo missing
   `docs/PHILOSOPHY.md` carries the durable conventions independently, so the
   philosophy still lands.
 
-## Step 4: clean up
+## Step 4: handle AGENTS.md for Codex
+
+`AGENTS.md` is Codex's repo entrypoint. It should not duplicate the project rules;
+it should point Codex at the same `CLAUDE.md`, `docs/PHILOSOPHY.md`, and `.claude/`
+workflows that Claude Code uses.
+
+```sh
+test -f AGENTS.md && echo present || echo missing
+```
+
+- **Missing** → write the template's Codex bridge:
+  ```sh
+  cp "$TMPDIR_HARNESS/AGENTS.md" AGENTS.md
+  ```
+
+- **Present and already bridged** → don't touch it. Treat any of these as already
+  bridged: `BEGIN CLAUDE HARNESS CODEX BRIDGE`, `Claude Guidance Bridge`, or
+  `Claude Mirror`.
+
+- **Present but not bridged** → append only the bounded bridge block from the template's
+  `AGENTS.md`. Do not overwrite the existing file; the target repo may already have
+  project-specific Codex rules.
+
+  ```sh
+  if grep -Eq 'BEGIN CLAUDE HARNESS CODEX BRIDGE|Claude Guidance Bridge|Claude Mirror' AGENTS.md; then
+    echo "AGENTS.md already has a Claude/Codex bridge"
+  else
+    {
+      printf '\n'
+      sed -n '/<!-- BEGIN CLAUDE HARNESS CODEX BRIDGE -->/,/<!-- END CLAUDE HARNESS CODEX BRIDGE -->/p' \
+        "$TMPDIR_HARNESS/AGENTS.md"
+    } >> AGENTS.md
+  fi
+  ```
+
+Track the result for the Step 6 summary: **added skeleton**, **appended bridge**, or
+**already bridged**.
+
+## Step 5: clean up
 
 ```sh
 rm -rf "$TMPDIR_HARNESS"
@@ -160,7 +208,7 @@ rm -rf "$TMPDIR_HARNESS"
 
 Don't leave the temp clone behind even on failure — surface the error first, then clean.
 
-## Step 5: report
+## Step 6: report
 
 Print a summary:
 
@@ -189,12 +237,15 @@ Print a summary:
   .gitignore: .jj/ws/                       (added | already present)
 
   CLAUDE.md: <added skeleton | preserved existing>
+  AGENTS.md: <added skeleton | appended Codex bridge | already bridged>
 
   Preserved (project-specific, untouched):
     <list any .claude/skills/* or .claude/agents/* not in the universal manifest>
 
 Next:
   - Fill the <!-- TODO --> markers in CLAUDE.md (if added).
+  - Codex will read AGENTS.md, which delegates back to CLAUDE.md and the .claude/
+    workflows so both agents use the same project rules.
   - Read docs/PHILOSOPHY.md if you haven't recently — it's the canonical source for
     the durable conventions referenced from CLAUDE.md.
   - Review the universal skills/agents; tune to taste and back-port useful edits to
@@ -221,6 +272,8 @@ fight that. Manual backport discipline is the price of multi-project consistency
 - **Don't** ask the user to choose which universal skills to install. The whole point
   is "the standard workflow is the standard workflow". Edit after install if needed.
 - **Don't** auto-merge into an existing `CLAUDE.md`. Diff yourself; the user owns it.
+- **Don't** duplicate project rules into `AGENTS.md`. It is a Codex bridge; the durable
+  project identity stays in `CLAUDE.md`.
 - **Don't** skip overwriting `docs/PHILOSOPHY.md`. It's universal and the
   canonical source — drift in the philosophy file is exactly what this skill exists
   to prevent. If the user has edited `docs/PHILOSOPHY.md` in a target project, that

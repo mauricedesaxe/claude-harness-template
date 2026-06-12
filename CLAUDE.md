@@ -49,6 +49,12 @@ file is silent or ambiguous. Specific sections referenced inline: §1 Earn its k
 Where this file overrides PHILOSOPHY.md, the override must name a specific project
 reason that clears §1's earn-its-keep bar.
 
+## Codex
+
+`AGENTS.md` is the Codex bridge for this repo. Keep durable project rules here in
+`CLAUDE.md`; `AGENTS.md` should stay thin and point Codex back to this file,
+`docs/PHILOSOPHY.md`, and the `.claude/skills/` workflows.
+
 ## Project status
 
 <!-- TODO: optional — if the repo is being bootstrapped, name the current milestone

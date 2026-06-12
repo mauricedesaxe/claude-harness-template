@@ -1,10 +1,10 @@
 # claude-harness-template
 
-A portable workflow harness for [Claude Code](https://claude.com/claude-code) projects.
-Install it in any repo with one command (`/bootstrap-harness`) and get the same
-opinionated end-to-end flow: capture → work (plan → adversarial plan review → implement
-→ review → ship) with atomic conventional commits, no `Co-Authored-By` trailers, and a
-shared "Lemon Pie" UI vocabulary.
+A portable workflow harness for [Claude Code](https://claude.com/claude-code) and
+Codex projects. Install it in any repo with one command (`/bootstrap-harness`) and
+get the same opinionated end-to-end flow: capture → work (plan → adversarial plan
+review → implement → review → ship) with atomic conventional commits, no
+`Co-Authored-By` trailers, and a shared "Lemon Pie" UI vocabulary.
 
 ## What's in here
 
@@ -29,6 +29,7 @@ docs/
                             no serverless, API-integration primitives, etc.
 CLAUDE.md                   skeleton: short rules + per-project TODOs, references
                             PHILOSOPHY.md for the long-form reasoning
+AGENTS.md                   Codex bridge: delegates to CLAUDE.md + .claude skills
 bootstrap-harness/
   SKILL.md                  the global skill that installs everything above
 ```
@@ -57,8 +58,10 @@ Inside any git repo:
 
 Claude clones the template, overwrites the universal skills/agents into `.claude/`,
 overwrites `docs/PHILOSOPHY.md` (the canonical "why" doc, always synced), preserves
-any non-universal skills/agents already there, and writes a `CLAUDE.md` skeleton (only
-if one doesn't exist). Then fill the `<!-- TODO -->` markers in `CLAUDE.md` with the
+any non-universal skills/agents already there, writes a `CLAUDE.md` skeleton (only if
+one doesn't exist), and sets up Codex through `AGENTS.md`. If `AGENTS.md` already
+exists, the installer appends a bounded Claude-harness bridge only when it does not
+already find one. Then fill the `<!-- TODO -->` markers in `CLAUDE.md` with the
 project's specifics: what the project does, its architecture, the load-bearing bar
 ("the score stays trustworthy and explainable", "the latency budget stays under N",
 etc.), area labels, and (if applicable) GitHub Project IDs.
@@ -149,7 +152,8 @@ template feeding many projects with different needs.
 - **Felt product value** is the bar for issues — not "feature vs refactor".
 
 Full reasoning in [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md). Project-specific bindings
-(runtimes, labels, modules) in `CLAUDE.md`.
+(runtimes, labels, modules) in `CLAUDE.md`. Codex reads `AGENTS.md`, which stays thin
+and delegates back to `CLAUDE.md` plus the `.claude/skills/` workflows.
 
 ## Not in here
 

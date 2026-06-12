@@ -1,10 +1,12 @@
 # Philosophy
 
-The durable "why" behind the conventions enforced by `CLAUDE.md` and the
-`.claude/` skills/agents in any repo bootstrapped from
+The durable "why" behind the conventions enforced by `CLAUDE.md`, `AGENTS.md`, and
+the `.claude/` skills/agents in any repo bootstrapped from
 [`claude-harness-template`](https://github.com/mauricedesaxe/claude-harness-template).
 
 `CLAUDE.md` is the **rules**, dense and enforceable, applied to *this* project.
+`AGENTS.md` is the **Codex bridge**, intentionally thin, so Codex follows the same
+rules instead of growing a parallel source of truth.
 This doc is the **reasoning** — the kind of thing you re-read when an edge case
 shows up that the rules don't obviously cover. When `CLAUDE.md` is silent or
 ambiguous, defer to the section number here.
