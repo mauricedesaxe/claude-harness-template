@@ -12,8 +12,9 @@ the single source of truth, so Claude Code and Codex install exactly the same fi
 
 The universal skills (`work`, `research`, `commit`, `review`, `capture`, `ship`,
 `setup`, `neobrutalist-pop`), reviewer agents (`code-reviewer`, `test-reviewer`,
-`plan-reviewer`, `data-reviewer`, `security-reviewer`), and the durable philosophy doc
-(`docs/PHILOSOPHY.md`) are overwritten with the template's versions on every run.
+`plan-reviewer`, `data-reviewer`, `security-reviewer`), the durable philosophy spine
+(`docs/PHILOSOPHY.md`), and the domain packs (`docs/packs/web.md`, `docs/packs/ai.md`)
+are overwritten with the template's versions on every run.
 Domain-specific skills and agents already in `.claude/` are left alone. `CLAUDE.md` is
 written only if missing. `AGENTS.md` is the Codex bridge: written if missing, its bounded
 bridge block synced in place if already present, appended if the file exists without one.
@@ -114,9 +115,12 @@ behaviour; the script enforces it.
 (the security reviewer runs at review time only when the project's `CLAUDE.md` declares
 `Commercial readiness: yes`, but is always installed).
 
-**Docs** — `docs/PHILOSOPHY.md`, overwritten. The canonical "why" doc; it travels
-independently of `CLAUDE.md` so the philosophy lands even when an existing `CLAUDE.md` is
-preserved.
+**Docs** — `docs/PHILOSOPHY.md` (the paradigm-agnostic spine) plus the domain packs
+`docs/packs/web.md` and `docs/packs/ai.md`, all overwritten. The spine is the canonical
+"why"; it travels independently of `CLAUDE.md` so the philosophy lands even when an
+existing `CLAUDE.md` is preserved. The packs layer web/backend and AI prescriptions on
+top; a non-web repo keeps the spine and ignores the web pack. (Per-paradigm *selection*
+of which packs install is a later step; today all install, the greenfield web default.)
 
 **`CLAUDE.md`** — copied from the skeleton only when missing. Present → left untouched
 (the project owns it; it's its identity). The skeleton carries `<!-- TODO -->` markers for
@@ -172,9 +176,10 @@ bash bootstrap-harness/scripts/install.test.sh
 - **Don't** mirror project skills into `.agents/skills` to make Codex see them. The
   `AGENTS.md` bridge already points Codex at `.claude/skills/`; a second copy is double
   state (PHILOSOPHY §26) and a drift source.
-- **Don't** skip overwriting `docs/PHILOSOPHY.md`. It's universal and canonical — drift in
-  the philosophy file is exactly what this skill exists to prevent. A local edit should
-  have been a PR to the template repo, not an override.
+- **Don't** skip overwriting `docs/PHILOSOPHY.md` or the `docs/packs/*.md`. They're
+  universal and canonical — drift in the philosophy spine or a pack is exactly what this
+  skill exists to prevent. A local edit should have been a PR to the template repo, not an
+  override.
 - **Don't** delete or rename non-universal skills/agents. They're the project's and not
   yours to touch.
 - **Don't** install if the target isn't a git repo. The harness presumes git.
