@@ -13,8 +13,9 @@ specific nested `AGENTS.md` conflicts.
 At the start of substantive work:
 
 - Read `CLAUDE.md`.
-- Read the relevant `docs/PHILOSOPHY.md` sections when `CLAUDE.md` references them
-  or when a rule needs its reasoning.
+- Read the relevant `docs/PHILOSOPHY.md` (and its `docs/packs/*.md`) sections when
+  `CLAUDE.md` references them or when a rule needs its reasoning. `§` numbers are stable
+  IDs; the spine's Section index says which file each lives in.
 - When the user invokes a workflow — `work`, `research`, `review`, `commit`, `ship`,
   `setup`, or `capture` (Codex: `$work`; Claude Code: `/work`) — read the matching
   `.claude/skills/<name>/SKILL.md` and follow it as workflow guidance. These skills

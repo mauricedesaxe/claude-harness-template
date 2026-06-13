@@ -32,19 +32,25 @@ Authorization and Observability sections below. -->
 
 ## Philosophy
 
-This project follows the durable conventions in [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md)
-— that file is the **why** behind the rules below, and the canonical source when this
-file is silent or ambiguous. Specific sections referenced inline: §1 Earn its keep,
-§2 Languages, §3 Single-instance default, §4 Modular monolith, §5 Postgres only,
-§6 Managed platforms, §7 No serverless / no edge, §8 Web architecture matrix,
-§9 Cloudflare, §10 End-to-end type safety, §11 API integration primitives,
-§12 Observability, §13 Outsource the non-core, §14 Code-level discipline,
-§15 Database discipline, §16 Value-type discipline, §17 Feature flags,
-§18 Testing philosophy, §19 Commercial readiness & authorization,
-§20 Frontend defaults & local-first, §21 Documentation discipline,
-§22 Background jobs, §23 File and blob storage, §24 CI/CD discipline,
-§25 Realtime — polling first, §26 Avoid double state, §27 AI/LLM integration,
-§28 Version control (jj, colocated).
+This project follows the durable conventions in `docs/PHILOSOPHY.md` and its domain
+packs — that's the **why** behind the rules below, and the canonical source when this
+file is silent or ambiguous. The philosophy is split:
+
+- [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md) — the **paradigm-agnostic spine** (applies
+  to any codebase): §1 Earn its keep, §2 Languages, §4 Modular monolith, §10 End-to-end
+  type safety, §11 API integration primitives, §12 Observability, §13 Outsource the
+  non-core, §14 Code-level discipline, §16 Value-type discipline, §18 Testing,
+  §19 Commercial readiness & authorization, §21 Documentation, §24 CI/CD, §26 Avoid
+  double state, §28 Version control.
+- [`docs/packs/web.md`](docs/packs/web.md) — the **web/backend pack**: §3 Single-instance,
+  §5 Postgres only, §6 Managed platforms, §7 No serverless/edge, §8 Web architecture,
+  §9 Cloudflare, §15 Database discipline, §17 Feature flags, §20 Frontend & local-first,
+  §22 Background jobs, §23 File/blob storage, §25 Realtime, plus the web specifics of the
+  six split sections (§2, §4, §10, §12, §19, §24).
+- [`docs/packs/ai.md`](docs/packs/ai.md) — the **AI/LLM pack**: §27 AI/LLM integration.
+
+`§` numbers are stable IDs; the spine's Section index records which file each lives in.
+This is a web-flavored project, so it applies the spine plus both packs.
 
 Where this file overrides PHILOSOPHY.md, the override must name a specific project
 reason that clears §1's earn-its-keep bar.
