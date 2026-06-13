@@ -34,6 +34,8 @@ universal_agents=(code-reviewer test-reviewer plan-reviewer data-reviewer securi
 universal_extras=(
   ".claude/skills/neobrutalist-pop/assets/brutpop.css"
   "docs/PHILOSOPHY.md"
+  "docs/packs/web.md"
+  "docs/packs/ai.md"
 )
 
 is_universal_skill() {

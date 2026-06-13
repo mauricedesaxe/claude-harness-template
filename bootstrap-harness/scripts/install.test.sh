@@ -52,7 +52,13 @@ assert_contains "$OUT" "AGENTS.md: added skeleton" "fresh: AGENTS.md skeleton"
 assert_files_eq "$r/.claude/skills/work/SKILL.md" \
   "$template_root/.claude/skills/work/SKILL.md" "fresh: work SKILL byte-equal"
 assert_files_eq "$r/docs/PHILOSOPHY.md" \
-  "$template_root/docs/PHILOSOPHY.md" "fresh: PHILOSOPHY byte-equal"
+  "$template_root/docs/PHILOSOPHY.md" "fresh: PHILOSOPHY (spine) byte-equal"
+assert_files_eq "$r/docs/packs/web.md" \
+  "$template_root/docs/packs/web.md" "fresh: web pack byte-equal"
+assert_files_eq "$r/docs/packs/ai.md" \
+  "$template_root/docs/packs/ai.md" "fresh: ai pack byte-equal"
+assert_grep "$r/docs/packs/web.md" "Web / backend domain pack" "fresh: web pack has content"
+assert_grep "$r/docs/packs/ai.md" "AI / LLM domain pack" "fresh: ai pack has content"
 assert_grep "$r/.gitignore" ".jj/ws/" "fresh: .gitignore has .jj/ws/"
 
 echo "2. idempotent re-run"
@@ -63,6 +69,8 @@ assert_contains "$OUT" "CLAUDE.md: preserved existing" "rerun: CLAUDE.md preserv
 assert_contains "$OUT" "AGENTS.md: synced bridge" "rerun: bridge synced"
 assert_eq "$(grep -cxF '.jj/ws/' "$r/.gitignore")" "1" "rerun: .jj/ws/ appears once"
 assert_eq "$(grep -cF "$BEGIN" "$r/AGENTS.md")" "1" "rerun: one BEGIN marker"
+assert_files_eq "$r/docs/packs/web.md" \
+  "$template_root/docs/packs/web.md" "rerun: web pack overwritten byte-equal"
 
 echo "3. bridge re-sync fidelity"
 r3="$(new_repo resync)"
@@ -122,14 +130,14 @@ fake="$WORK/faketemplate"
 mkdir -p "$fake"
 cp -R "$template_root/.claude" "$template_root/docs" "$template_root/bootstrap-harness" "$fake/"
 cp "$template_root/CLAUDE.md" "$template_root/AGENTS.md" "$fake/"
-rm "$fake/docs/PHILOSOPHY.md"
+rm "$fake/docs/packs/web.md"
 r8="$(new_repo missingsrc)"
 set +e
 OUT="$(bash "$fake/bootstrap-harness/scripts/install.sh" "$r8" 2>&1)"
 RC=$?
 set -e
 assert_eq "$RC" "1" "missing-source: exit 1"
-assert_contains "$OUT" "template file missing" "missing-source: message"
+assert_contains "$OUT" "template file missing: docs/packs/web.md" "missing-source: names the missing pack"
 [[ ! -e "$r8/.claude" ]] && ok "missing-source: no partial write" || bad "missing-source: wrote files before failing"
 
 echo "9. unbalanced bridge marker fails loud, content preserved"
