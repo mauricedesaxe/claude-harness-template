@@ -12,6 +12,7 @@ review → implement → review → ship) with atomic conventional commits, no
 .claude/
   skills/
     work/                   pick up a GitHub issue end-to-end
+    research/               go deep on an issue's open questions, no implementation
     commit/                 atomic conventional commits, no --no-verify
     review/                 run reviewer agents on the diff, chat report
     capture/                file a GH issue — only if it clears the felt-value bar
@@ -32,36 +33,47 @@ CLAUDE.md                   skeleton: short rules + per-project TODOs, reference
 AGENTS.md                   Codex bridge: delegates to CLAUDE.md + .claude skills
 bootstrap-harness/
   SKILL.md                  the global skill that installs everything above
+  scripts/install.sh        the installer the skill runs — single source of truth
 ```
 
 ## Install (one-time, per machine)
 
-The `bootstrap-harness` skill needs to live globally so it's available in any repo.
-Copy it from this repo into your user-scope Claude skills:
+The `bootstrap-harness` skill lives globally so it's available in any repo. Install the
+same `SKILL.md` into both Claude Code's and Codex's user-scope skill directories:
 
 ```sh
-git clone --depth 1 https://github.com/mauricedesaxe/claude-harness-template.git /tmp/cht
-mkdir -p ~/.claude/skills/bootstrap-harness
-cp /tmp/cht/bootstrap-harness/SKILL.md ~/.claude/skills/bootstrap-harness/SKILL.md
-rm -rf /tmp/cht
+CHT="$(mktemp -d)"
+git clone --depth 1 https://github.com/mauricedesaxe/claude-harness-template.git "$CHT"
+mkdir -p ~/.claude/skills/bootstrap-harness ~/.agents/skills/bootstrap-harness
+cp "$CHT/bootstrap-harness/SKILL.md" ~/.claude/skills/bootstrap-harness/SKILL.md
+cp "$CHT/bootstrap-harness/SKILL.md" ~/.agents/skills/bootstrap-harness/SKILL.md
+rm -rf "$CHT"
 ```
 
-From then on, `/bootstrap-harness` works in any Claude Code session.
+Only `SKILL.md` is installed globally — the installer is always run from a fresh clone of
+the template (the skill clones it on each run), so there's no stale local copy to drift.
+From then on, `/bootstrap-harness` works in any Claude Code session and
+`$bootstrap-harness` works in any Codex session (`~/.agents/skills` is Codex's user-level
+skills directory; restart Codex once after installing a new skill so it's discovered).
 
 ## Use (per-project)
 
 Inside any git repo:
 
 ```
-/bootstrap-harness
+/bootstrap-harness      # Claude Code
+$bootstrap-harness      # Codex
 ```
 
-Claude clones the template, overwrites the universal skills/agents into `.claude/`,
-overwrites `docs/PHILOSOPHY.md` (the canonical "why" doc, always synced), preserves
-any non-universal skills/agents already there, writes a `CLAUDE.md` skeleton (only if
-one doesn't exist), and sets up Codex through `AGENTS.md`. If `AGENTS.md` already
-exists, the installer appends a bounded Claude-harness bridge only when it does not
-already find one. Then fill the `<!-- TODO -->` markers in `CLAUDE.md` with the
+The agent clones the template and runs `bootstrap-harness/scripts/install.sh` from that
+fresh clone. The installer overwrites the universal skills/agents into `.claude/`,
+overwrites `docs/PHILOSOPHY.md` (the canonical "why" doc, always synced), preserves any
+non-universal skills/agents already there, writes a `CLAUDE.md` skeleton (only if one
+doesn't exist), and sets up Codex through `AGENTS.md`. If `AGENTS.md` already has the
+bridge, the installer syncs it in place; if it exists without one, the bounded bridge is
+appended. Codex picks up the project workflows through that `AGENTS.md` bridge (which
+points it at `.claude/skills/`), so the skills aren't duplicated into a second directory.
+Then fill the `<!-- TODO -->` markers in `CLAUDE.md` with the
 project's specifics: what the project does, its architecture, the load-bearing bar
 ("the score stays trustworthy and explainable", "the latency budget stays under N",
 etc.), area labels, and (if applicable) GitHub Project IDs.
