@@ -15,9 +15,11 @@ At the start of substantive work:
 - Read `CLAUDE.md`.
 - Read the relevant `docs/PHILOSOPHY.md` sections when `CLAUDE.md` references them
   or when a rule needs its reasoning.
-- When the user invokes a workflow such as `/work`, `/research`, `/review`,
-  `/commit`, `/ship`, `/setup`, or `/capture`, read the matching
-  `.claude/skills/<name>/SKILL.md` and follow it as workflow guidance.
+- When the user invokes a workflow — `work`, `research`, `review`, `commit`, `ship`,
+  `setup`, or `capture` (Codex: `$work`; Claude Code: `/work`) — read the matching
+  `.claude/skills/<name>/SKILL.md` and follow it as workflow guidance. These skills
+  live under `.claude/` and are intentionally not duplicated into `.agents/skills`;
+  read them from here so there's a single source of truth.
 - When a workflow references reviewer agents in `.claude/agents/`, use those files
   as the review prompt or checklist.
 
