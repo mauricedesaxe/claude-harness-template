@@ -33,7 +33,7 @@ CLAUDE.md                   skeleton: short rules + per-project TODOs, reference
 AGENTS.md                   Codex bridge: delegates to CLAUDE.md + .claude skills
 bootstrap-harness/
   SKILL.md                  the global skill that installs everything above
-  scripts/install.sh        the installer the skill runs — single source of truth
+                            (LLM-driven: clone, copy the manifest, fill CLAUDE.md TODOs)
 ```
 
 ## Install (one-time, per machine)
@@ -50,8 +50,8 @@ cp "$CHT/bootstrap-harness/SKILL.md" ~/.agents/skills/bootstrap-harness/SKILL.md
 rm -rf "$CHT"
 ```
 
-Only `SKILL.md` is installed globally — the installer is always run from a fresh clone of
-the template (the skill clones it on each run), so there's no stale local copy to drift.
+Only `SKILL.md` is installed globally — on each run the skill clones a fresh copy of the
+template and copies the universal files from *that*, so there's no stale local copy to drift.
 From then on, `/bootstrap-harness` works in any Claude Code session and
 `$bootstrap-harness` works in any Codex session (`~/.agents/skills` is Codex's user-level
 skills directory; restart Codex once after installing a new skill so it's discovered).
@@ -65,18 +65,17 @@ Inside any git repo:
 $bootstrap-harness      # Codex
 ```
 
-The agent clones the template and runs `bootstrap-harness/scripts/install.sh` from that
-fresh clone. The installer overwrites the universal skills/agents into `.claude/`,
-overwrites `docs/PHILOSOPHY.md` (the canonical "why" doc, always synced), preserves any
-non-universal skills/agents already there, writes a `CLAUDE.md` skeleton (only if one
-doesn't exist), and sets up Codex through `AGENTS.md`. If `AGENTS.md` already has the
-bridge, the installer syncs it in place; if it exists without one, the bounded bridge is
-appended. Codex picks up the project workflows through that `AGENTS.md` bridge (which
-points it at `.claude/skills/`), so the skills aren't duplicated into a second directory.
-Then fill the `<!-- TODO -->` markers in `CLAUDE.md` with the
-project's specifics: what the project does, its architecture, the load-bearing bar
-("the score stays trustworthy and explainable", "the latency budget stays under N",
-etc.), area labels, and (if applicable) GitHub Project IDs.
+The agent asks whether the repo is for Claude Code, Codex, or both, then clones the template
+and copies the universal files from that fresh clone — overwriting the skills/agents in
+`.claude/`, overwriting `docs/PHILOSOPHY.md` and the packs (the canonical "why", always
+synced), and preserving any non-universal skills/agents already there. It writes a `CLAUDE.md`
+skeleton only if one doesn't exist, and (when Codex is in play) sets up `AGENTS.md`: syncing
+the bridge in place if present, appending it if not. Codex picks up the project workflows
+through that bridge (which points it at `.claude/skills/`), so the skills aren't duplicated
+into a second directory. When it writes a fresh `CLAUDE.md`, the agent fills the
+`<!-- TODO -->` markers from what it can read in the repo — what the project does, its
+architecture, the load-bearing bar, area labels, GitHub Project IDs — and tells you which it
+left blank.
 
 `docs/PHILOSOPHY.md` is the load-bearing reference doc — read it once, then let
 `CLAUDE.md` point at its section numbers (§1 Earn its keep, §3 Single-instance
