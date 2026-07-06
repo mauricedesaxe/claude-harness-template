@@ -55,13 +55,22 @@ run — that's how the conventions stay synced. **Anything not in this list unde
 or `docs/` is the project's own and is left untouched.**
 
 **Skills** → `.claude/skills/<name>/SKILL.md` (overwrite):
-`work`, `research`, `commit`, `review`, `capture`, `ship`, `setup`, `neobrutalist-pop`
-(plus `neobrutalist-pop/assets/brutpop.css`).
+- **Issue layer:** `work`, `research`, `commit`, `review`, `capture`, `ship`, `setup`.
+- **Initiative layer** (Shape Up, §29): `shape`, `bet`, `prune`.
+- **Planning & assessment:** `next-task`, `viability`.
+- **Reporting:** `codebase-report` (plus its `collect-metrics.sh` + `test-collect.sh`).
+- **UI / design:** `neobrutalist-pop` (plus `neobrutalist-pop/assets/brutpop.css`),
+  `tldraw` (plus `tldraw/LICENSE` — a vendored MIT skill).
+
+`tldraw` needs an external CLI: mention that the user should
+`npm install -g @kitschpatrol/tldraw-cli` to use it (it's not a repo dependency).
 
 **Agents** → `.claude/agents/<name>.md` (overwrite):
-`code-reviewer`, `test-reviewer`, `plan-reviewer`, `data-reviewer`, `security-reviewer`.
+`code-reviewer`, `test-reviewer`, `plan-reviewer`, `data-reviewer`, `security-reviewer`,
+`git-hygiene-reviewer`.
 (The security reviewer only *runs* when `CLAUDE.md` declares `Commercial readiness: yes`, but
-it's always installed.)
+it's always installed. `git-hygiene-reviewer` runs on every `/review` — it judges the shape of
+the history and PR meta, not the code.)
 
 **Docs** → overwrite:
 `docs/PHILOSOPHY.md` (the paradigm-agnostic spine — the canonical "why"),
@@ -94,11 +103,30 @@ from a duplicated `.agents/skills` copy (one source of truth, no drift).
   block between them with the template's current bridge.
 - **Present without markers** → append the bridge block, leaving existing content intact.
 
-## Step 6: report
+## Step 6: recommended MCPs
+
+The harness assumes a few MCP servers are available (they're user-scope, not repo config, so
+this is a recommendation, not a copy). Mention the ones the skills lean on and let the user
+wire the ones they want:
+
+- **Browser (Playwright)** — the load-bearing one. The `work`/`review` flow verifies UI
+  changes by driving a real browser (navigate, snapshot, screenshot) rather than trusting the
+  code compiled. Any UI-shaped repo wants it. Install: `claude mcp add playwright -- npx
+  @playwright/mcp@latest`, then, on first use, install the browser binary the error names
+  (`npx @playwright/mcp install-browser chrome-for-testing`). New MCP tools need a session
+  restart to register.
+- **GitHub** — `capture`/`ship`/`work` touch issues, PRs, and the project board. The `gh` CLI
+  covers most of it; the GitHub MCP is a convenience.
+- **Deploy platform** (Railway / your host) — optional, for driving deploys and reading logs.
+
+Don't install these for the user or write them into the repo. Name them, point at the install
+commands, and move on.
+
+## Step 7: report
 
 Tell the user what was added vs. overwritten vs. preserved, which `CLAUDE.md` TODOs you filled
-and which you left, and the next step (fill any remaining TODOs; for Codex, restart it once so
-it discovers the bridge).
+and which you left, and the next step (fill any remaining TODOs; wire any recommended MCPs;
+for Codex, restart it once so it discovers the bridge).
 
 ## Drift policy
 

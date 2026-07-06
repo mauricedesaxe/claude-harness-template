@@ -18,13 +18,21 @@ review → implement → review → ship) with atomic conventional commits, no
     capture/                file a GH issue — only if it clears the felt-value bar
     ship/                   land on main (branch/commit/push/PR/CI/rebase-merge)
     setup/                  fresh-clone onboarding skeleton
+    shape/                  shape a raw idea into a bettable milestone (Shape Up)
+    bet/                    commit a shaped milestone to the active set, WIP-capped
+    prune/                  periodic backlog hygiene — cull only the dead
+    next-task/              rank the top few things to work on next
+    viability/              market/impact assessment before betting (TAM/SAM/SOM, CAC/LTV)
+    codebase-report/        two-perspective health snapshot over a metrics collector
     neobrutalist-pop/       neo-brutalist UI tokens + components
+    tldraw/                 talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
   agents/
     code-reviewer.md        engineering-quality reviewer
     test-reviewer.md        adversarial test reviewer
     plan-reviewer.md        adversarial plan reviewer (run before code exists)
     data-reviewer.md        schema, migrations, value types, feature flags
     security-reviewer.md    authz/RBAC/RLS/audit/PII (commercial-ready only)
+    git-hygiene-reviewer.md history + PR-meta shape (atomic commits, clean stack)
 docs/
   PHILOSOPHY.md             durable "why" doc — single-instance, Postgres-only,
                             no serverless, API-integration primitives, etc.
@@ -80,7 +88,13 @@ left blank.
 `docs/PHILOSOPHY.md` is the load-bearing reference doc — read it once, then let
 `CLAUDE.md` point at its section numbers (§1 Earn its keep, §3 Single-instance
 default, §5 Postgres only, §7 No serverless / no edge, §11 API integration
-primitives, etc.).
+primitives, §29 Shaping / appetite / betting, etc.).
+
+The bootstrap run also names the MCP servers the skills lean on (it doesn't install
+them — they're user-scope). The load-bearing one is the **browser MCP (Playwright)**:
+the `work` / `review` flow verifies UI changes by driving a real browser (navigate,
+snapshot, screenshot) instead of trusting that the code compiled. The `tldraw` skill
+additionally needs `@kitschpatrol/tldraw-cli` on your PATH.
 
 ## Customizing
 
@@ -161,6 +175,10 @@ template feeding many projects with different needs.
 - **Fail loud, distinguish "no data" from "fetched zero"** — the "two zeros" rule.
 - **No `throw` in app code** — return a `Result<T, E>`.
 - **Felt product value** is the bar for issues — not "feature vs refactor".
+- **Two altitudes (Shape Up).** Initiatives (GitHub milestones) get shaped, bet on,
+  and circuit-broken; issues get captured, researched, and built. Appetite is counted
+  in sittings, 1–3 bets active at once, never four. Skills: `shape` / `bet` / `prune`
+  at the initiative layer, `capture` / `research` / `work` / `ship` at the issue layer.
 
 Full reasoning in [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md). Project-specific bindings
 (runtimes, labels, modules) in `CLAUDE.md`. Codex reads `AGENTS.md`, which stays thin
@@ -173,8 +191,8 @@ and delegates back to `CLAUDE.md` plus the `.claude/skills/` workflows.
   `CLAUDE.md`. The `review` skill picks them up automatically.
 - Hook configs (`lefthook.yml`, `.husky/`, etc.) — these are project-flavoured and live
   in the project repo.
-- Anything WalkUp-specific. The skills started life there; the domain references are
-  stripped out here.
+- Anything project-specific. The skills started life in a working product repo; the
+  domain references are stripped out here.
 
 ## License
 

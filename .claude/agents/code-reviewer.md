@@ -16,7 +16,7 @@ domain reviewer should run.
 
 These are tooling-enforced; do not flag them:
 
-- Formatting (the project's formatter — Biome, Prettier, etc.)
+- Formatting (the project's formatter)
 - `as any` and non-null assertions (strict `tsc` flags, lint rules)
 - Unused locals and parameters (strict `tsc` flags)
 
@@ -24,15 +24,14 @@ These are tooling-enforced; do not flag them:
 
 **Module ownership.** External-dependency boundaries are hard — one module per upstream.
 The project's `CLAUDE.md` "Architecture" section lists the authoritative boundaries (e.g.
-`server/integrations/<service>.ts` is the only place `<service>` is called). A diff that
+one integration module is the only place a given upstream is called). A diff that
 bypasses these — a `fetch("https://upstream-api…")` in a route loader, an inline
 `setTimeout` throttle, ad-hoc `process.env.<KEY>`, raw DB calls from a component
 loader — is a violation. Point at the right module.
 
-**Domain-named modules.** A new file's name should describe a piece of the domain
-(`overpass.ts`, `decay.ts`, `pricing.ts`), not a role-shaped category. If the closest
-description for a candidate filename is "miscellaneous" / "utils" / "helpers", the
-design hasn't landed. Push back.
+**Domain-named modules.** A new file's name should describe a piece of the domain, not a
+role-shaped category. If the closest description for a candidate filename is
+"miscellaneous" / "utils" / "helpers", the design hasn't landed. Push back.
 
 **Imports.** Follow the project's configured path aliases (`~/…`, `@/…`, etc.); flag a
 new alias scheme introduced without the matching `tsconfig`/build-config change. Prefer
@@ -61,15 +60,15 @@ Flag:
 - Any log line that could include an API key or full PII.
 - **An external upstream call without logging** latency, status, retry count,
   circuit-breaker state, and rate-limiter wait.
-- **A new error path that doesn't reach the error tracker** (Sentry or equivalent).
+- **A new error path that doesn't reach the error tracker.**
   Even with `Result<T, E>` and no `throw`s, the error needs to be captured for
   the operator-side visibility — flag a `Result.err()` path that is created and
   consumed silently.
 - **Errors deliberately sampled out.** Sampling on successful traces / logs is
   fine at scale (PHILOSOPHY §12 earn-its-keep); errors are always kept.
 - **In a multi-service change**: missing `traceparent` / `tracestate` propagation
-  (W3C Trace Context). Both Sentry and BetterStack consume OpenTelemetry, which
-  uses the standard; don't invent a homebrew correlation header.
+  (W3C Trace Context). Use the standard OpenTelemetry context; don't invent a
+  homebrew correlation header.
 - **A new metered API call (LLM, SMS, Maps, transaction processor) without an
   `api_calls` row** (or whatever the project's cost-tracking table is named).
   PHILOSOPHY §27 makes per-request cost tracking a hard line — provider, model,
@@ -187,31 +186,30 @@ When the diff adds or modifies a background job:
 
 When the diff touches file uploads or large-binary storage:
 
-- **Object storage is Cloudflare R2.** Flag a new dependency on `aws-sdk` /
-  raw S3 / DigitalOcean Spaces / MinIO / Backblaze without a written reason —
-  R2 is the §9-aligned default.
-- **Uploads use pre-signed URLs from the browser direct to R2.** Flag a route
+- **Object storage is an S3-compatible bucket** (the project names the provider in
+  `CLAUDE.md`). Flag a new object-storage dependency that deviates from that default
+  without a written reason.
+- **Uploads use pre-signed URLs from the browser direct to the bucket.** Flag a route
   handler that accepts a `multipart/form-data` upload body and writes bytes
   to storage from the server. The server signs the URL after authorization
   (§19) and records the metadata row; it does not move the bytes.
-- **Paths in DB, bytes in R2.** Flag a `bytea` / `BLOB` / `LONGBLOB` column
+- **Paths in DB, bytes in the bucket.** Flag a `bytea` / `BLOB` / `LONGBLOB` column
   storing user-uploaded file contents — a §5 + §23 anti-pattern. The schema
-  records the R2 key + metadata; the bytes never live in Postgres.
+  records the object key + metadata; the bytes never live in Postgres.
 - **Post-processing runs in a §22 job.** Flag synchronous image resizing,
   virus scanning, or thumbnail generation inside a route handler. Upload
   complete → enqueue job → metadata row status transitions.
 - **Public URLs are gated on virus-scan status** for user-uploaded files. Flag
-  a new code path that emits a public R2 URL before the scan-status field
+  a new code path that emits a public object URL before the scan-status field
   reaches `clean`.
 
 ## AI integration (PHILOSOPHY §27)
 
 When the diff adds an LLM / AI call:
 
-- **Provider routing via OpenRouter** is the default. Flag direct
-  `@anthropic-ai/sdk` / `openai` imports introduced for *new* call sites
-  without a written reason. The OpenRouter SDK fronts both (and many others)
-  with a single switching surface.
+- **Provider routing goes through the project's model-router boundary** (a single
+  switching surface). Flag direct `@anthropic-ai/sdk` / `openai` imports introduced
+  for *new* call sites without a written reason.
 - **Cost tracking at the call site is mandatory.** The call returns; the
   `api_calls` row gets inserted with provider, model, input/output tokens,
   cost estimate, latency, status, user attribution. The logging-and-observability
@@ -280,6 +278,16 @@ Flag, concretely:
 
 Don't flag bare primitives where the value is genuinely free-form (a parsed input
 that's about to be used and discarded, display-only text).
+
+**Options object over a long positional list.** Once a function signature crosses
+~3-4 parameters, flag it and propose collapsing the arguments into a single named
+options object — named fields beat positional args the caller has to count, and they
+close the same-typed-neighbour swap window the brand rule targets from the other side.
+The pattern is `createUpstream(tag, limits, { fetchImpl, log, gate })`: the
+always-needed args stay positional, the rest move into one object. A signature growing a
+fourth/fifth positional param, or call sites padded with `undefined, undefined, x` to
+reach a trailing argument, is the finding. Genuinely-always-needed leading args (the one
+or two every caller passes) can stay positional.
 
 **Purity leaks into the pure core.** If the project has a pure functional core (scoring,
 pricing, routing math, etc. — `CLAUDE.md` names it), flag any import of an integration,

@@ -101,6 +101,12 @@ itself a finding — name it what it does.
 
 **Domain identifiers.**
 
+- **PK type defaults to `bigint` identity, not UUID/random** (PHILOSOPHY §16).
+  Flag a new UUID / `text`-random primary key on an app-owned table that
+  carries no stated reason (client-gen, enumeration exposure, replication). A
+  library-owned table keeps its own id type, and an FK to
+  it inherits that type — that's the earned exception, and it should be named
+  in a comment at the column.
 - New `id` columns get a **branded type** at the schema-derived TypeScript
   side. `type UserId = string & { __brand: "UserId" }`, the equivalent in
   Rust/Python, etc. Flag a new ID-shaped column whose derived type is `string`
@@ -183,19 +189,19 @@ When the diff adds or modifies tables that jobs read or write:
 When the diff touches schema for user-uploaded files or generated media:
 
 - **`bytea` / `BLOB` / `LONGBLOB` columns storing file contents** are the §23
-  anti-pattern. Bytes live in R2; Postgres stores the R2 key plus metadata.
-  Flag any new such column unless the contents are genuinely small,
+  anti-pattern. Bytes live in object storage; Postgres stores the object key plus
+  metadata. Flag any new such column unless the contents are genuinely small,
   app-controlled, and frequently queried structurally (rare).
 - **Media metadata table shape.** A new `media` (or equivalent) table covers
-  at minimum: `id`, `r2_key`, `content_type`, `size_bytes`, `owner_id`,
+  at minimum: `id`, `object_key`, `content_type`, `size_bytes`, `owner_id`,
   `status` (lifecycle), `scan_status`, `scanned_at`, `created_at`. Flag
   missing columns where the project will need the question they answer.
 - **Lifecycle status field.** `pending → scanned → processed → public` (or
   the project's equivalent). Flag a media table that doesn't model the
   lifecycle — that's how virus scanning and public-URL exposure get
   serialised correctly per §23.
-- **R2-key uniqueness and stability.** The R2 key column has a uniqueness
-  constraint; it's stable for the lifetime of the row. Flag mutable R2-key
+- **Object-key uniqueness and stability.** The object-key column has a uniqueness
+  constraint; it's stable for the lifetime of the row. Flag mutable object-key
   columns or schemas that allow duplicate keys.
 
 ### 8. Metered API call schemas (PHILOSOPHY §27)

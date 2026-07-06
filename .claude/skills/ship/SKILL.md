@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Land work on `main` end-to-end. jj-native (Jujutsu, colocated with git). Detect current state (uncommitted @, branch commits, bookmark, PR) and run only the steps still missing — name a bookmark if needed, commit the working copy atomically (via the `commit` skill), `jj git push --bookmark`, open a PR with a structured body and `Closes #N`, wait for CI, merge via `gh pr merge --rebase --delete-branch`, then forget the workspace and `jj git fetch` so trunk picks up the merge. Finishes with a post-merge prompt for follow-up issues. Use when the user says "ship", "/ship", "ship this", "ship it", "land this", "merge this", "merge this PR", or otherwise wants the work landed on `main` without thinking about which intermediate step is missing.
+description: Land work on `main` end-to-end. jj-native (Jujutsu, colocated with git). Detect current state (uncommitted @, branch commits, bookmark, PR) and run only the steps still missing — name a bookmark if needed, commit the working copy atomically (via the `commit` skill), `jj git push --bookmark`, open a PR with a structured body and `Closes #N`, confirm the check gate is green, merge via `gh pr merge --rebase --delete-branch`, then forget the workspace and `jj git fetch` so trunk picks up the merge. Finishes with a post-merge prompt for follow-up issues. Use when the user says "ship", "/ship", "ship this", "ship it", "land this", "merge this", "merge this PR", or otherwise wants the work landed on `main` without thinking about which intermediate step is missing.
 ---
 
 # Ship Skill
@@ -87,8 +87,8 @@ open PR. Decide which steps need to run:
 | PR state ≠ OPEN                                               | Stop and explain |
 
 State the plan in one line before acting — e.g. "you've got uncommitted work and no
-branch yet; I'll commit, name a bookmark, push, open a PR, wait for CI, then merge". The
-user can redirect early.
+branch yet; I'll commit, name a bookmark, push (the check gate runs), open a PR,
+then merge". The user can redirect early.
 
 ## Step 2: name a bookmark for the work (only if none exists yet)
 
@@ -148,6 +148,10 @@ if it still matches what jj last fetched, so a clean rebase pushes without cerem
 else advanced the branch), surface it and re-fetch rather than forcing past the safety
 check.
 
+If the project runs its check gate locally on push (a push wrapper that runs the gate
+before `jj git push`), push through that wrapper so the gate fires; a raw `jj git push`
+bypasses it. See `CLAUDE.md` for how this project gates.
+
 ## Step 5: open a PR (only if no PR exists)
 
 ### 5a. Detect linked issue
@@ -201,26 +205,28 @@ EOF
 
 Capture the new PR number from the output URL. Don't `--draft` unless asked.
 
-## Step 6: pre-flight — CI green and branch mergeable
+## Step 6: pre-flight — gate green and branch mergeable
+
+Confirm the project's check gate is green before merging. Whether that gate is a remote CI
+run or a local pre-push gate is a per-project call (see `CLAUDE.md`):
+
+- **Local pre-push gate** (no remote CI): the gate ran when you pushed via the project's
+  push wrapper. Confirm you pushed through that wrapper (or ran the gate by hand); a raw
+  `jj git push` skips it. `gh pr checks` reporting no checks is expected in this setup, not
+  a problem.
+- **Remote CI**: wait for the required checks to go green (`gh pr checks <#> --watch`).
+
+Then check the branch is mergeable:
 
 ```sh
 jj git fetch
 env -u GITHUB_TOKEN gh pr view <#> --json mergeStateStatus,mergeable
-env -u GITHUB_TOKEN gh pr checks <#>
 ```
 
-- All required checks passing → continue.
-- Failing → show the output and ask whether to wait, fix, or override. Don't merge a red
-  PR without an explicit "merge anyway", and even then prefer fixing.
-- Pending → wait. Use Bash with `run_in_background` and an `until`-loop:
-
-  ```sh
-  until env -u GITHUB_TOKEN gh pr checks <n> --json bucket \
-          --jq 'all(.bucket != "pending")' 2>/dev/null | grep -q true; do
-    sleep 20
-  done
-  env -u GITHUB_TOKEN gh pr checks <n>
-  ```
+- The gate passed and `mergeable: MERGEABLE` → continue.
+- The gate failed (or you skipped it) → fix and re-push before merging. Don't merge
+  a change that hasn't been through the gate without an explicit "merge anyway", and even then
+  prefer fixing.
 
 - `mergeStateStatus: BEHIND` → the branch is behind `main`. Since we rebase-merge, update
   by rebasing: `env -u GITHUB_TOKEN gh pr update-branch <#> --rebase`, or locally

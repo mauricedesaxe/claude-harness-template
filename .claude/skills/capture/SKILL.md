@@ -24,7 +24,7 @@ the product more **useful, more trustworthy, or more pleasant to actually use**?
 - **Internal tidiness is not a product outcome.** "Cleaner code", "more testable", "best
   practice", "more modern", "nice to have" — none of these justify an issue on their own.
   Do that work inline while delivering something real.
-- **The project's specific bar** lives in its `CLAUDE.md` (e.g. "the score stays trustworthy
+- **The project's specific bar** lives in its `CLAUDE.md` (e.g. "the result stays trustworthy
   and explainable", "the latency budget stays under N", "the export is reproducible"). Read
   it and apply it as the test.
 
@@ -51,9 +51,9 @@ env -u GITHUB_TOKEN gh auth status    # keyring token (see below)
 
 `$ARGUMENTS` is the raw capture. Forms:
 
-- Title only: `/capture Show which items dragged the score down`
-- Title + detail, split on `|`: `/capture Show which items dragged the score down | the
-  report should call out the missing/distant categories (PRD §6)`
+- Title only: `/capture Show which items dragged the result down`
+- Title + detail, split on `|`: `/capture Show which items dragged the result down | the
+  report should call out the missing/distant categories (spec §6)`
 
 If empty, ask for at least a one-line title.
 
@@ -99,6 +99,16 @@ ask — silently dropping the label loses the signal. If the work genuinely fits
 existing `area/*` labels, ask the user before inventing a new area; an area label is meant
 to be stable across many issues.
 
+**Appetite (optional second axis, PHILOSOPHY §29).** If the user names one, stamp an
+`appetite/S|M|L` label — a fuzzy cap in *sittings* (one / a few / many supervision visits),
+not a time estimate. Don't force it: a quick capture can stay un-sized and get its appetite at
+`/shape` or pickup. Most single issues are **S** (one sitting). The `appetite/*` labels are
+§29 system labels; create them once if missing (`gh label create appetite/S …`, see `shape`).
+
+**Milestone (optional).** If this issue belongs to an initiative being shaped, attach it:
+`--milestone "<title>"` on create (or `gh issue edit <N> --milestone …` after). Don't invent a
+milestone here — that's `/shape`'s job; capture only *attaches* to one that exists.
+
 ## Step 4: create the issue
 
 The body **leads with the felt outcome** — that's the whole point of the bar:
@@ -119,8 +129,8 @@ EOF
 If the project has a GitHub Project board configured in `CLAUDE.md`, add the new issue to
 the **Backlog** column (or whatever the project's default-landing column is). Capture lands
 in Backlog by default — moving to Ready is a separate decision the user makes when they
-decide to pick it up. The project number, owner, field/option IDs live in the project's
-`CLAUDE.md` "Issue triage" section.
+decide to pick it up. The project number, owner, and field/option IDs live in the project's
+`CLAUDE.md` "Issue triage" section (see CLAUDE.md for your board's ID/URL and field IDs).
 
 ```sh
 env -u GITHUB_TOKEN gh project item-add <project#> --owner <owner> --url "<issue url>"
@@ -139,6 +149,56 @@ Captured #<N>: <title>  [area/<x>]
 Backlog · <url>
 ```
 
+## Board flow (if the project has a GitHub Project board)
+
+Many projects track issues on a single shared **GitHub Project** board. The concrete board
+coordinates — project number, owner, project id, the field ids, and the concrete label/field
+option lists — are project-specific and live in the project's `CLAUDE.md`. See CLAUDE.md for
+your board's ID/URL and field IDs.
+<!-- TODO: point this at your board's coordinates in CLAUDE.md -->
+
+Below is the generic mechanism. A well-run board has **orthogonal axes plus a flow column** —
+keep them straight, each answers a different question:
+
+1. **Product/app axis (label + board field) — *which* part of the system.** For a monorepo or
+   multi-product board this axis names which app/product the work belongs to. Infer it from the
+   issue's paths where you can; for a brand-new-product idea or pure research with no path yet,
+   **ask** which one rather than defaulting. The concrete option list lives in `CLAUDE.md`.
+   <!-- TODO: your board's product/app option list lives in CLAUDE.md -->
+2. **`area/*` label — *kind* of work.** In addition to the product axis, not a replacement.
+   Exactly one `area/*`. The concrete `area/*` taxonomy in use lives in `CLAUDE.md`; add a new
+   `area/*` only when an issue genuinely fits none (ask first).
+3. **Milestones — the *roadmap phase* axis.** Orthogonal to Status. The milestone list lives
+   in `CLAUDE.md`. Stamp a milestone at capture only when the phase is obvious; otherwise leave
+   it for pickup.
+4. **`Status` board field — *where in the flow*.** Backlog → To research → Ready to build →
+   In progress → Blocked → Done (+ Icebox). **Capture lands new issues in Backlog.**
+
+**Board moves are manual — the board does NOT auto-move on issue close.** Whenever an issue
+closes (or a PR closes it), set its `Status` to **Done** yourself. Every other transition is
+manual too: `capture` lands Backlog, `research` promotes To research → Ready to build, `work`
+sets Ready to build → In progress on pickup, a blocked issue gets the **`blocked` label +
+the Blocked column** (both, so it's filterable and visible).
+
+**Commands.** Always refetch field/option IDs (`gh project field-list <project#> --owner
+<owner> --format json`) — never hardcode option ids, they can change. Prefix mutating
+`gh project`/`gh issue` calls with `env -u GITHUB_TOKEN` when the ambient token lacks
+`project` scope.
+
+```sh
+# 1. create with BOTH axes of labels (product axis + area/*)
+env -u GITHUB_TOKEN gh issue create --title "<outcome-framed>" \
+  --label "<product>,area/<area>[,bug][,blocked]" --body "..."
+# 2. add to the board
+env -u GITHUB_TOKEN gh project item-add <project#> --owner <owner> --url "<issue url>"
+# 3. refetch field + option ids, then set Status=Backlog and the product field
+env -u GITHUB_TOKEN gh project field-list <project#> --owner <owner> --format json
+env -u GITHUB_TOKEN gh project item-edit --project-id <project-id> \
+  --id <itemId> --field-id <Status-field-id> --single-select-option-id <Backlog-option-id>
+env -u GITHUB_TOKEN gh project item-edit --project-id <project-id> \
+  --id <itemId> --field-id <Product-field-id> --single-select-option-id <Product-option-id>
+```
+
 ## Notes
 
 - The value check is non-negotiable, and **felt product value is the test** — not whether
@@ -151,15 +211,14 @@ Backlog · <url>
 ## Examples
 
 ```
-/capture Show which items dragged the score down
-→ #12 [area/scoring] · Backlog — felt: you instantly see why a result scored low.
+/capture Show which items dragged the result down
+→ #<N> [area/<x>] · Backlog — felt: you instantly see why a result scored low.
 
-/capture Fix: score shows 0 when source times out instead of "unavailable"
-→ #13 [area/scoring, bug] · Backlog — felt: the score stops lying when data is missing
-   (the "two zeros" rule).
+/capture Fix: result shows 0 when source times out instead of "unavailable"
+→ #<N> [area/<x>, bug] · Backlog — felt: the result stops lying when data is missing.
 
-/capture Refactor score.ts into smaller files
-→ Pushed back: "Refactoring isn't a product outcome on its own. If splitting score.ts is
+/capture Refactor result.ts into smaller files
+→ Pushed back: "Refactoring isn't a product outcome on its own. If splitting result.ts is
    blocking a feature you're about to build, do it as part of that work. What does using
    the product feel like differently afterward? If nothing, skip the issue."
 
