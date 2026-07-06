@@ -120,14 +120,26 @@ credential/access decision, or a finding that changes what the issue even is. An
 - A bare question with no issue → allowed, but ask once whether it should be anchored to an
   issue (most research belongs to one). If the user says no, proceed issue-less — Step 8 and
   the board parts then no-op.
-- Empty → ask which issue (and any specific questions). Don't guess.
+- A **milestone / initiative** ref (`/research milestone:5`, `/research the cutover
+  initiative`) → research at the **initiative altitude**. This is `research` doing the
+  rabbit-hole hunt that `/shape` calls for (PHILOSOPHY §29): the target is the milestone, and
+  the agenda is framed around the unknown that could blow the appetite (Step 2). It's the same
+  machinery one level up. Differences at this scope: the write-up lands as
+  `docs/research/<slug>.md` (no issue number); Step 8 posts the verdict into the **milestone
+  description** (and back to `/shape`), since a milestone has no comment thread; the board's
+  "promote to Ready to build" move doesn't apply — the output feeds the bet decision instead.
+- Empty → ask which issue or milestone (and any specific questions). Don't guess.
 
 A trailing `auto` (or a clear "let it rip" intent) selects **Autonomous mode** (see that
 section); strip it from the ref, and settle which mode you're in here, at Step 0.
 
-Sanity-check local state before anything mutating:
+**Fetch first, before you read or explore anything.** `jj git fetch` so your reading of the
+issue and the codebase (Lane B in Step 5) is against the current `main@origin`, not a stale
+local checkout. This holds even for **doc-only** research that never creates a workspace —
+a feasibility verdict built on a stale tree can be wrong about what the code already does:
 
 ```sh
+jj git fetch                # ALWAYS first — research the latest main, not a stale checkout
 jj st                       # working-copy status: what's in @, which commit it sits on
 jj log -r 'trunk()..@'      # any local commits not yet on trunk
 ```
@@ -166,6 +178,13 @@ search (which sources), codebase read, or a small spike. Numbers come from the r
 not estimates — that's the house style.
 
 Keep it to ~3–7 questions. If the issue only really has one, that's fine — say so.
+
+**At the milestone altitude**, the agenda has one mandatory question above the rest: *what is
+the rabbit hole — the single unknown that could blow this initiative's appetite?* (an unproven
+integration, a data shape you haven't seen, a ToS/limit you're assuming.) Frame it falsifiably
+and answer it for real; the whole point of milestone-scope research is to resolve or de-scope
+that unknown *before* `/shape` commits to an appetite. A verdict of "this rabbit hole can't be
+closed inside the appetite" is a valid, valuable "don't build it."
 
 ## Step 3: user confirms/extends the agenda
 

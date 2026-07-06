@@ -23,27 +23,39 @@ The universal reviewers (shipped in `.claude/agents/`):
 - `test-reviewer` — adversarial reviewer for changed tests: do they pin the real
   behaviour (not a mock or a proxy), are the failure / `err` branches and
   boundaries covered, could the test climb one rung higher on the fidelity ladder
-  and stay deterministic, do non-trivial UI components ship Storybook stories for
+  and stay deterministic, do non-trivial UI components ship stories for
   their default / loading / empty / error states (PHILOSOPHY §18).
 - `data-reviewer` — data layer: schema changes, migrations (reversible by
   default; expand → backfill → contract for invasive changes), value types at
-  the storage boundary (`timestamptz`, `numeric`/`bigint` money, branded
-  identifiers — PHILOSOPHY §15 + §16), feature-flag plumbing in Postgres
-  (PHILOSOPHY §17), repository discipline.
+  the storage boundary (UTC timestamps, decimal/bigint money, branded
+  identifiers — PHILOSOPHY §15 + §16), feature-flag plumbing in the app's own
+  store (PHILOSOPHY §17), repository discipline.
+- `git-hygiene-reviewer` — the shape of the *history and PR meta*, not the code:
+  atomic conventional commits, linear bisectable history, no in-stack
+  fixup/revert pairs, commit-message↔diff fidelity and correct type, a bookmarked
+  non-divergent jj stack, a PR body that describes the commits and `Closes` the
+  correct existing issue, and no secrets / AI-attribution trailers committed into
+  the stack (the `CLAUDE.md` "Version control: jj" section, PHILOSOPHY §28, the
+  `commit`/`ship` skills). Unlike the others it reads the **commit graph + PR
+  state**, not just the file diff (see Step 3); it reads the diff only to judge
+  message↔code fidelity and atomicity — code quality stays with `code-reviewer`.
 
 **Conditional — run when `CLAUDE.md` declares `Commercial readiness: yes`:**
 
-- `security-reviewer` — authorization (app-layer + RBAC + Postgres RLS as the
-  second layer), audit logging, role × resource matrix tests, tenant isolation,
-  PII handling, session/cookie discipline (PHILOSOPHY §19). The agent itself
-  self-checks the declaration; pass it the path to `CLAUDE.md` in the prompt so
-  it can confirm.
+- `security-reviewer` — authorization (app-layer + RBAC, plus a second data-layer
+  authz line if the store supports it), audit logging, role × resource matrix
+  tests, tenant isolation, PII handling, session/cookie discipline
+  (PHILOSOPHY §19). The agent itself self-checks the declaration; pass it the path
+  to `CLAUDE.md` in the prompt so it can confirm.
 
-**Project-specific reviewers** live alongside the universal ones in
-`.claude/agents/`. If the project ships a domain reviewer (e.g.
-`geo-scoring-reviewer`, `payments-reviewer`), run it here too — see the
-project's `CLAUDE.md` for what scope each one owns and what to note about
-cross-running.
+**Project-specific reviewers** live alongside the universal ones in `.claude/agents/`.
+A project may add its own domain reviewer(s) — namespaced and scoped by their
+`description` to one area or sub-app — and the `review` skill runs them **only for diffs
+under that area's paths**. A project reviewer either runs **in addition to** the universal
+set (a domain lens on top of `code-reviewer`) or **in place of** the generic
+`code-reviewer` (a stack-tuned replacement); its `description` says which. See the
+project's `CLAUDE.md` for the reviewer→path mapping and which mode each one is in. Don't
+run a scoped reviewer for a diff that doesn't touch its paths.
 
 ## Step 1: gather the diff
 
@@ -62,6 +74,13 @@ jj diff --from 'trunk()' --to @               # the full diff to hand the review
 
 That path list is already deduplicated. If it's empty, say so and stop — there is nothing
 to review.
+
+`git-hygiene-reviewer` also reads the PR state, so grab the PR number now (or note there
+is none yet):
+
+```sh
+env -u GITHUB_TOKEN gh pr view --json number,url 2>/dev/null   # "no PR yet" if this errors
+```
 
 ## Step 2: check commercial readiness
 
@@ -94,9 +113,17 @@ message so they run concurrently. Each prompt should give the agent:
    should be concrete (file path, line number, fix) and skip restating its own
    scope.
 
-Always spawn: `code-reviewer`, `test-reviewer`, `data-reviewer`, plus any
-project-specific reviewers from `.claude/agents/` that this project's
-`CLAUDE.md` lists.
+Always spawn: `code-reviewer`, `test-reviewer`, `data-reviewer`, `git-hygiene-reviewer`,
+plus any project-specific reviewers matching the diff's paths (see the reviewer→path
+mapping in the project's `CLAUDE.md`; a scoped reviewer may run *in place of*
+`code-reviewer` rather than alongside it).
+
+`git-hygiene-reviewer` reads the **commit graph + PR state**, not just the file diff, so
+its prompt gets extra inputs the others don't: the already-fetched diff base (`trunk()`),
+the stack range (`trunk()..@`), and the PR number — or "no PR yet" if Step 1 found none.
+It runs its own read-only `jj log` / `jj bookmark list` / `gh pr view` from there; tell it
+**not** to re-run `jj git fetch` (reuse this run's already-resolved `trunk()` so it judges
+the same snapshot as the other reviewers).
 
 Conditionally spawn `security-reviewer` when `RUN_SECURITY=1` from Step 2.
 When spawning it, include in the prompt: *"The project's `CLAUDE.md` is at
@@ -124,6 +151,10 @@ Changed files: <count> across <areas>.
 
 ## data-reviewer
 <findings, or "No issues found.">
+
+## git-hygiene-reviewer
+<findings, or "No issues found." — locations are `commit <short-sha>` / `PR body` /
+`PR meta`, not `path:line`, since these are history-level findings>
 
 ## security-reviewer
 <findings, or "Skipped — non-commercial." / "Skipped — commercial-readiness

@@ -76,6 +76,17 @@ the durable "when to reach for which".
 | `ship` | Land work on `main` end-to-end — branch/commit/push/PR/CI-wait/rebase-merge, running only the missing steps. |
 | `setup` | A fresh clone — install deps, bring up the stack, set keys, verify build + tests. |
 | `neobrutalist-pop` | Building or styling any UI — the neo-brutalist look (thick borders, hard shadows, candy accents). |
+| `tldraw` | Talking through a diagram or a low-fi UI wireframe — system/API/DB diagrams and product sketches on a tldraw canvas (needs `@kitschpatrol/tldraw-cli`). |
+| `shape` | A raw idea is really a multi-issue effort — shape it into a bettable milestone (felt outcome, appetite in sittings, in/out scope, the rabbit hole). Can conclude "don't build it". |
+| `bet` | Committing a shaped milestone to the active set with a cutoff — runs the circuit breaker on expired bets first. Hard WIP cap of 1–3. |
+| `prune` | The backlog is bloated — cull only the genuinely dead, surface dups. Read-then-recommend; never closes without approval. |
+| `next-task` | "What should I work on next" — a ranked shortlist from the board, open issues, and roadmap docs. |
+| `viability` | "Is there a market / would anyone pay for X" — market/impact assessment before betting (TAM/SAM/SOM, competitor table, CAC/LTV, verdict-first). |
+| `codebase-report` | "How big/healthy is this / what shipped lately" — a two-perspective (business + engineering) snapshot over a metrics collector. |
+
+The **initiative layer** (`shape` / `bet` / `prune`) runs one altitude up from issues, on
+GitHub milestones — the Shape Up model (PHILOSOPHY §29). Nudge toward it when a raw idea is
+really a multi-issue effort, or when reaching for a fourth active bet.
 
 **Autonomous mode (`auto`).** `work` and `research` each take an optional `auto` opt-in
 (the keyword — `/work 12 auto` — or clear "let it rip" / "review at the end" intent) that

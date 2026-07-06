@@ -38,7 +38,9 @@ By default this skill stops for the user at two **gates** — Step 5 (the plan) 
 (review findings). Autonomous mode keeps both decisions but makes them *yours*, collapsing
 to a **single load-bearing gate at the very end, right before the merge** — the first step
 that goes outward and is hard to walk back. Opening the PR is *not* that step: it's
-reversible and it's what runs CI (and any per-PR preview deploy) you'll review against.
+reversible. The check gate runs on push (local via `etc/hooks/pre-push` if the project has
+no remote CI, or on the PR if it does), and the PR is what triggers any per-PR preview
+deploy you'll review against.
 
 **When it's on — explicit opt-in only.** Either the `auto` keyword in the invocation
 (`/work <N> auto`) or unambiguous natural language ("let it rip", "yolo", "review at the
@@ -56,8 +58,9 @@ accident.
 - **Step 8 (review findings)** → after `/review`, triage the decision table *yourself*:
   apply the Fixes, record the Skips with reasons, re-run `/review` if a fix changed
   something substantial, then continue.
-- **Step 9 (/ship)** → run ship through commit → push → **PR open → CI green** (→ preview, if
-  the project has per-PR previews), then **stop before the merge**. Merge only on the user's go.
+- **Step 9 (/ship)** → run ship through commit → push (**the check gate runs on push**,
+  local or remote per the project) → **PR open** (→ preview, if the project has per-PR
+  previews), then **stop before the merge**. Merge only on the user's go.
 
 **The end gate** presents one report and waits:
 
@@ -73,7 +76,7 @@ accident.
 <the /review decision table: Fixed / Skipped (reason)>
 
 ## Checks
-typecheck · lint · unit · build · CI: <status>   PR: <link>   Preview: <link, if any>
+typecheck · lint · unit · build · gate: <status>   PR: <link>   Preview: <link, if any>
 
 ## Left for you / follow-ups
 <manual steps, deferred items, or "none">
@@ -102,9 +105,14 @@ A trailing `auto` keyword (`/work 12 auto`) or a clear "let it rip" intent selec
 **Autonomous mode** (see that section above); strip it from the ref before resolving, and
 settle which mode you're in here, at Step 0.
 
-Sanity-check the local state before doing anything mutating:
+**Fetch first, before you read or explore anything.** `jj git fetch` so your model of the
+issue and the code is built on the current `main@origin`, not a stale local checkout — other
+agents and the user land on `main` continuously, and forming a plan against a stale base
+means you find out at PR time that `main` moved under you (the workspace in Step 2 then bases
+on the freshly-fetched `trunk()`):
 
 ```sh
+jj git fetch                # ALWAYS first — get the latest main before forming any understanding
 jj st                       # working-copy status: what's in @, which commit it sits on
 jj log -r 'trunk()..@'      # any local commits in this workspace not yet on trunk
 ```
@@ -137,7 +145,7 @@ section (set them up once after the repo's GitHub Project is created).
 ## Step 2: create a jj workspace off the latest main
 
 Work happens in a **dedicated jj workspace**, not by moving the shared working copy's
-`@`. Multiple agents (and the user) routinely work this repo concurrently (PHILOSOPHY
+`@`. Multiple agents (and the user) may work this repo concurrently (PHILOSOPHY
 §14 + §28): the default workspace's `@` belongs to no one in particular, and jj has a
 single `@` per workspace — so the isolation unit is a **workspace, not a git worktree**
 (a git worktree wouldn't isolate jj's `@`; running jj from it still snapshots the
@@ -147,7 +155,7 @@ shared repo, `.git`/`.jj` metadata, and GitHub state stay shared.
 Generate a branch (bookmark) name from the issue: `<type>/<#>-<short-slug>`. Pick the
 conventional-commit type that fits the work (`feat`, `fix`, `refactor`, `chore`,
 `docs`, `test`, `perf`, `ci`, `build`). Examples: `feat/12-parser-rewrite`,
-`fix/47-decay-boundary`.
+`fix/47-boundary-case`.
 
 Including the issue number in the slug means the `ship` skill auto-detects the
 `Closes #N` reference later (see `ship` Step 5a).
@@ -180,9 +188,28 @@ to another run.
 Show the proposed branch name and workspace path; proceed unless the user renames.
 
 If the project has a board configured in `CLAUDE.md`, move the issue's board item from
-**Ready → In progress** so the board reflects what's actually being worked. Field/option
-IDs live in `CLAUDE.md` "Issue triage". (When the issue closes at `/ship` time, GitHub
-auto-moves the item to Done.)
+**Ready → In progress** so the board reflects what's actually being worked, and **stamp
+any project-axis fields the board uses if they're unset** (see "Board-stamping on pickup"
+below). Field/option IDs live in `CLAUDE.md` "Issue triage". **The board does NOT auto-move
+on close** — at `/ship` time you set `Status = Done` yourself; closing the issue alone
+leaves the item stale.
+
+## Board-stamping on pickup
+
+If the project tracks issues on a shared GitHub Project (see the `CLAUDE.md` "Board flow"
+pointer and the `capture` skill for the full board doc), a board item may carry
+project-axis single-selects (e.g. an area or component field) alongside `Status`. On
+pickup, if such a field (or its mirror label) is unset, set it before moving to In progress
+— infer it from the paths the work will touch. The axis values and their path mapping live
+in the project's `CLAUDE.md`; a multi-project or monorepo setup binds them there.
+
+If the issue is a **brand-new idea or pure research with no code path yet**, don't guess a
+value — ask the user which one. Stamp both the mirror label
+(`env -u GITHUB_TOKEN gh issue edit <N> --add-label <value>`) and the board field
+(`gh project item-edit --project-id <id> --id <item> --field-id <field> \
+--single-select-option-id <option>`; refetch IDs via `gh project field-list`, never
+hardcode). Run mutating `gh project`/`gh issue` calls under `env -u GITHUB_TOKEN` when the
+ambient token lacks `project` scope.
 
 ## Step 3: draft the plan
 
@@ -312,8 +339,8 @@ what the gate is for — but don't quietly delete the finding from the table; ma
 ## Step 9: /ship
 
 Invoke the `ship` skill (`.claude/skills/ship/SKILL.md`). It handles the rest end-to-end
-— push, PR (with `Closes #<N>` auto-detected from the branch name), CI wait, rebase-merge,
-workspace cleanup, follow-up prompt.
+— push, PR (with `Closes #<N>` auto-detected from the branch name), check-gate wait,
+rebase-merge, workspace cleanup, follow-up prompt.
 
 If the user wants to pause before merging (e.g. for a manual verification on a preview
 deploy), stop at PR-open and let them resume `ship` later. The `ship` skill already
