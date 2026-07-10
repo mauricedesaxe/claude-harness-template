@@ -39,6 +39,16 @@ The universal reviewers (shipped in `.claude/agents/`):
   `commit`/`ship` skills). Unlike the others it reads the **commit graph + PR
   state**, not just the file diff (see Step 3); it reads the diff only to judge
   message↔code fidelity and atomicity — code quality stays with `code-reviewer`.
+- `yagni-reviewer` — speculative generality: the abstraction for one caller, the
+  config knob nobody asked for, the generic over a single type, the extension
+  point for a future that hasn't filed an issue, and the premature reach for a
+  replica / queue / cache / second service without a named, currently-felt
+  problem (PHILOSOPHY §1 / §13 / §14, and §19 over-engineering a non-commercial
+  tool). Its angle is "is this machinery needed *yet*"; it deliberately does **not**
+  flag the discipline the repo requires up front at N=1 (branded types, the
+  five-primitive concurrency stack, `Result`/discriminated unions, boundary
+  schemas) — those pay off today, so they aren't YAGNI. Overlap with
+  `code-reviewer`'s code-level YAGNI is expected; both run.
 
 **Conditional — run when `CLAUDE.md` declares `Commercial readiness: yes`:**
 
@@ -114,9 +124,10 @@ message so they run concurrently. Each prompt should give the agent:
    scope.
 
 Always spawn: `code-reviewer`, `test-reviewer`, `data-reviewer`, `git-hygiene-reviewer`,
-plus any project-specific reviewers matching the diff's paths (see the reviewer→path
-mapping in the project's `CLAUDE.md`; a scoped reviewer may run *in place of*
-`code-reviewer` rather than alongside it).
+`yagni-reviewer`, plus any project-specific reviewers matching the diff's paths (see the
+reviewer→path mapping in the project's `CLAUDE.md`; a scoped reviewer may run *in place of*
+`code-reviewer` rather than alongside it). `yagni-reviewer` is app-agnostic — it runs
+alongside any scoped reviewers too.
 
 `git-hygiene-reviewer` reads the **commit graph + PR state**, not just the file diff, so
 its prompt gets extra inputs the others don't: the already-fetched diff base (`trunk()`),
@@ -155,6 +166,9 @@ Changed files: <count> across <areas>.
 ## git-hygiene-reviewer
 <findings, or "No issues found." — locations are `commit <short-sha>` / `PR body` /
 `PR meta`, not `path:line`, since these are history-level findings>
+
+## yagni-reviewer
+<findings, or "No issues found.">
 
 ## security-reviewer
 <findings, or "Skipped — non-commercial." / "Skipped — commercial-readiness

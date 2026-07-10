@@ -21,7 +21,7 @@ touched.
 1. resolve the issue            6. implement
 2. jj workspace off latest main 7. /review
 3. draft the plan               8. user triage gate (findings)
-4. plan-reviewer agent          9. /ship
+4. plan + yagni reviewers       9. /ship
 ```
 
 This skill is **jj-native** (PHILOSOPHY §28): the working copy is Jujutsu, colocated
@@ -249,21 +249,31 @@ Do not start writing code yet. The plan is a text artefact for review.
 
 ## Step 4: adversarial plan review
 
-Spawn the `plan-reviewer` agent (`.claude/agents/plan-reviewer.md`) with the plan and
-the issue body. Its job is to attack the plan against `CLAUDE.md`, any product spec
-(`docs/PRD.md` if present), and the business logic — *before* any code exists. It
-returns concrete findings (rule, why it matters, what to change), not vibes.
+Spawn two agents in parallel (single message, concurrent tool calls) with the plan and
+the issue body:
 
-Run it once per plan revision. If the plan changes materially after Step 5 (user said
+- `plan-reviewer` (`.claude/agents/plan-reviewer.md`) — attacks the plan against
+  `CLAUDE.md`, any product spec (`docs/PRD.md` if present), and the business logic
+  *before* any code exists.
+- `yagni-reviewer` (`.claude/agents/yagni-reviewer.md`) in **plan mode** — attacks the
+  plan for speculative generality: proposed abstractions, config knobs, extension
+  points, generic layers, speculative schema, and premature infrastructure that no
+  current, felt need justifies (PHILOSOPHY §1 / §13 / §14 / §19). Its angle is narrower
+  than `plan-reviewer`'s architecture concerns — "is any of this needed *yet*" — so
+  collate both, but don't double-count a finding they both raise.
+
+Each returns concrete findings (rule, why it matters, what to change), not vibes.
+
+Run them once per plan revision. If the plan changes materially after Step 5 (user said
 "do it differently"), re-run Step 4 on the new plan. Re-running is cheap and expected.
 
-The agent reads `CLAUDE.md`, any project spec, and the issue body itself; you do not
-have to inline those into the prompt. Give it:
+Both agents read `CLAUDE.md`, any project spec, and the issue body itself; you do not
+have to inline those into the prompt. Give each:
 
 1. The plan as written in Step 3.
 2. The issue ref and one-line summary (so it can re-read context if needed).
 3. A reminder that its output is collated into a chat report for the user — concrete
-   findings, no scope-restating.
+   findings, no scope-restating. For `yagni-reviewer`, say it's reviewing a **plan**.
 
 ## Step 5: user approval gate (plan)
 
@@ -274,8 +284,8 @@ Present a single chat block:
 
 <the plan from Step 3, verbatim>
 
-## plan-reviewer findings
-<findings, or "No issues found.">
+## plan-review findings (plan-reviewer + yagni-reviewer)
+<findings from both, or "No issues found.">
 
 ### Decision table
 
