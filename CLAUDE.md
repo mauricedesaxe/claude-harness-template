@@ -97,9 +97,11 @@ opt-in → the normal gated flow; borderline wording → ask once.
 
 The reviewer **agents** in `.claude/agents/` are run *by* skills, not invoked directly:
 
-- **At plan time** (run by `work`): `plan-reviewer` against the plan text, before code exists.
-- **At diff time** (run by `review`): `code-reviewer`, `test-reviewer`, `data-reviewer`
-  always; `security-reviewer` only when this file declares `Commercial readiness: yes`.
+- **At plan time** (run by `work`): `plan-reviewer` and `yagni-reviewer` against the plan
+  text, before code exists.
+- **At diff time** (run by `review`): `code-reviewer`, `test-reviewer`, `data-reviewer`,
+  `git-hygiene-reviewer`, `yagni-reviewer` always; `security-reviewer` only when this file
+  declares `Commercial readiness: yes`.
 
 Project-specific reviewer agents (e.g. a `payments-reviewer`) live in the project's own
 `.claude/agents/` and are picked up automatically by `review`.
