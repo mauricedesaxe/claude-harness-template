@@ -106,6 +106,32 @@ The reviewer **agents** in `.claude/agents/` are run *by* skills, not invoked di
 Project-specific reviewer agents (e.g. a `payments-reviewer`) live in the project's own
 `.claude/agents/` and are picked up automatically by `review`.
 
+### Engineering skills (`matt-*`)
+
+Alongside the workflow skills above, the `matt-*` family (Matt Pocock's engineering skills)
+installs as a distinct **engineering-skills layer** — reach for these mid-task, not as an
+end-to-end workflow. They keep the `matt-` prefix, cross-reference each other by that name,
+and bring their **own** review sub-agents (they don't use the reviewer agents above).
+
+| Skill | Reach for it when |
+|---|---|
+| `matt-wayfinder` | Orienting in unfamiliar code before you plan or change it — map the module(s), entry points, data flow. |
+| `matt-grilling` / `matt-grill-with-docs` | Stress-testing a plan/design Socratically before building; `-with-docs` when the question is "does this API actually behave the way the plan assumes". |
+| `matt-to-spec` / `matt-to-tickets` | Turning a rough idea into a spec, or a spec into tickets. |
+| `matt-tdd` | Building a checkable-contract change test-first (red-green-refactor). |
+| `matt-implement` | A structured implementation pass against a spec. |
+| `matt-diagnosing-bugs` | A bug/regression — find the root cause before planning a fix. |
+| `matt-code-review` | A two-axis (standards + spec) review of a diff against a fixed point. |
+| `matt-domain-modeling` / `matt-codebase-design` | Pinning domain terms / designing a deep module's interface. |
+
+Plus `matt-prototype`, `matt-diagnosing-bugs`, `matt-triage`, `matt-handoff`,
+`matt-improve-codebase-architecture`, `matt-research`, `matt-resolving-merge-conflicts`,
+`matt-teach`, `matt-ask-matt`, `matt-grill-me`, `matt-writing-great-skills`.
+
+They're **issue-tracker-agnostic**: run `/matt-setup-matt-pocock-skills` once per repo — it
+writes `docs/agents/issue-tracker.md` (GitHub / GitLab / local / other) that the rest read
+from.
+
 ## Hard rules
 
 These are the always-in-context, enforceable form of the philosophy. The `§` ref points
