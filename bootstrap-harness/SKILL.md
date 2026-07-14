@@ -61,6 +61,19 @@ or `docs/` is the project's own and is left untouched.**
 - **Reporting:** `codebase-report` (plus its `collect-metrics.sh` + `test-collect.sh`).
 - **UI / design:** `neobrutalist-pop` (plus `neobrutalist-pop/assets/brutpop.css`),
   `tldraw` (plus `tldraw/LICENSE` — a vendored MIT skill).
+- **Engineering skills (Matt Pocock):** the full `matt-*` family — copy each skill's
+  whole directory (several carry supporting `.md` files or `scripts/`, not just a lone
+  `SKILL.md`): `matt-grill-with-docs`, `matt-grilling`, `matt-grill-me`, `matt-to-spec`,
+  `matt-to-tickets`, `matt-implement`, `matt-tdd`, `matt-code-review`, `matt-wayfinder`,
+  `matt-triage`, `matt-handoff`, `matt-domain-modeling`, `matt-codebase-design`,
+  `matt-diagnosing-bugs`, `matt-improve-codebase-architecture`, `matt-prototype`,
+  `matt-research`, `matt-resolving-merge-conflicts`, `matt-teach`, `matt-ask-matt`,
+  `matt-writing-great-skills`, and `matt-setup-matt-pocock-skills`. They keep the `matt-`
+  prefix as a distinct engineering-skills layer, cross-reference each other by that name, and
+  bring their own review sub-agents (they don't depend on the universal reviewers below).
+  They're **issue-tracker-agnostic**: after install, run `/matt-setup-matt-pocock-skills`
+  once in the repo — it writes `docs/agents/issue-tracker.md` (GitHub / GitLab / local /
+  other) that the rest read from.
 
 `tldraw` needs an external CLI: mention that the user should
 `npm install -g @kitschpatrol/tldraw-cli` to use it (it's not a repo dependency).
