@@ -80,11 +80,12 @@ or `docs/` is the project's own and is left untouched.**
 
 **Agents** → `.claude/agents/<name>.md` (overwrite):
 `code-reviewer`, `test-reviewer`, `plan-reviewer`, `data-reviewer`, `security-reviewer`,
-`git-hygiene-reviewer`, `yagni-reviewer`.
+`git-hygiene-reviewer`, `yagni-reviewer`, `clarity-reviewer`.
 (The security reviewer only *runs* when `CLAUDE.md` declares `Commercial readiness: yes`, but
-it's always installed. `git-hygiene-reviewer` and `yagni-reviewer` run on every `/review` —
-the former judges the shape of the history and PR meta, the latter flags speculative
-generality; neither reviews code quality, that's `code-reviewer`.)
+it's always installed. `git-hygiene-reviewer`, `yagni-reviewer`, and `clarity-reviewer` run on
+every `/review` — history/PR-meta shape, speculative generality, and documentation/comment +
+self-explanatory-code discipline (§21) respectively; none reviews code quality, that's
+`code-reviewer`.)
 
 **Docs** → overwrite:
 `docs/PHILOSOPHY.md` (the paradigm-agnostic spine — the canonical "why"),
