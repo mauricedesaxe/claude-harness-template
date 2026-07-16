@@ -146,6 +146,11 @@ assert_same_file "lazar-review installs to Claude Code" \
 assert_same_file "lazar-review installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-review/SKILL.md" "$opencode/skills/lazar-review/SKILL.md"
 
+assert_same_file "lazar-pr-status installs to Claude Code" \
+  "$HARNESS_SOURCE/skills/lazar-pr-status/SKILL.md" "$claude/skills/lazar-pr-status/SKILL.md"
+assert_same_file "lazar-pr-status installs to OpenCode" \
+  "$HARNESS_SOURCE/skills/lazar-pr-status/SKILL.md" "$opencode/skills/lazar-pr-status/SKILL.md"
+
 # lazar-review names the global agents rather than globbing an agents dir, so that it always
 # spawns them even where a repo ships none. That only holds while the names it spawns are the
 # names the harness ships.
