@@ -103,6 +103,12 @@
       "skillPath": "skills/productivity/teach/SKILL.md",
       "computedHash": "68999bb1a241384b2f921f3321d779b7d05eb6089077b70d88cee2aee3d75ccc"
     },
+    "tldraw-skill": {
+      "source": "Agents365-ai/tldraw-skill",
+      "sourceType": "github",
+      "skillPath": "skills/tldraw-skill/SKILL.md",
+      "computedHash": "90e593a6dc22c94a4bbfa6e9f368a56bd75a767ba83a1b0946cd7b083a99af09"
+    },
     "to-spec": {
       "source": "mattpocock/skills",
       "sourceType": "github",

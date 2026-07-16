@@ -29,8 +29,10 @@ paths below assume.
 
 ```
 install.sh                  the whole install path
-vendor-matt-skills.sh       re-vendors mattpocock/skills as matt-*
+vendor-skills.sh            re-vendors mattpocock/skills as matt-*, tldraw-skill as lazar-tldraw
 skills-lock.json            the source and content hash every vendored skill is pinned to
+patches/
+  lazar-tldraw.patch        the local divergence from tldraw-skill, re-applied at vendor time
 CLAUDE.md                   the instructions both runtimes load
 agents/
   clarity-reviewer.md       docs/comment + self-explanatory-code discipline (§21)
@@ -40,6 +42,7 @@ skills/
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
   matt-*/                   Matt Pocock's 22 skills, vendored (see below)
+                            both are generated — edit the upstream or the patch, not the file
 docs/
   PHILOSOPHY.md             the paradigm-agnostic spine, installed as a rule
   packs/                    per-paradigm packs, each scoped by its own `paths:`
@@ -69,13 +72,16 @@ a skill writes one the first and only time it has to ask, and reads it forever a
 
 ## Vendored skills
 
-[Matt Pocock's skills](https://github.com/mattpocock/skills) are vendored through the
-[`skills` CLI](https://skills.sh). Nothing here is hand-edited, so there is nothing to hand-merge
-and no local edits an update could lose:
+Two upstreams are vendored through the [`skills` CLI](https://skills.sh):
+[Matt Pocock's skills](https://github.com/mattpocock/skills) as `matt-*`, and
+[Agents365-ai/tldraw-skill](https://github.com/Agents365-ai/tldraw-skill) as `lazar-tldraw`.
+Nothing here is hand-edited, so there is nothing to hand-merge and no local edits an update could
+lose:
 
 ```sh
-./vendor-matt-skills.sh --update    # pull upstream's current content and repin the lockfile
-./vendor-matt-skills.sh             # re-vendor exactly what the lockfile pins, or fail
+./vendor-skills.sh --update    # pull upstream's current content and repin the lockfile
+./vendor-skills.sh             # re-vendor exactly what the lockfile pins, or fail
+./vendor-skills.sh --regen-patch   # rebuild patches/lazar-tldraw.patch from an edited lazar-tldraw
 ```
 
 `skills-lock.json` pins each skill's source repository, its path within that repository, and the
@@ -85,8 +91,9 @@ reproduces those prompts or tells you upstream moved. A skill's supporting files
 by that hash — they are pinned only by being committed here, where a re-vendor shows any upstream
 change to them as a diff.
 
-Every skill is renamed `matt-<name>` on the way in — its directory, its `name:` frontmatter, and
-the `/name` cross-references its prose dispatches through. The prefix is load-bearing: upstream
+Every skill of Matt's is renamed `matt-<name>` on the way in — its directory, its `name:`
+frontmatter, and the `/name` cross-references its prose dispatches through. The prefix is
+load-bearing: upstream
 ships `code-review`, `implement` and `research`, so a skill installed under its own name would
 silently replace Claude Code's built-in `/code-review`, and a body left saying `/code-review`
 would call that built-in instead of `matt-code-review`.
@@ -98,22 +105,48 @@ vendored names are rewritten, so Claude Code's own `/compact` still means `/comp
 where a reference and not a path is being written, so `docs/agents/triage-labels.md` and the
 route `/prototype/<name>` are left alone.
 
+### lazar-tldraw, which carries local patches
+
+`lazar-tldraw` is the exception the `lazar-` prefix is announcing: it is not upstream's skill
+under a new name. It adds the UI/UX wireframe and Shape-up presets and widens the triggers. That
+is prose, not a rewrite rule, so it cannot be re-derived the way the `matt-` prefix is.
+
+It is still not hand-maintained. The divergence lives in `patches/lazar-tldraw.patch` and is
+re-applied to freshly-fetched upstream on every run, which keeps the same property by a different
+means: **`skills/lazar-tldraw/SKILL.md` is generated**, and the next re-vendor overwrites whatever
+is sitting in it. The workflow is to edit that file like any other, then run `--regen-patch`,
+which rebuilds the patch from the difference against pristine upstream so the change survives.
+
+`git apply` matches context exactly and will not fuzz, so if upstream ever edits a region the
+patch touches, the vendor **stops** with a conflict and writes nothing. That is the whole design:
+the failure mode of an update is a loud stop, never a quietly-dropped local fix. Upstream's MIT
+`LICENSE` is fetched alongside the skill, because the `skills` CLI installs `SKILL.md` alone and
+the licence belongs next to the text it covers.
+
 ## Test
 
 ```sh
 bash test/install-smoke.sh
 bash test/prefix-rewrite.sh
+bash test/tldraw-patch.sh
 ```
 
 `install-smoke.sh` is one end-to-end pass: it runs the installer with `HOME` pointed at a temp
 directory and asserts what landed on disk — that both runtimes got the skills, the agent, and the
-instructions, that every skill the lockfile pins is installed under its `matt-` name with no
-body still dispatching to an unprefixed one, and that the OpenCode agent carries the generated
-frontmatter while its prompt still matches the source byte for byte.
+instructions, that every skill the lockfile pins is installed under its `matt-` or `lazar-` name
+with no body still dispatching to an unprefixed one, and that the OpenCode agent carries the
+generated frontmatter while its prompt still matches the source byte for byte.
 
 `prefix-rewrite.sh` drives the vendor script's rename over a fixture, offline. It is the seam
 where the prefix is decided, so it is the seam that pins which `/name` is a reference to rewrite
 and which is a path or a built-in to leave alone.
+
+`tldraw-patch.sh` drives the vendor script's patch step over a fixture, offline. Its reason to
+exist is the drift case: it pins that upstream moving under a patched region **stops** the
+vendor, since the alternative is shipping a `lazar-tldraw` with its local fixes silently gone.
+
+Neither of the two offline seams reaches the network; `vendor-skills.sh` itself does, so it is
+run by hand rather than by a test.
 
 `docs/PHILOSOPHY.md` is the load-bearing reference doc — read it once, then let
 `CLAUDE.md` point at its section numbers (§1 Earn its keep, §3 Single-instance

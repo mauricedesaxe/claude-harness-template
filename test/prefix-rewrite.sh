@@ -4,7 +4,7 @@ set -uo pipefail
 
 HARNESS_SOURCE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
-. "$HARNESS_SOURCE/vendor-matt-skills.sh"
+. "$HARNESS_SOURCE/vendor-skills.sh"
 set +e # the script it just sourced runs under `set -e`; this file collects failures instead
 
 failures=0
