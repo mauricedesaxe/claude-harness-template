@@ -86,7 +86,7 @@ the durable "when to reach for which".
 | `codebase-report` | "How big/healthy is this / what shipped lately" — a two-perspective (business + engineering) snapshot over a metrics collector. |
 
 The **initiative layer** (`shape` / `bet` / `prune`) runs one altitude up from issues, on
-GitHub milestones — the Shape Up model (PHILOSOPHY §29). Nudge toward it when a raw idea is
+GitHub milestones — the Shape Up model. Nudge toward it when a raw idea is
 really a multi-issue effort, or when reaching for a fourth active bet.
 
 **Autonomous mode (`auto`).** `work` and `research` each take an optional `auto` opt-in

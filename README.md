@@ -118,7 +118,7 @@ and which is a path or a built-in to leave alone.
 `docs/PHILOSOPHY.md` is the load-bearing reference doc — read it once, then let
 `CLAUDE.md` point at its section numbers (§1 Earn its keep, §3 Single-instance
 default, §5 Postgres only, §7 No serverless / no edge, §11 API integration
-primitives, §29 Shaping / appetite / betting, etc.).
+primitives, §30 Felt outcome and writing, etc.).
 
 The skills lean on a few MCP servers, which are user-scope and so are yours to wire. The
 load-bearing one is the **browser MCP (Playwright)**: the review flow verifies UI changes by
@@ -205,10 +205,6 @@ by re-bootstrapping each repo.
 - **Fail loud, distinguish "no data" from "fetched zero"** — the "two zeros" rule.
 - **No `throw` in app code** — return a `Result<T, E>`.
 - **Felt product value** is the bar for issues — not "feature vs refactor".
-- **Two altitudes (Shape Up).** Initiatives (GitHub milestones) get shaped, bet on,
-  and circuit-broken; issues get captured, researched, and built. Appetite is counted
-  in sittings, 1–3 bets active at once, never four. Skills: `shape` / `bet` / `prune`
-  at the initiative layer, `capture` / `research` / `work` / `ship` at the issue layer.
 
 Full reasoning in [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md). Project-specific bindings
 (runtimes, labels, modules) in `CLAUDE.md`. Codex reads `AGENTS.md`, which stays thin
