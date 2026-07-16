@@ -153,14 +153,11 @@ install_philosophy() {
   write_opencode_instructions
 }
 
+# A skill the harness stops shipping has to stop loading, so the whole tree is replaced rather
+# than each shipped name in turn, which never touches a destination the source has no name for.
 install_skills() {
-  local skill name
-  for skill in "$HARNESS_SOURCE"/skills/*/; do
-    skill=${skill%/}
-    name=$(basename -- "$skill")
-    replace_dir "$CLAUDE_HOME/skills/$name" "$skill"
-    replace_dir "$OPENCODE_HOME/skills/$name" "$skill"
-  done
+  replace_dir "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
+  replace_dir "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
 }
 
 # An agent the harness stops shipping has to stop reviewing, so each directory is replaced
