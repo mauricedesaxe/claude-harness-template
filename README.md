@@ -18,12 +18,15 @@ It writes to `~/.claude/` (skills, agents, `CLAUDE.md`) and `~/.config/opencode/
 agents, `AGENTS.md`), reading everything from this repo:
 
 ```
-install.sh                  the only executable artifact — the whole install path
+install.sh                  the whole install path
+vendor-matt-skills.sh       re-vendors mattpocock/skills as matt-*
+skills-lock.json            the source and content hash every vendored skill is pinned to
 CLAUDE.md                   the instructions both runtimes load
 agents/
   clarity-reviewer.md       docs/comment + self-explanatory-code discipline (§21)
 skills/
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
+  matt-*/                   Matt Pocock's 22 skills, vendored (see below)
 docs/
   PHILOSOPHY.md             durable "why" doc — single-instance, Postgres-only,
                             no serverless, API-integration primitives, etc.
@@ -38,6 +41,37 @@ at install time, so there is no second copy of an agent to keep in sync.
 `CLAUDE.md` is installed to `~/.claude/CLAUDE.md` and, under OpenCode's own name for the same
 thing, to `~/.config/opencode/AGENTS.md`.
 
+## Vendored skills
+
+[Matt Pocock's skills](https://github.com/mattpocock/skills) are vendored through the
+[`skills` CLI](https://skills.sh). Nothing here is hand-edited, so there is nothing to hand-merge
+and no local edits an update could lose:
+
+```sh
+./vendor-matt-skills.sh --update    # pull upstream's current content and repin the lockfile
+./vendor-matt-skills.sh             # re-vendor exactly what the lockfile pins, or fail
+```
+
+`skills-lock.json` pins each skill's source repository, its path within that repository, and the
+content hash of its `SKILL.md`. Without `--update`, the script fetches upstream and refuses to
+write anything if a pinned `SKILL.md` no longer hashes to what it pinned, so a re-vendor either
+reproduces those prompts or tells you upstream moved. A skill's supporting files are not covered
+by that hash — they are pinned only by being committed here, where a re-vendor shows any upstream
+change to them as a diff.
+
+Every skill is renamed `matt-<name>` on the way in — its directory, its `name:` frontmatter, and
+the `/name` cross-references its prose dispatches through. The prefix is load-bearing: upstream
+ships `code-review`, `implement` and `research`, so a skill installed under its own name would
+silently replace Claude Code's built-in `/code-review`, and a body left saying `/code-review`
+would call that built-in instead of `matt-code-review`.
+
+That makes the vendored prose diverge from upstream, which is a bug everywhere except here: the
+rename is a step of the vendor script, re-derived from scratch on every run and never
+hand-maintained, so it survives each future update without anyone remembering it. Only the 22
+vendored names are rewritten, so Claude Code's own `/compact` still means `/compact`, and only
+where a reference and not a path is being written, so `docs/agents/triage-labels.md` and the
+route `/prototype/<name>` are left alone.
+
 ## Test
 
 ```sh
@@ -45,9 +79,10 @@ bash test/install-smoke.sh
 ```
 
 One end-to-end pass: it runs the installer with `HOME` pointed at a temp directory and asserts
-what landed on disk — that both runtimes got the skill, the agent, and the instructions, and
-that the OpenCode agent carries the generated frontmatter while its prompt still matches the
-source byte for byte.
+what landed on disk — that both runtimes got the skills, the agent, and the instructions, that
+every skill the lockfile pins is installed under its `matt-` name and none under its upstream
+one, and that the OpenCode agent carries the generated frontmatter while its prompt still
+matches the source byte for byte.
 
 `docs/PHILOSOPHY.md` is the load-bearing reference doc — read it once, then let
 `CLAUDE.md` point at its section numbers (§1 Earn its keep, §3 Single-instance
