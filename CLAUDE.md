@@ -25,7 +25,7 @@ the philosophy is the long form. The split:
   safety, §11 API integration primitives, §12 Observability, §13 Outsource the non-core,
   §14 Code-level discipline, §16 Value-type discipline, §18 Testing, §19 Commercial
   readiness & authorization, §21 Documentation, §24 CI/CD, §26 Avoid double state,
-  §28 Version control.
+  §28 Version control, §30 Felt outcome and writing.
 - [`docs/packs/web.md`](docs/packs/web.md) — the **web/backend pack**: §3 Single-instance,
   §5 Postgres only, §6 Managed platforms, §7 No serverless/edge, §8 Web architecture,
   §9 Cloudflare, §15 Database discipline, §17 Feature flags, §20 Frontend & local-first,

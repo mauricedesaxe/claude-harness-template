@@ -12,7 +12,7 @@ live in [`packs/web.md`](packs/web.md); the AI/LLM prescriptions live in
 whatever packs match its paradigm — a smart-contract or mobile repo takes the spine
 and simply omits the web pack.
 
-Section numbers (§1–§28) are **stable IDs**: a section keeps its number wherever it
+Section numbers (§1–§30) are **stable IDs**: a section keeps its number wherever it
 lands, and inline `§N` cross-references resolve through the index below, which records
 the file each section lives in. Six sections **split** — a universal kernel stays here
 and the web-specific prescription lives under the same `§N` heading in the web pack.
@@ -60,6 +60,7 @@ clause (when deviation is allowed, and what bar a deviation has to clear).
 | §27 | AI / LLM integration | packs/ai.md |
 | §28 | Version control — jj (colocated) | Spine |
 | §29 | Shaping, appetite, and betting | Spine |
+| §30 | Felt outcome and writing | Spine |
 
 ---
 
@@ -69,9 +70,9 @@ clause (when deviation is allowed, and what bar a deviation has to clear).
 second instance, a replica, a queue, a cache layer, a different language, a
 different database, an infrastructure-as-code tool, a hosting platform with more
 moving parts — has to *earn its keep* before it lands. The bar is the same one
-the `capture` skill applies to product features: a **felt, current, specific
-problem** that the simpler option doesn't solve. Hypothetical, future, or
-aesthetic ("cleaner") reasons don't qualify.
+§30 applies to product work: a **felt, current, specific problem** that the
+simpler option doesn't solve. Hypothetical, future, or aesthetic ("cleaner")
+reasons don't qualify.
 
 **Why.** Most software is killed by complexity it didn't need. The single-machine
 Postgres-backed monolith ships faster, is easier to debug, has fewer moving
@@ -933,6 +934,82 @@ betting on (a platform migration, a framework migration, a new service kind of
 effort); skip it for one-off issues that don't need a milestone.
 The bands and the cap are fuzzy on purpose — making them precise would be false
 precision that earns nothing.
+
+---
+
+## §30. Felt outcome and writing
+
+**Rule.** Work earns its place only when you can name the product outcome it
+delivers *and that outcome is felt when using the product*: it makes the product
+more useful, more trustworthy, or more pleasant to actually use. The mechanics
+below apply to whatever you write to describe that work, and to everything else
+you write.
+
+**The gate is the outcome, not the category of work.** A refactor, a bug fix, a
+performance change, and a feature can each qualify. Each can also fail. A
+refactor that unblocks something you'd feel passes; a "feature" nobody notices
+doesn't. Don't bank work that isn't felt: if a step takes 100 ms and 100 ms is
+fine, making it 50 ms is not an issue. Optimize something when its current state
+is a noticeable problem in use, not before. Internal tidiness ("cleaner", "more
+testable", "best practice", "more modern") is not a product outcome, so do that
+work inline while delivering something real. The project's own bar lives in its
+`CLAUDE.md` ("the score stays trustworthy and explainable", "the latency budget
+stays under N"); read it and apply it as the test.
+
+**This is a gate, not a writing rule.** The difference is the whole point.
+Skills that write tickets and specs *frame* work around the user ("the problem
+the user is facing, from the user's perspective", "so that `<benefit>`"), which
+is a good habit and not this rule. Framing changes how you describe the work.
+Gating decides whether you write it down at all. A ticket framed impeccably
+around a user who won't notice still fails. Do both: frame the work in the
+user's terms, and refuse to bank it when no felt outcome survives the framing.
+
+**Why.** Most candidate work exists because it occurred to someone, not because
+it's worth doing. A tracker records that difference badly: everything in it
+looks equally legitimate once it has a title. So apply the gate at the moment of
+writing, the last point where saying no is still free. Aiming it at categories
+instead of outcomes is what breaks it in practice. "Refactors don't count" is a
+rule you can follow while shipping nothing anyone feels, and it forbids the
+refactor that would have. This is §1 at the altitude of product work rather than
+architecture. `yagni-reviewer` enforces it on diffs and plans.
+
+**The mechanics apply to everything you write**: specs, ADRs, PRDs, issues, PR
+bodies, docs, commit messages, chat.
+
+- **No em dashes.** A comma, a period, or parentheses instead.
+- **No LLM filler**: delve, moreover, furthermore, "it's worth noting",
+  landscape, tapestry, robust, seamless, leverage, ultimately.
+- **Active voice and contractions.**
+- **One idea per sentence.** More than one comma is the tell; split it.
+- **Be specific.** Say what happened, not what it "represents".
+- **Cite primary sources and link them**: the official doc, the actual file, the
+  PR, the issue, the ADR. A claim with no source is an opinion.
+- **The project's own style guide wins** over every rule above.
+
+**Voice is separate, and narrower.** The mechanics are floor-level clarity, so
+they hold for a formal spec exactly as they hold for a PR comment. A personal
+voice (terse fragments, hedging, particular verbs, a set of calibration
+examples) is a different thing, and it applies only to prose posted **as** a
+person: PR reviews, issue and PR comments, standups, messages to teammates. Not
+specs, not formal docs, not code. That voice lives in `CLAUDE.md`, which is
+where a repo's writer defines it; this section doesn't restate it.
+
+**Why the mechanics don't exempt formal docs.** Exempting "formal documentation"
+from writing rules cuts on the wrong axis, and it costs the most exactly where
+the writing matters most. A spec written in passive, sourceless, em-dashed
+filler is harder to act on than a chat message written the same way, because
+more decisions hang off it. What's actually personal is the voice, not the
+mechanics, so that's what the exemption should name.
+
+**Earn-its-keep.** A house style that contradicts a mechanic wins on its own
+turf: a repo whose docs use em dashes deliberately, a changelog format fixed by
+a tool, a public API doc whose tooling mandates a shape. Name the source of the
+override. This file is one: its prose predates the mechanic and keeps its em
+dashes, and rewriting 900 lines of punctuation is exactly the unfelt work the
+gate above rejects. Prose written into it from now on follows §30.
+
+The gate has no such exemption. If you can't name what's better in the product,
+the work isn't an issue. "We'll want it later" is the answer §1 already rejects.
 
 ---
 
