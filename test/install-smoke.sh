@@ -167,6 +167,35 @@ assert_same_file "lazar-pr-status installs to Claude Code" \
 assert_same_file "lazar-pr-status installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-pr-status/SKILL.md" "$opencode/skills/lazar-pr-status/SKILL.md"
 
+assert_same_file "lazar-commit installs to Claude Code" \
+  "$HARNESS_SOURCE/skills/lazar-commit/SKILL.md" "$claude/skills/lazar-commit/SKILL.md"
+assert_same_file "lazar-commit installs to OpenCode" \
+  "$HARNESS_SOURCE/skills/lazar-commit/SKILL.md" "$opencode/skills/lazar-commit/SKILL.md"
+
+assert_same_file "lazar-ship installs to Claude Code" \
+  "$HARNESS_SOURCE/skills/lazar-ship/SKILL.md" "$claude/skills/lazar-ship/SKILL.md"
+assert_same_file "lazar-ship installs to OpenCode" \
+  "$HARNESS_SOURCE/skills/lazar-ship/SKILL.md" "$opencode/skills/lazar-ship/SKILL.md"
+
+# These skills reach each other by name: ship composes lazar-commit and defers to
+# lazar-research. A name the harness stopped shipping still reads fine and dispatches nowhere,
+# which is how both of them carried a reference to `work` long after it was deleted.
+dangling_siblings=""
+for skill_md in "$claude"/skills/lazar-*/SKILL.md; do
+  for ref in $(grep -oE 'lazar-[a-z-]+' "$skill_md" | sort -u); do
+    # The machine-local note lives under ~/.lazar-harness and is a path, not a skill.
+    [ "$ref" = "lazar-harness" ] && continue
+    [ -d "$claude/skills/$ref" ] ||
+      dangling_siblings="$dangling_siblings $(basename -- "$(dirname -- "$skill_md")")->$ref"
+  done
+done
+
+if [ -z "${dangling_siblings// /}" ]; then
+  pass "every lazar- skill names only skills the harness ships"
+else
+  fail "every lazar- skill names only skills the harness ships:$dangling_siblings"
+fi
+
 # lazar-review names the global agents rather than globbing an agents dir, so that it always
 # spawns them even where a repo ships none. That only holds while the names it spawns are the
 # names the harness ships.
