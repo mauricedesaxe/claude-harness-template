@@ -177,23 +177,38 @@ assert_same_file "lazar-ship installs to Claude Code" \
 assert_same_file "lazar-ship installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-ship/SKILL.md" "$opencode/skills/lazar-ship/SKILL.md"
 
-# These skills reach each other by name: ship composes lazar-commit and defers to
-# lazar-research. A name the harness stopped shipping still reads fine and dispatches nowhere,
-# which is how both of them carried a reference to `work` long after it was deleted.
-dangling_siblings=""
-for skill_md in "$claude"/skills/lazar-*/SKILL.md; do
-  for ref in $(grep -oE 'lazar-[a-z-]+' "$skill_md" | sort -u); do
+# Skills and agents reach skills by name: lazar-ship composes lazar-commit, and every reviewer
+# tells a finding which skill to cite. A name the harness stopped shipping still reads fine and
+# dispatches nowhere, which is how git-hygiene-reviewer went on citing `commit` and `ship` after
+# both were renamed, and how the skills carried `work` long after it was deleted.
+#
+# A reference is recognised by its shape, never matched against a list of dead names a future
+# rename would have to remember to extend. Either the name carries a harness prefix — asserted
+# below, every installed skill is `lazar-` or `matt-`, so a prefixed token can only be meant as
+# a skill — or the prose labels it one (`x` skill). Ordinary English carries neither marker,
+# which is what keeps this off the words git-hygiene-reviewer is largely made of: it says
+# "commit" constantly and correctly, and yagni-reviewer weighs unfelt "work".
+#
+# Only what this repo authors is walked. A vendored matt- skill's prose is upstream's to fix.
+skill_refs() {
+  grep -oE 'lazar-[a-z-]+' "$1"
+  grep -oE '`[^`]+` +skills?([^A-Za-z]|$)' "$1" | sed -E 's/^`([^`]*)`.*/\1/'
+}
+
+dangling_refs=""
+for authored_md in "$claude"/skills/lazar-*/SKILL.md "$claude"/agents/*.md; do
+  for ref in $(skill_refs "$authored_md" | sort -u); do
     # The machine-local note lives under ~/.lazar-harness and is a path, not a skill.
     [ "$ref" = "lazar-harness" ] && continue
     [ -d "$claude/skills/$ref" ] ||
-      dangling_siblings="$dangling_siblings $(basename -- "$(dirname -- "$skill_md")")->$ref"
+      dangling_refs="$dangling_refs ${authored_md#"$claude"/}->$ref"
   done
 done
 
-if [ -z "${dangling_siblings// /}" ]; then
-  pass "every lazar- skill names only skills the harness ships"
+if [ -z "${dangling_refs// /}" ]; then
+  pass "every skill and agent the harness authors names only skills it ships"
 else
-  fail "every lazar- skill names only skills the harness ships:$dangling_siblings"
+  fail "every skill and agent the harness authors names only skills it ships:$dangling_refs"
 fi
 
 # lazar-review names the global agents rather than globbing an agents dir, so that it always
