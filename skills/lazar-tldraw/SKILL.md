@@ -1,5 +1,5 @@
 ---
-name: tldraw
+name: lazar-tldraw
 description: Draw on a tldraw canvas by describing what you want (talk or voice-to-text) — generates .tldr JSON and exports PNG/SVG via @kitschpatrol/tldraw-cli. Use for system-design / architecture diagrams, API / sequence flows, database / ERD schemas, flowcharts, ML diagrams, AND low-fidelity fat-marker UI/UX wireframes + product shape-up sketches. Also use proactively when explaining a system with 3+ components, a data flow, or sketching a screen/flow before building it.
 license: MIT
 homepage: https://github.com/Agents365-ai/tldraw-skill

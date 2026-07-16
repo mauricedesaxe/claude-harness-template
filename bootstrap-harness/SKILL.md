@@ -60,7 +60,7 @@ or `docs/` is the project's own and is left untouched.**
 - **Planning & assessment:** `next-task`, `viability`.
 - **Reporting:** `codebase-report` (plus its `collect-metrics.sh` + `test-collect.sh`).
 - **UI / design:** `neobrutalist-pop` (plus `neobrutalist-pop/assets/brutpop.css`),
-  `tldraw` (plus `tldraw/LICENSE` — a vendored MIT skill).
+  `lazar-tldraw` (plus its `LICENSE` — a vendored MIT skill).
 - **Engineering skills (Matt Pocock):** the full `matt-*` family — copy each skill's
   whole directory (several carry supporting `.md` files or `scripts/`, not just a lone
   `SKILL.md`): `matt-grill-with-docs`, `matt-grilling`, `matt-grill-me`, `matt-to-spec`,
@@ -75,7 +75,7 @@ or `docs/` is the project's own and is left untouched.**
   once in the repo — it writes `docs/agents/issue-tracker.md` (GitHub / GitLab / local /
   other) that the rest read from.
 
-`tldraw` needs an external CLI: mention that the user should
+`lazar-tldraw` needs an external CLI: mention that the user should
 `npm install -g @kitschpatrol/tldraw-cli` to use it (it's not a repo dependency).
 
 **Agents** → `.claude/agents/<name>.md` (overwrite):

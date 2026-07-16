@@ -76,7 +76,7 @@ the durable "when to reach for which".
 | `ship` | Land work on `main` end-to-end — branch/commit/push/PR/CI-wait/rebase-merge, running only the missing steps. |
 | `setup` | A fresh clone — install deps, bring up the stack, set keys, verify build + tests. |
 | `neobrutalist-pop` | Building or styling any UI — the neo-brutalist look (thick borders, hard shadows, candy accents). |
-| `tldraw` | Talking through a diagram or a low-fi UI wireframe — system/API/DB diagrams and product sketches on a tldraw canvas (needs `@kitschpatrol/tldraw-cli`). |
+| `lazar-tldraw` | Talking through a diagram or a low-fi UI wireframe — system/API/DB diagrams and product sketches on a tldraw canvas (needs `@kitschpatrol/tldraw-cli`). |
 | `shape` | A raw idea is really a multi-issue effort — shape it into a bettable milestone (felt outcome, appetite in sittings, in/out scope, the rabbit hole). Can conclude "don't build it". |
 | `bet` | Committing a shaped milestone to the active set with a cutoff — runs the circuit breaker on expired bets first. Hard WIP cap of 1–3. |
 | `prune` | The backlog is bloated — cull only the genuinely dead, surface dups. Read-then-recommend; never closes without approval. |
