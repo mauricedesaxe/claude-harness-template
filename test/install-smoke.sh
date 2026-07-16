@@ -179,11 +179,23 @@ case "${note_path#\~/}" in
 esac
 
 pinned=$(lockfile_skills)
-if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 22 ]; then
-  pass "skills-lock.json pins Matt's 22 skills"
+if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 23 ]; then
+  pass "skills-lock.json pins Matt's 22 skills and tldraw-skill"
 else
-  fail "skills-lock.json pins Matt's 22 skills"
+  fail "skills-lock.json pins Matt's 22 skills and tldraw-skill"
 fi
+
+# The reason lazar-tldraw is vendored rather than hand-kept: an upstream nobody pins is an
+# upstream nobody can update with a command.
+if grep -qF '"source": "Agents365-ai/tldraw-skill"' "$HARNESS_SOURCE/skills-lock.json"; then
+  pass "lazar-tldraw's upstream is pinned rather than hand-synced"
+else
+  fail "lazar-tldraw's upstream is pinned rather than hand-synced"
+fi
+
+# Everything of Matt's, judged as Matt's. tldraw-skill is pinned in the same lockfile but
+# installs under a lazar- name, so it is asserted separately.
+matt_pinned=$(printf '%s\n' "$pinned" | grep -vx 'tldraw-skill')
 
 missing=""
 misnamed=""
@@ -198,7 +210,19 @@ while IFS= read -r name; do
     fi
     [ -e "$root/skills/$name" ] && unprefixed="$unprefixed $root/skills/$name"
   done
-done <<<"$pinned"
+done <<<"$matt_pinned"
+
+# Same rule, other prefix: upstream calls it tldraw-skill, and that name must not reach a runtime
+# either — lazar-tldraw is what the harness declares and what CLAUDE.md points at.
+for root in "$claude" "$opencode"; do
+  [ -e "$root/skills/tldraw-skill" ] && unprefixed="$unprefixed $root/skills/tldraw-skill"
+done
+
+if grep -qx "name: lazar-tldraw" "$claude/skills/lazar-tldraw/SKILL.md"; then
+  pass "the installed tldraw skill declares its lazar- name"
+else
+  fail "the installed tldraw skill declares its lazar- name"
+fi
 
 if [ -z "$missing" ]; then
   pass "every pinned Matt skill installs to both runtimes"

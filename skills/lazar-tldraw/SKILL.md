@@ -8,7 +8,14 @@ platforms: [macos, linux, windows]
 metadata: {"openclaw":{"requires":{"bins":["tldraw"]},"emoji":"📝","os":["darwin","linux","win32"],"install":[{"id":"npm-tldraw","kind":"npm","package":"@kitschpatrol/tldraw-cli","global":true,"bins":["tldraw"],"label":"Install tldraw-cli via npm"}]},"hermes":{"tags":["tldraw","diagram","flowchart","architecture","whiteboard","visualization"],"category":"design","requires_tools":["tldraw"],"related_skills":["drawio","mermaid","excalidraw","plantuml"]},"author":"Agents365-ai","version":"1.2.1"}
 ---
 
-> **Vendored and extended.** Upstream: [Agents365-ai/tldraw-skill](https://github.com/Agents365-ai/tldraw-skill) v1.2.1 (MIT, see `LICENSE`). Local additions on top of upstream: the **UI/UX Wireframe (low-fidelity)** and **Product Shape-up sketch** presets, plus wider triggers in the frontmatter and "When to Use". Everything else is upstream, so keep those sections in sync when pulling updates. Requires `@kitschpatrol/tldraw-cli` on PATH (`npm install -g @kitschpatrol/tldraw-cli`).
+> **Generated file.** Vendored from
+> [Agents365-ai/tldraw-skill](https://github.com/Agents365-ai/tldraw-skill) (MIT, see `LICENSE`)
+> by `vendor-skills.sh`, which re-applies `patches/lazar-tldraw.patch` to upstream on every run.
+> A re-vendor overwrites this file, so an edit left sitting here is an edit lost: change it, then
+> run `./vendor-skills.sh --regen-patch` to fold the change back into the patch that carries it.
+> The local patch adds the **UI/UX Wireframe** and **Product Shape-up sketch** presets and widens
+> the triggers.
+> Requires `@kitschpatrol/tldraw-cli` on PATH (`npm install -g @kitschpatrol/tldraw-cli`).
 
 # tldraw Whiteboard Diagrams
 
