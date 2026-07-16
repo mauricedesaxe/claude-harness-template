@@ -318,6 +318,27 @@ for agent in git-hygiene-reviewer clarity-reviewer yagni-reviewer; do
   assert_agent_installs "$agent"
 done
 
+# A `§N` is the contract between a citation and the doctrine: an agent's finding cites the
+# number, and the spine promises its own cross-references resolve through the index. Dropping or
+# renumbering a cited section breaks both silently, since the citation still reads fine while
+# pointing at nothing. Read from the installed tree, which is what a runtime actually loads.
+installed_sections=$(grep -hoE '^## §[0-9]+\.' \
+  "$claude/rules/PHILOSOPHY.md" "$claude"/rules/packs/*.md | tr -cd '0-9\n' | sort -u)
+unresolved=""
+for citer in "$claude"/agents/*.md "$claude/CLAUDE.md" \
+  "$claude/rules/PHILOSOPHY.md" "$claude"/rules/packs/*.md; do
+  for cited in $(grep -oE '§[0-9]+' "$citer" | tr -cd '0-9\n' | sort -u); do
+    printf '%s\n' "$installed_sections" | grep -qx -- "$cited" ||
+      unresolved="$unresolved $(basename -- "$citer")→§$cited"
+  done
+done
+
+if [ -z "${unresolved// /}" ]; then
+  pass "every § the installed harness cites resolves to a section of the philosophy"
+else
+  fail "every § the installed harness cites resolves to a section of the philosophy:$unresolved"
+fi
+
 REDIRECT_HOME=$(mktemp -d)
 redirect_claude="$REDIRECT_HOME/claude-config-dir"
 redirect_xdg="$REDIRECT_HOME/xdg-config-home"
