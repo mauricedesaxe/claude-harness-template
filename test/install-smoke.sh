@@ -61,10 +61,12 @@ canary_before=$(canary_digest)
 # An allowlist, not a blocklist: only HOME and PATH reach the installer, so a redirect variable
 # added to install.sh later is neutralised without this test having to learn its name.
 run_installer() {
-  env -i PATH="$PATH" HOME="$TEST_HOME" "$HARNESS_SOURCE/install.sh"
+  local home=$1
+  shift
+  env -i PATH="$PATH" HOME="$home" "$@" "$HARNESS_SOURCE/install.sh"
 }
 
-run_installer >/dev/null || {
+run_installer "$TEST_HOME" >/dev/null || {
   echo "FAIL install.sh exited non-zero" >&2
   exit 1
 }
@@ -268,7 +270,7 @@ mv "$opencode/opencode.json.seeded" "$opencode/opencode.json"
 printf -- '---\nname: code-reviewer\n---\n' >"$claude/agents/code-reviewer.md"
 printf -- '---\nmode: subagent\n---\n' >"$opencode/agents/code-reviewer.md"
 
-run_installer >/dev/null || fail "installing twice is safe"
+run_installer "$TEST_HOME" >/dev/null || fail "installing twice is safe"
 
 if [ -e "$claude/skills/lazar-tldraw/STALE.md" ]; then
   fail "reinstalling purges a file the source no longer carries"
@@ -315,6 +317,53 @@ fi
 for agent in git-hygiene-reviewer clarity-reviewer yagni-reviewer; do
   assert_agent_installs "$agent"
 done
+
+REDIRECT_HOME=$(mktemp -d)
+redirect_claude="$REDIRECT_HOME/claude-config-dir"
+redirect_xdg="$REDIRECT_HOME/xdg-config-home"
+
+run_installer "$REDIRECT_HOME" \
+  CLAUDE_CONFIG_DIR="$redirect_claude" XDG_CONFIG_HOME="$redirect_xdg" >/dev/null ||
+  fail "the installer runs against redirected config homes"
+
+assert_same_file "CLAUDE.md installs where CLAUDE_CONFIG_DIR points" \
+  "$HARNESS_SOURCE/CLAUDE.md" "$redirect_claude/CLAUDE.md"
+assert_same_file "the spine installs where CLAUDE_CONFIG_DIR points" \
+  "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$redirect_claude/rules/PHILOSOPHY.md"
+assert_same_file "skills install where CLAUDE_CONFIG_DIR points" \
+  "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$redirect_claude/skills/lazar-tldraw/SKILL.md"
+assert_same_file "agents install where CLAUDE_CONFIG_DIR points" \
+  "$HARNESS_SOURCE/agents/yagni-reviewer.md" "$redirect_claude/agents/yagni-reviewer.md"
+
+if [ -e "$REDIRECT_HOME/.claude" ]; then
+  fail "CLAUDE_CONFIG_DIR wins over ~/.claude, which Claude Code would not read"
+else
+  pass "CLAUDE_CONFIG_DIR wins over ~/.claude, which Claude Code would not read"
+fi
+
+assert_same_file "AGENTS.md installs where XDG_CONFIG_HOME points" \
+  "$HARNESS_SOURCE/CLAUDE.md" "$redirect_xdg/opencode/AGENTS.md"
+assert_same_file "the spine installs where XDG_CONFIG_HOME points" \
+  "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$redirect_xdg/opencode/rules/PHILOSOPHY.md"
+
+if [ -e "$REDIRECT_HOME/.config/opencode" ]; then
+  fail "XDG_CONFIG_HOME wins over ~/.config, which OpenCode would not read"
+else
+  pass "XDG_CONFIG_HOME wins over ~/.config, which OpenCode would not read"
+fi
+
+# Resolve the reference the way OpenCode would rather than pinning its spelling: `~` is correct
+# only while it expands onto the rules that were just written, which a moved config home breaks.
+spine_ref=$(jq -r '.instructions[] | select(endswith("PHILOSOPHY.md"))' \
+  "$redirect_xdg/opencode/opencode.json")
+
+if [ -f "${spine_ref/#\~/$REDIRECT_HOME}" ]; then
+  pass "opencode.json points at the spine it actually installed"
+else
+  fail "opencode.json points at the spine it actually installed: $spine_ref resolves nowhere"
+fi
+
+rm -rf -- "$REDIRECT_HOME"
 
 if [ "$(canary_digest)" = "$canary_before" ]; then
   pass "the installer writes nothing outside the home the test gave it"
