@@ -13,8 +13,9 @@ metadata: {"openclaw":{"requires":{"bins":["tldraw"]},"emoji":"📝","os":["darw
 > by `vendor-skills.sh`, which re-applies `patches/lazar-tldraw.patch` to upstream on every run.
 > A re-vendor overwrites this file, so an edit left sitting here is an edit lost: change it, then
 > run `./vendor-skills.sh --regen-patch` to fold the change back into the patch that carries it.
-> The local patch adds the **UI/UX Wireframe** and **Product Shape-up sketch** presets and widens
-> the triggers.
+> The local patch adds the **UI/UX Wireframe** and **Product Shape-up sketch** presets, widens the
+> triggers, and fixes the sizing and spacing rules that made diagrams come out packed with text
+> overflowing its shapes.
 > Requires `@kitschpatrol/tldraw-cli` on PATH (`npm install -g @kitschpatrol/tldraw-cli`).
 
 # tldraw Whiteboard Diagrams
@@ -90,11 +91,12 @@ Skip clarification if the request already specifies these details or is clearly 
 
 After exporting the draft PNG, use the agent's vision capability (e.g., Claude's image input) to read the image and check for these issues before showing the user. If the agent does not support vision, skip self-check and show the PNG directly.
 
-tldraw's own AI agent flags exactly three structural defects — **text overflow** (a box too small for its label), **overlapping text**, and **friendless arrows** (an arrow with an unbound end). The first three rows below target those; size boxes correctly up front (see "Sizing boxes to fit labels") and they rarely occur.
+tldraw's own AI agent flags exactly three structural defects — **text overflow** (a box too small for its label), **overlapping text**, and **friendless arrows** (an arrow with an unbound end). The first three rows below target those; size boxes correctly up front (see "Sizing shapes to fit labels") and they rarely occur.
 
 | Check | What to look for | Auto-fix action |
 |-------|-----------------|-----------------|
 | Text overflow | Label spills past the shape's border, or the box looks taller than you set (tldraw auto-grows an undersized box) | Increase `w`/`h` to fit the label — see the sizing formula below |
+| Label outside a non-rectangular shape | Label sits inside the shape's bounding box but crosses the drawn outline — past a diamond's points, a triangle's corners, an ellipse's curve | Apply the shape's `geo` factor (see "Sizing shapes to fit labels"), or shorten the label / switch to `rectangle` |
 | Overlapping text | Two text-bearing shapes' labels touch or overlap, hurting legibility | Shift shapes apart by ≥200px |
 | Friendless arrow | An arrow with one end not connected to a shape (floats loose) | Bind both ends: every arrow's `start` and `end` need a `boundShapeId` matching an existing shape |
 | Off-canvas shapes | Shapes at negative coordinates or far from the main group | Move to positive coordinates near the cluster |
@@ -187,7 +189,7 @@ After self-check, show the exported image and ask the user for feedback.
   "opacity": 1,
   "meta": {},
   "props": {
-    "w": 180,
+    "w": 200,
     "h": 60,
     "geo": "rectangle",
     "color": "blue",
@@ -204,6 +206,12 @@ After self-check, show the exported image and ask the user for feedback.
   }
 }
 ```
+
+**`w` and `h` above are worked examples, not defaults.** They are what the sizing rules below
+yield for a size-`m` `rectangle` labeled `"API Gateway"` — nothing more. Copying `200`/`60` onto a
+shape with a longer label or a non-rectangular `geo` is the single biggest source of unreadable
+diagrams. Compute both from the label and the `geo` before you write the record: see
+"Sizing shapes to fit labels".
 
 ### Geo Types
 
@@ -429,7 +437,23 @@ aa, ab, ac, ... az          ← continue here past aZ; never "a10"
 | Medium | 6–10 | 280px | 200px |
 | Complex | >10 | 350px | 250px |
 
-**Sizing boxes to fit labels (do this up front, not in self-check):** the `draw` font is wide. Compute `w`/`h` from the label so text never clips. Approximate per-character width and line height for the default `draw` font:
+**These gaps are empty space between two shapes' facing edges — they are not a
+centre-to-centre pitch, and not a step to add to `x`.** Getting this backwards is the other
+half of "the diagram looks cramped": shapes are sized to their labels, so a fixed step makes the
+real gap *shrink as labels get longer* — a 280px step past a 280px-wide `"Payments Service"` box
+leaves exactly 0px, and the two boxes touch. Place each shape from the **previous shape's actual
+size**:
+
+```
+x_next = x_prev + w_prev + horizontal_gap
+y_next = y_prev + h_prev + vertical_gap
+```
+
+For a row of shapes with different widths, that means a different step per shape. Centre a row by
+computing its total width (`Σ w + gaps`) first, then laying it out from the left edge — never by
+assuming every shape is the same size.
+
+**Sizing shapes to fit labels (do this up front, not in self-check):** the `draw` font is wide. Compute `w`/`h` from the label so text never clips. Approximate per-character width and line height for the default `draw` font:
 
 | `size` | char width (px) | line height (px) |
 |--------|-----------------|------------------|
@@ -445,6 +469,39 @@ With `padding = 16` on each side:
 Example: a size-`m` box labeled `"API Gateway"` (11 chars, 1 line) → `w ≈ 11*15 + 32 = 197 → 200`, `h ≈ 28 + 32 = 60`. Multi-line labels (with `\n`) count the **longest** line for `w` and the line count for `h`. Err slightly large — extra padding looks fine, a too-narrow box hard-wraps a word mid-letters.
 
 **Why this matters:** if a box is too short for its text, tldraw silently **grows it taller** on render (it sets the shape's `growY`) — so the box ends up bigger than the `h` you wrote and collides with whatever you placed below it. Sizing correctly up front keeps `growY` at 0 and your layout intact. This is the single most common cause of "the diagram looks cramped / boxes overlap" after export.
+
+**Then scale for the `geo` — the formula above is for a `rectangle` only.** tldraw lays a label
+into the shape's **bounding box**, not into the outline it draws inside that box. So on any shape
+that isn't a full-bleed rectangle, a label sized to `w`×`h` renders *outside the drawn edges*: it
+spills past a diamond's left and right points, past a triangle's bottom corners, past an ellipse's
+curve. Worst on the shapes the presets reach for most — `triangle` gateways, `diamond` decisions,
+`ellipse` databases, `cloud` external APIs.
+
+Multiply the rectangle's `w`/`h` by the shape's factor, then round up to a multiple of 10:
+
+| `geo` | `w` × | `h` × | Why |
+|-------|-------|-------|-----|
+| `rectangle`, `x-box`, `check-box` | 1.0 | 1.0 | the label's box *is* the shape |
+| `oval` | 1.1 | 1.0 | only the rounded ends cut in |
+| `octagon` | 1.3 | 1.3 | corners clipped |
+| `hexagon` | 1.4 | 1.3 | slanted sides cut into the label's line |
+| `trapezoid` | 1.5 | 1.2 | one edge slants across the label |
+| `ellipse`, `pentagon` | 1.5 | 1.5 | the curve is tightest exactly at the label's line |
+| `rhombus`, `rhombus-2` | 1.6 | 1.2 | the slant offsets the whole line sideways |
+| `cloud` | 1.6 | 1.6 | bumps eat the corners |
+| `diamond` | 2.0 | 2.0 | the label sits at the diamond's *waist*, its narrowest span |
+| `triangle` | 2.2 | 1.8 | mid-height is only half the base width |
+| `star` | 2.6 | 2.6 | little of the bounding box falls inside the points |
+
+Any other `geo` (the `arrow-*` blocks, `heart`): start at 1.5 × 1.5 and confirm on the export.
+
+Example: `"API Gateway"` in a `triangle` → rectangle size 200×60, then `w = 200*2.2 = 440`,
+`h = 60*1.8 = 108 → 110`. In a `diamond` → 400×120.
+
+**The cheaper fix is often a shorter label or a different `geo`.** A `triangle` that needs to say
+`"Payments Service"` wants ~640px of width to do it — at which point use a `rectangle` and carry
+the meaning in `color`, or shorten the label to `"Gateway"`. Reserve the dramatic shapes for short
+labels.
 
 **Routing corridors:** between shape rows/columns, leave an extra ~80px empty corridor where arrows can route without crossing other shapes. Never place a shape in a gap that arrows need to traverse.
 
@@ -509,7 +566,7 @@ tldraw doesn't have native lifeline shapes. Approximate with:
 | Async message | arrow with `dash: dashed` | `black` | Dashed horizontal arrow |
 | Return message | arrow with `dash: dashed`, `color: grey` | `grey` | Grey dashed |
 
-**Layout:** LR for actors (200–280px apart), TB for time. Each message is a horizontal arrow between two lifelines at increasing `y`.
+**Layout:** LR for actors (200–280px gap between their edges), TB for time. Each message is a horizontal arrow between two lifelines at increasing `y`.
 
 ### ML / Deep Learning Model Diagram
 
@@ -531,7 +588,7 @@ For neural network architecture diagrams — useful for paper figures and explai
 "text": "Conv2D\n(B, 64, 32, 32)"
 ```
 
-**Layout:** TB (data flows top → bottom), layers ~150px apart. Skip connections curve around the main stack.
+**Layout:** TB (data flows top → bottom), ~150px gap between one layer's bottom edge and the next layer's top edge. Skip connections curve around the main stack.
 
 ### ER Diagram (ERD)
 
@@ -546,7 +603,7 @@ tldraw lacks native table/row shapes. Approximate each entity as a tall rectangl
 
 Label the arrow with cardinality (e.g., `1..*`, `0..1`) via `props.text`.
 
-**Layout:** TB or grid; entities spaced ≥300px apart to leave room for column lists.
+**Layout:** TB or grid; ≥300px of empty space between entity edges to leave room for column lists.
 
 ### UML Class Diagram
 
@@ -560,7 +617,7 @@ Label the arrow with cardinality (e.g., `1..*`, `0..1`) via `props.text`.
 
 **Note:** tldraw's `triangle`/`diamond` arrowheads are **filled**, whereas strict UML uses *hollow* triangles (inheritance) and either filled/hollow diamonds (composition/aggregation). The shapes read correctly for sketches and explainers; for publication-grade UML with hollow heads, drawio-skill (separate skill) is a better fit.
 
-**Layout:** TB, classes ~250px apart, interfaces above implementations.
+**Layout:** TB, ~250px of empty space between class edges, interfaces above implementations.
 
 ### UI / UX Wireframe (low-fidelity, fat-marker)
 
@@ -582,7 +639,7 @@ Rough screen mockups, not pixel-faithful UI. The hand-drawn look is the point �
 - Keep `font: draw` and `dash: draw` everywhere — the marker aesthetic *is* the low-fi signal.
 - One vertical column per screen, regions stacked top→down. For multiple screens (states,
   responsive variants, before/after) place several `frame`s side by side.
-- **Size every box to its label up front** (see "Sizing boxes to fit labels"). A chip that
+- **Size every box to its label up front** (see "Sizing shapes to fit labels"). A chip that
   overflows past its card is the #1 wireframe defect — leave ≥20px between a chip's bottom edge
   and its container's bottom edge.
 - Convey hierarchy / importance by **position and size**, not color. Reserve color for role.
@@ -663,7 +720,7 @@ Or upload to https://tldraw.com (drag-and-drop the `.tldr` file) for browser edi
 | Blank/empty export | Verify `document:document` and `page:page1` records are present |
 | Output file not found | `-o` is a directory; file name matches input: `tldraw export foo.tldr -o ./` → `./foo.png` |
 | Arrow doesn't appear | Use `"type": "binding"` with `boundShapeId`; set arrow `x`/`y` to `0,0` |
-| Shapes overlap | Plan a 200px+ grid before assigning x/y; scale spacing with complexity |
+| Shapes overlap | Step `x`/`y` by the previous shape's own `w`/`h` **plus** the gap, not by a fixed pitch; scale spacing with complexity |
 | Box taller than expected / collides below | Label overflowed an undersized box, so tldraw auto-grew it (`growY`). Size `w`/`h` to the label up front using the sizing formula |
 | Text not visible | Check `props.text` is set; if `fill: "none"`, ensure text color contrasts |
 | Index collision | All shapes must have unique `index` values |

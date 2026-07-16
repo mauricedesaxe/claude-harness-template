@@ -109,8 +109,9 @@ route `/prototype/<name>` are left alone.
 ### lazar-tldraw, which carries local patches
 
 `lazar-tldraw` is the exception the `lazar-` prefix is announcing: it is not upstream's skill
-under a new name. It adds the UI/UX wireframe and Shape-up presets and widens the triggers. That
-is prose, not a rewrite rule, so it cannot be re-derived the way the `matt-` prefix is.
+under a new name. It adds the UI/UX wireframe and Shape-up presets, widens the triggers, and fixes
+the sizing and spacing rules that had diagrams coming out packed with text overflowing its shapes.
+That is prose, not a rewrite rule, so it cannot be re-derived the way the `matt-` prefix is.
 
 It is still not hand-maintained. The divergence lives in `patches/lazar-tldraw.patch` and is
 re-applied to freshly-fetched upstream on every run, which keeps the same property by a different
