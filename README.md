@@ -1,111 +1,75 @@
-# claude-harness-template
+# lazar-harness
 
-A portable workflow harness for [Claude Code](https://claude.com/claude-code) and
-Codex projects. Install it in any repo with one command (`/bootstrap-harness`) and
-get the same opinionated end-to-end flow: capture → work (plan → adversarial plan
-review → implement → review → ship) with atomic conventional commits, no
-`Co-Authored-By` trailers, and a shared "Lemon Pie" UI vocabulary.
+A single, global-only agent harness. It is **installed** into every runtime it supports and
+is never copied into a repository, because every copy is a fork that starts drifting the day
+it lands. One source, one install command, and the per-runtime differences are generated
+rather than hand-maintained.
 
-## What's in here
+Supported runtimes: [Claude Code](https://claude.com/claude-code) and
+[OpenCode](https://opencode.ai).
+
+## Install
+
+```sh
+./install.sh
+```
+
+It writes to `~/.claude/` (skills, agents, `CLAUDE.md`) and `~/.config/opencode/` (skills,
+agents, `AGENTS.md`), reading everything from this repo:
 
 ```
-.claude/
-  skills/
-    work/                   pick up a GitHub issue end-to-end
-    research/               go deep on an issue's open questions, no implementation
-    commit/                 atomic conventional commits, no --no-verify
-    review/                 run reviewer agents on the diff, chat report
-    capture/                file a GH issue — only if it clears the felt-value bar
-    ship/                   land on main (branch/commit/push/PR/CI/rebase-merge)
-    setup/                  fresh-clone onboarding skeleton
-    shape/                  shape a raw idea into a bettable milestone (Shape Up)
-    bet/                    commit a shaped milestone to the active set, WIP-capped
-    prune/                  periodic backlog hygiene — cull only the dead
-    next-task/              rank the top few things to work on next
-    viability/              market/impact assessment before betting (TAM/SAM/SOM, CAC/LTV)
-    codebase-report/        two-perspective health snapshot over a metrics collector
-    neobrutalist-pop/       neo-brutalist UI tokens + components
-    tldraw/                 talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
-  agents/
-    code-reviewer.md        engineering-quality reviewer
-    test-reviewer.md        adversarial test reviewer
-    plan-reviewer.md        adversarial plan reviewer (run before code exists)
-    data-reviewer.md        schema, migrations, value types, feature flags
-    security-reviewer.md    authz/RBAC/RLS/audit/PII (commercial-ready only)
-    git-hygiene-reviewer.md history + PR-meta shape (atomic commits, clean stack)
+install.sh                  the only executable artifact — the whole install path
+CLAUDE.md                   the instructions both runtimes load
+agents/
+  clarity-reviewer.md       docs/comment + self-explanatory-code discipline (§21)
+skills/
+  lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
 docs/
   PHILOSOPHY.md             durable "why" doc — single-instance, Postgres-only,
                             no serverless, API-integration primitives, etc.
-CLAUDE.md                   skeleton: short rules + per-project TODOs, references
-                            PHILOSOPHY.md for the long-form reasoning
-AGENTS.md                   Codex bridge: delegates to CLAUDE.md + .claude skills
-bootstrap-harness/
-  SKILL.md                  the global skill that installs everything above
-                            (LLM-driven: clone, copy the manifest, fill CLAUDE.md TODOs)
+test/
+  install-smoke.sh          runs install.sh under a temp HOME, asserts the tree
 ```
 
-## Install (one-time, per machine)
+An agent is authored **once**, in Claude Code's format. OpenCode additionally requires a
+`mode:` and a `permission:` block, and the installer generates those from that single source
+at install time, so there is no second copy of an agent to keep in sync.
 
-The `bootstrap-harness` skill lives globally so it's available in any repo. Install the
-same `SKILL.md` into both Claude Code's and Codex's user-scope skill directories:
+`CLAUDE.md` is installed to `~/.claude/CLAUDE.md` and, under OpenCode's own name for the same
+thing, to `~/.config/opencode/AGENTS.md`.
+
+## Test
 
 ```sh
-CHT="$(mktemp -d)"
-git clone --depth 1 https://github.com/mauricedesaxe/claude-harness-template.git "$CHT"
-mkdir -p ~/.claude/skills/bootstrap-harness ~/.agents/skills/bootstrap-harness
-cp "$CHT/bootstrap-harness/SKILL.md" ~/.claude/skills/bootstrap-harness/SKILL.md
-cp "$CHT/bootstrap-harness/SKILL.md" ~/.agents/skills/bootstrap-harness/SKILL.md
-rm -rf "$CHT"
+bash test/install-smoke.sh
 ```
 
-Only `SKILL.md` is installed globally — on each run the skill clones a fresh copy of the
-template and copies the universal files from *that*, so there's no stale local copy to drift.
-From then on, `/bootstrap-harness` works in any Claude Code session and
-`$bootstrap-harness` works in any Codex session (`~/.agents/skills` is Codex's user-level
-skills directory; restart Codex once after installing a new skill so it's discovered).
-
-## Use (per-project)
-
-Inside any git repo:
-
-```
-/bootstrap-harness      # Claude Code
-$bootstrap-harness      # Codex
-```
-
-The agent asks whether the repo is for Claude Code, Codex, or both, then clones the template
-and copies the universal files from that fresh clone — overwriting the skills/agents in
-`.claude/`, overwriting `docs/PHILOSOPHY.md` and the packs (the canonical "why", always
-synced), and preserving any non-universal skills/agents already there. It writes a `CLAUDE.md`
-skeleton only if one doesn't exist, and (when Codex is in play) sets up `AGENTS.md`: syncing
-the bridge in place if present, appending it if not. Codex picks up the project workflows
-through that bridge (which points it at `.claude/skills/`), so the skills aren't duplicated
-into a second directory. When it writes a fresh `CLAUDE.md`, the agent fills the
-`<!-- TODO -->` markers from what it can read in the repo — what the project does, its
-architecture, the load-bearing bar, area labels, GitHub Project IDs — and tells you which it
-left blank.
+One end-to-end pass: it runs the installer with `HOME` pointed at a temp directory and asserts
+what landed on disk — that both runtimes got the skill, the agent, and the instructions, and
+that the OpenCode agent carries the generated frontmatter while its prompt still matches the
+source byte for byte.
 
 `docs/PHILOSOPHY.md` is the load-bearing reference doc — read it once, then let
 `CLAUDE.md` point at its section numbers (§1 Earn its keep, §3 Single-instance
 default, §5 Postgres only, §7 No serverless / no edge, §11 API integration
 primitives, §29 Shaping / appetite / betting, etc.).
 
-The bootstrap run also names the MCP servers the skills lean on (it doesn't install
-them — they're user-scope). The load-bearing one is the **browser MCP (Playwright)**:
-the `work` / `review` flow verifies UI changes by driving a real browser (navigate,
-snapshot, screenshot) instead of trusting that the code compiled. The `tldraw` skill
-additionally needs `@kitschpatrol/tldraw-cli` on your PATH.
+The skills lean on a few MCP servers, which are user-scope and so are yours to wire. The
+load-bearing one is the **browser MCP (Playwright)**: the review flow verifies UI changes by
+driving a real browser (navigate, snapshot, screenshot) instead of trusting that the code
+compiled. The `lazar-tldraw` skill additionally needs `@kitschpatrol/tldraw-cli` on your PATH.
 
-## Customizing
+## Legacy: the per-repo bootstrap
 
-The universal skills are deliberately opinionated. If you need to diverge for a
-specific project — different test runner, no GitHub Project board, etc. — edit the
-files in that project's `.claude/` after install.
+`bootstrap-harness/`, and the `.claude/` skills and agents beside it, are the previous model:
+`/bootstrap-harness` cloned this repo into whatever project you ran it in and copied the
+harness there. That is what produced the drifting copies this repo now exists to end, so the
+skill is frozen, its manifest is no longer authoritative, and it is being removed. Use
+`./install.sh`.
 
-**Improvements you'd want everywhere should be backported here.** Open a PR against
-`mauricedesaxe/claude-harness-template`. The next `/bootstrap-harness` run picks it
-up. There is no auto-sync — manual backport discipline is the price of having one
-template feeding many projects with different needs.
+Improvements still land here first — open a PR against
+`mauricedesaxe/claude-harness-template` — but they now reach you by reinstalling rather than
+by re-bootstrapping each repo.
 
 ## Philosophy in one breath
 

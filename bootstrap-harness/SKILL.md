@@ -1,11 +1,15 @@
 ---
 name: bootstrap-harness
-description: Install the Claude Code + Codex harness (universal skills, reviewer agents, philosophy spine + packs, CLAUDE.md skeleton, AGENTS.md Codex bridge) from claude-harness-template into the current repo. Use when the user says "/bootstrap-harness", "$bootstrap-harness", "bootstrap the harness", "set up the harness here", or when starting a new project that should follow the standard work -> review -> ship flow with atomic conventional commits and the reviewer agents.
+description: Install the Claude Code + Codex harness (universal skills, reviewer agents, philosophy spine + packs, CLAUDE.md skeleton, AGENTS.md Codex bridge) from lazar-harness into the current repo. Use when the user says "/bootstrap-harness", "$bootstrap-harness", "bootstrap the harness", "set up the harness here", or when starting a new project that should follow the standard work -> review -> ship flow with atomic conventional commits and the reviewer agents.
 ---
 
 # Bootstrap Harness
 
-Install the portable parts of `claude-harness-template` into the current repo. This is an
+> **Superseded by `install.sh`; frozen.** `lazar-harness` is installed globally, not copied
+> into a repo, because every copy is a fork that starts drifting the day it lands. This skill
+> is the old per-repo model and the manifest below is no longer authoritative.
+
+Install the portable parts of `lazar-harness` into the current repo. This is an
 **LLM-driven install**: you clone the template, copy a fixed manifest of files, and fill in
 the project-specific `CLAUDE.md` TODOs using what you can read from the repo. There is no
 bash installer to run — you do the copies yourself with judgment where the skeleton needs it.

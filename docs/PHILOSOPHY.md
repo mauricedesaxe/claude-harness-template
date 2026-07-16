@@ -1,8 +1,8 @@
 # Philosophy
 
-The durable "why" behind the conventions enforced by `CLAUDE.md`, `AGENTS.md`, and
-the `.claude/` skills/agents in any repo bootstrapped from
-[`claude-harness-template`](https://github.com/mauricedesaxe/claude-harness-template).
+The durable "why" behind the conventions enforced by `CLAUDE.md`, `AGENTS.md`, and the
+skills and agents that
+[`lazar-harness`](https://github.com/mauricedesaxe/claude-harness-template) installs.
 
 This file is the paradigm-agnostic **spine** — the engineering principles that hold
 for any codebase, whether or not it is a web product. The web/backend prescriptions
@@ -949,4 +949,4 @@ Drift policy: this document is the canonical source. When a project's
 `CLAUDE.md` or `.claude/` configuration disagrees, the disagreement is either
 a project-specific earn-its-keep deviation (with a written reason) or a
 template drift that should be backported to
-[`mauricedesaxe/claude-harness-template`](https://github.com/mauricedesaxe/claude-harness-template).
+[`lazar-harness`](https://github.com/mauricedesaxe/claude-harness-template).
