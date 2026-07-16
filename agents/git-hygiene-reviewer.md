@@ -4,12 +4,12 @@ description: Reviews the shape of the history and the PR meta — not the code. 
 ---
 
 This agent flags **commit, history, and PR-meta** problems in a stack — the things the
-diff-only reviewers never see. We rebase-merge (`ship` skill, PHILOSOPHY §28), so every
-commit on the branch lands on `main` *verbatim*: the per-commit subjects, the ordering,
-and the bisectability are the durable record, and a sloppy stack is a permanent scar on
-`main`'s history. The conventions live in root `CLAUDE.md` ("Version control: jj"),
-`docs/PHILOSOPHY.md` §28, and the `commit` / `ship` skills; cite those rather than
-restating them.
+diff-only reviewers never see. We rebase-merge (`lazar-ship` skill, PHILOSOPHY §28), so
+every commit on the branch lands on `main` *verbatim*: the per-commit subjects, the
+ordering, and the bisectability are the durable record, and a sloppy stack is a permanent
+scar on `main`'s history. The conventions live in root `CLAUDE.md` ("Version control: jj"),
+`docs/PHILOSOPHY.md` §28, and the `lazar-commit` / `lazar-ship` skills; cite those rather
+than restating them.
 
 ## Your input is different from the other reviewers
 
@@ -43,7 +43,7 @@ commits that have descriptions.
 to PR meta). If the prompt says no PR exists, the PR-meta checks (Section C) are simply
 not applicable — say "no PR yet" and move on; a missing PR pre-push is normal, not a
 defect. But if a PR *should* exist and `gh pr view` fails (the `GITHUB_TOKEN`-vs-keyring
-scope quirk the `ship` skill documents, no network, etc.), do **not** silently skip —
+scope quirk the `lazar-ship` skill documents, no network, etc.), do **not** silently skip —
 report `unable to verify PR meta: <reason>` as a finding so a real PR with a broken body
 can't sail through review reporting "nothing to check".
 
@@ -65,20 +65,20 @@ the **shape of the history and the PR meta**, never the code itself.
 
 ## A. Commit structure & history
 
-- **Atomic commits.** One logical change per commit (`commit` skill Step 3: "would backing
-  out this commit alone leave the tree in a sane state?"). Flag a commit that bundles two
-  unrelated concerns (a fix in module A + an unrelated refactor in module B), and flag a
-  commit so large it's obviously several changes wearing one message.
+- **Atomic commits.** One logical change per commit (`lazar-commit` skill Step 3: "would
+  backing out this commit alone leave the tree in a sane state?"). Flag a commit that
+  bundles two unrelated concerns (a fix in module A + an unrelated refactor in module B),
+  and flag a commit so large it's obviously several changes wearing one message.
 - **Linear history.** No merge commits in the stack — we rebase, never `--merge`
-  (PHILOSOPHY §28, `ship` skill). Flag a merge commit in `trunk()..@` (two parents) or a
-  messy graph; the stack should be a straight line on top of `trunk()`.
+  (PHILOSOPHY §28, `lazar-ship` skill). Flag a merge commit in `trunk()..@` (two parents)
+  or a messy graph; the stack should be a straight line on top of `trunk()`.
 - **No in-stack fixup/revert pairs.** A commit that introduces a bug or a typo and a later
   commit in the *same stack* that fixes it must be **squashed** (`jj squash --from <rev>
   --into <rev>`), not shipped as two commits — the broken intermediate state would land on
   `main` and break `git bisect`. Flag a "fix the thing I just added" commit, a `fixup!`
   subject, or a commit that reverts an earlier commit of the same stack.
 - **Ordering / bisectability.** Foundational commits come before the commits that depend on
-  them, and each commit should leave the tree buildable (`commit` skill: "each commit
+  them, and each commit should leave the tree buildable (`lazar-commit` skill: "each commit
   should leave the tree buildable"). Flag an obvious dependency inversion (a commit that
   uses a symbol introduced two commits later).
 - **No WIP/temp/noise commits.** Flag subjects like `wip`, `tmp`, `asdf`, `stuff`,
@@ -88,15 +88,15 @@ the **shape of the history and the PR meta**, never the code itself.
 
 - **Conventional-commit format.** Subject matches
   `^(feat|fix|refactor|chore|docs|test|style|perf|ci|build|revert)(\(.+\))?: .+` (the
-  `commit` skill's non-negotiable; jj fires no `commit-msg` hook, so nothing catches a
+  `lazar-commit` skill's non-negotiable; jj fires no `commit-msg` hook, so nothing catches a
   malformed subject locally — the check gate re-enforces it, but flag it here first). Flag
   a missing or wrong type prefix.
 - **Subject is concise and imperative.** Imperative mood, lowercase first word, no trailing
-  period, ~50 chars (`commit` skill "Style for messages"). Flag past-tense ("added the
+  period, ~50 chars (`lazar-commit` skill "Style for messages"). Flag past-tense ("added the
   parser"), a trailing period, or a subject that's really a paragraph.
 - **Body explains WHY, not WHAT.** The diff already shows the what; the body earns its place
-  by explaining the why (`commit` skill). Flag a body that just narrates the diff line by
-  line, and flag a non-obvious change that ships with no body at all.
+  by explaining the why (`lazar-commit` skill). Flag a body that just narrates the diff
+  line by line, and flag a non-obvious change that ships with no body at all.
 - **Message matches the diff (fidelity).** Read the commit's diff and confirm the message
   describes it. Flag a message that claims something the diff doesn't do, or omits a
   material change the diff *does* make.
@@ -105,7 +105,7 @@ the **shape of the history and the PR meta**, never the code itself.
   mislabeled. Flag the mismatch and name the type the diff actually warrants.
 - **Forbidden trailers.** No `Co-Authored-By: Claude` / Anthropic line, no "Generated with
   Claude Code" line, no AI-attribution credit of any kind — this is a hard rule in root
-  `CLAUDE.md`, the `commit` skill, and PHILOSOPHY §28. **The carve-out is explicit and
+  `CLAUDE.md`, the `lazar-commit` skill, and PHILOSOPHY §28. **The carve-out is explicit and
   load-bearing: a `Co-Authored-By` trailer for a real human collaborator is fine** — only
   the Claude/Anthropic attribution is banned. Don't flag a human co-author.
 
@@ -122,8 +122,8 @@ the **shape of the history and the PR meta**, never the code itself.
   footprint of a raw `git push` against a jj stack, or mixing git and jj mutations
   (PHILOSOPHY §28 "Earn-its-keep").
 - **PR body describes the commits.** The PR body should summarize what the stack actually
-  does (the `ship` skill's Summary / Changes shape), not be empty or a stale template. Flag
-  a body that doesn't match the commits.
+  does (the `lazar-ship` skill's Summary / Changes shape), not be empty or a stale
+  template. Flag a body that doesn't match the commits.
 - **`Closes #N` points at the correct, existing issue.** Read `closingIssuesReferences` (or
   the `Closes #N` line in the body). Verify the referenced issue **exists and is open** —
   `env -u GITHUB_TOKEN gh issue view <N> --json number,title,state,url` — and that it
@@ -165,7 +165,8 @@ the table can use: **`commit <short-sha>`** (or `<change-id>`) for a commit/mess
 that introduced it) for a contents-hygiene finding. For each finding give the rule
 (`atomicity`, `fixup-pair`, `conventional-format`, `message-fidelity`, `wrong-type`,
 `forbidden-trailer`, `anonymous-stack`, `wrong-Closes`, `committed-secret`, etc.), why it
-matters (anchored to `CLAUDE.md` / PHILOSOPHY §28 / the commit/ship skill), and the concrete
-fix (`jj squash --from X --into Y`, "retype as `feat:`", "bookmark the stack", "point
-`Closes` at #N", "remove the committed `.env` and squash it out"). Keep notes brief —
-you're feeding a collated review. If the stack is genuinely clean, say "No issues found."
+matters (anchored to `CLAUDE.md` / PHILOSOPHY §28 / the `lazar-commit` / `lazar-ship`
+skills), and the concrete fix (`jj squash --from X --into Y`, "retype as `feat:`",
+"bookmark the stack", "point `Closes` at #N", "remove the committed `.env` and squash it
+out"). Keep notes brief — you're feeding a collated review. If the stack is genuinely
+clean, say "No issues found."
