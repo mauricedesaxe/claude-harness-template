@@ -19,6 +19,10 @@ assert_contains() {
   if grep -qF -- "$2" "$3"; then pass "$1"; else fail "$1"; fi
 }
 
+lockfile_skills() {
+  awk -F'"' '/^    "/ && /: \{$/ { print $2 }' "$HARNESS_SOURCE/skills-lock.json"
+}
+
 frontmatter_of() {
   awk 'NR > 1 && /^---$/ { exit } NR > 1' "$1"
 }
@@ -49,6 +53,60 @@ assert_same_file "lazar-tldraw installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$opencode/skills/lazar-tldraw/SKILL.md"
 assert_same_file "a skill's supporting files travel with it" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$claude/skills/lazar-tldraw/LICENSE"
+
+pinned=$(lockfile_skills)
+if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 22 ]; then
+  pass "skills-lock.json pins Matt's 22 skills"
+else
+  fail "skills-lock.json pins Matt's 22 skills"
+fi
+
+missing=""
+misnamed=""
+unprefixed=""
+while IFS= read -r name; do
+  for root in "$claude" "$opencode"; do
+    skill_md="$root/skills/matt-$name/SKILL.md"
+    if [ -f "$skill_md" ]; then
+      grep -qx "name: matt-$name" "$skill_md" || misnamed="$misnamed $skill_md"
+    else
+      missing="$missing $skill_md"
+    fi
+    [ -e "$root/skills/$name" ] && unprefixed="$unprefixed $root/skills/$name"
+  done
+done <<<"$pinned"
+
+if [ -z "$missing" ]; then
+  pass "every pinned Matt skill installs to both runtimes"
+else
+  fail "every pinned Matt skill installs to both runtimes:$missing"
+fi
+
+if [ -z "$misnamed" ]; then
+  pass "every installed Matt skill declares its matt- name"
+else
+  fail "every installed Matt skill declares its matt- name:$misnamed"
+fi
+
+if [ -z "$unprefixed" ]; then
+  pass "no Matt skill installs under its upstream name, which would eat a built-in"
+else
+  fail "no Matt skill installs under its upstream name:$unprefixed"
+fi
+
+# A body that still says `/code-review` dispatches to Claude Code's built-in, so the prefix has
+# to hold across the cross-references too, not just the directory and the frontmatter.
+reference='[ `]/('"$(printf '%s' "$pinned" | paste -sd '|' -)"')([^A-Za-z0-9/-]|$)'
+dangling=""
+for root in "$claude" "$opencode"; do
+  dangling="$dangling $(grep -rlE "$reference" "$root/skills"/matt-*/)"
+done
+
+if [ -z "${dangling// /}" ]; then
+  pass "no installed Matt skill dispatches to an unprefixed name"
+else
+  fail "no installed Matt skill dispatches to an unprefixed name:$dangling"
+fi
 
 source_agent="$HARNESS_SOURCE/agents/clarity-reviewer.md"
 claude_agent="$claude/agents/clarity-reviewer.md"
