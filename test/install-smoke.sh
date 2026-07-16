@@ -136,6 +136,26 @@ assert_same_file "lazar-standup installs to Claude Code" \
 assert_same_file "lazar-standup installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-standup/SKILL.md" "$opencode/skills/lazar-standup/SKILL.md"
 
+assert_same_file "lazar-review installs to Claude Code" \
+  "$HARNESS_SOURCE/skills/lazar-review/SKILL.md" "$claude/skills/lazar-review/SKILL.md"
+assert_same_file "lazar-review installs to OpenCode" \
+  "$HARNESS_SOURCE/skills/lazar-review/SKILL.md" "$opencode/skills/lazar-review/SKILL.md"
+
+# lazar-review names the global agents rather than globbing an agents dir, so that it always
+# spawns them even where a repo ships none. That only holds while the names it spawns are the
+# names the harness ships.
+unnamed=""
+for agent in "$HARNESS_SOURCE"/agents/*.md; do
+  grep -qF -- "$(basename -- "$agent" .md)" "$claude/skills/lazar-review/SKILL.md" ||
+    unnamed="$unnamed $(basename -- "$agent" .md)"
+done
+
+if [ -z "$unnamed" ]; then
+  pass "lazar-review's roster names every agent the harness ships"
+else
+  fail "lazar-review's roster names every agent the harness ships:$unnamed"
+fi
+
 # Both runtimes read the same instructions byte for byte (asserted above), so pinning the note
 # path once pins it for both. Read the root back out of what was installed rather than restating
 # it here, or the assertion just agrees with itself.

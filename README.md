@@ -37,6 +37,7 @@ agents/
   git-hygiene-reviewer.md   atomic conventional commits, linear history, PR meta
   yagni-reviewer.md         speculative generality, in a diff or in a plan
 skills/
+  lazar-review/             the one review: global agents + the repo's own + matt-code-review
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
   matt-*/                   Matt Pocock's 22 skills, vendored (see below)
