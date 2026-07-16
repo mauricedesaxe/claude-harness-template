@@ -96,16 +96,17 @@ the very end**, right before the outward step (the merge for `work`, the merge +
 comment for `research`). The reviewer agents still run and genuine blockers still stop. No
 opt-in → the normal gated flow; borderline wording → ask once.
 
-The reviewer **agents** in `.claude/agents/` are run *by* skills, not invoked directly:
+The reviewer **agents** are run *by* skills, not invoked directly. Three install globally,
+because they judge habits that hold in every repo:
 
-- **At plan time** (run by `work`): `plan-reviewer` and `yagni-reviewer` against the plan
-  text, before code exists.
-- **At diff time** (run by `review`): `code-reviewer`, `test-reviewer`, `data-reviewer`,
-  `git-hygiene-reviewer`, `yagni-reviewer`, `clarity-reviewer` always; `security-reviewer`
-  only when this file declares `Commercial readiness: yes`.
+- **At plan time** (run by `work`): `yagni-reviewer` against the plan text, before code exists.
+- **At diff time** (run by `review`): `git-hygiene-reviewer`, `yagni-reviewer`, and
+  `clarity-reviewer`, always.
 
-Project-specific reviewer agents (e.g. a `payments-reviewer`) live in the project's own
-`.claude/agents/` and are picked up automatically by `review`.
+Every other reviewer judges a repo against *its* standards, so it lives in that repo's own
+`.claude/agents/` — a `code-reviewer` that knows the module boundaries, a `payments-reviewer`,
+a `security-reviewer` if the repo is commercial. `review` picks them up automatically and runs
+them alongside the global three.
 
 ### Engineering skills (`matt-*`)
 

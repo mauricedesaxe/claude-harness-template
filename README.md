@@ -25,6 +25,8 @@ skills-lock.json            the source and content hash every vendored skill is 
 CLAUDE.md                   the instructions both runtimes load
 agents/
   clarity-reviewer.md       docs/comment + self-explanatory-code discipline (§21)
+  git-hygiene-reviewer.md   atomic conventional commits, linear history, PR meta
+  yagni-reviewer.md         speculative generality, in a diff or in a plan
 skills/
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
@@ -208,6 +210,10 @@ and delegates back to `CLAUDE.md` plus the `.claude/skills/` workflows.
 - Domain-specific reviewer agents (e.g. a `payments-reviewer` or `geo-scoring-reviewer`)
   — ship them in the project's own `.claude/agents/` and list them in the project's
   `CLAUDE.md`. The `review` skill picks them up automatically.
+- `code-reviewer`, `test-reviewer`, `plan-reviewer`, `data-reviewer`, `security-reviewer`
+  — they judge a repo against *its* standards (its module boundaries, its schema rules, its
+  commercial posture), so they belong to the repo that holds those standards. The three in
+  `agents/` survive globally because they encode habits that hold in every repo.
 - Hook configs (`lefthook.yml`, `.husky/`, etc.) — these are project-flavoured and live
   in the project repo.
 - Anything project-specific. The skills started life in a working product repo; the
