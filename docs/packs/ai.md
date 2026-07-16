@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/ai/**"
+  - "**/llm/**"
+  - "**/prompts/**"
+  - "**/*prompt*"
+---
+
 # AI / LLM domain pack
 
 AI / LLM domain pack. Layers on the spine ([`../PHILOSOPHY.md`](../PHILOSOPHY.md));
