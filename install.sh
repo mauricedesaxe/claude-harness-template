@@ -3,7 +3,11 @@ set -euo pipefail
 
 HARNESS_SOURCE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_HOME="$HOME/.claude"
+CLAUDE_RULES="$CLAUDE_HOME/rules"
 OPENCODE_HOME="$HOME/.config/opencode"
+OPENCODE_RULES="$OPENCODE_HOME/rules"
+# OpenCode resolves `~` itself, so its config keeps pointing at the rules after $HOME moves.
+OPENCODE_RULES_REF='~/.config/opencode/rules'
 
 die() {
   printf 'install.sh: %s\n' "$1" >&2
@@ -55,6 +59,43 @@ install_instructions() {
   cp -- "$HARNESS_SOURCE/CLAUDE.md" "$OPENCODE_HOME/AGENTS.md"
 }
 
+# OpenCode has no equivalent of `paths:`, so every instructions entry loads in every session and
+# the packs cannot scope themselves there.
+write_opencode_instructions() {
+  local config="$OPENCODE_HOME/opencode.json" existing='{}' staged
+
+  [ -f "$config" ] && existing=$(<"$config")
+
+  staged=$(mktemp -- "$config.XXXXXX")
+  printf '%s' "$existing" | jq \
+    --arg schema https://opencode.ai/config.json \
+    --arg prefix "$OPENCODE_RULES_REF/" \
+    --arg spine "$OPENCODE_RULES_REF/PHILOSOPHY.md" \
+    --arg packs "$OPENCODE_RULES_REF/packs/*.md" '
+      ."$schema" //= $schema
+      | .instructions = (
+          [(.instructions // [])[] | select(startswith($prefix) | not)] + [$spine, $packs]
+        )
+    ' >"$staged" || {
+    rm -f -- "$staged"
+    die "could not merge $config"
+  }
+  mv -- "$staged" "$config"
+}
+
+# Claude Code reads every .md under its rules dir. A rule with no `paths:` frontmatter loads in
+# every session; one with `paths:` loads only when the agent touches a file that matches. That is
+# what carries the spine into every repo with no per-repo setup while each pack applies itself by
+# paradigm. Spine and packs keep their source layout so the relative links between them resolve.
+install_philosophy() {
+  mkdir -p -- "$CLAUDE_RULES" "$OPENCODE_RULES"
+  cp -- "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$CLAUDE_RULES/PHILOSOPHY.md"
+  cp -- "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$OPENCODE_RULES/PHILOSOPHY.md"
+  replace_dir "$CLAUDE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
+  replace_dir "$OPENCODE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
+  write_opencode_instructions
+}
+
 install_skills() {
   local skill name
   for skill in "$HARNESS_SOURCE"/skills/*/; do
@@ -75,7 +116,10 @@ install_agents() {
   done
 }
 
+command -v jq >/dev/null || die "jq is needed to merge OpenCode's instructions array"
+
 install_instructions
+install_philosophy
 install_skills
 install_agents
 

@@ -1,3 +1,13 @@
+---
+paths:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "**/*.sql"
+  - "package.json"
+---
+
 # Web / backend domain pack
 
 Web / backend domain pack. Layers on [`../PHILOSOPHY.md`](../PHILOSOPHY.md) (the

@@ -14,8 +14,9 @@ Supported runtimes: [Claude Code](https://claude.com/claude-code) and
 ./install.sh
 ```
 
-It writes to `~/.claude/` (skills, agents, `CLAUDE.md`) and `~/.config/opencode/` (skills,
-agents, `AGENTS.md`), reading everything from this repo:
+Needs `bash` and `jq`. It writes to `~/.claude/` (skills, agents, rules, `CLAUDE.md`) and
+`~/.config/opencode/` (skills, agents, rules, `AGENTS.md`, `opencode.json`), reading
+everything from this repo:
 
 ```
 install.sh                  the whole install path
@@ -28,8 +29,8 @@ skills/
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
   matt-*/                   Matt Pocock's 22 skills, vendored (see below)
 docs/
-  PHILOSOPHY.md             durable "why" doc — single-instance, Postgres-only,
-                            no serverless, API-integration primitives, etc.
+  PHILOSOPHY.md             the paradigm-agnostic spine, installed as a rule
+  packs/                    per-paradigm packs, each scoped by its own `paths:`
 test/
   install-smoke.sh          runs install.sh under a temp HOME, asserts the tree
 ```
@@ -37,6 +38,12 @@ test/
 An agent is authored **once**, in Claude Code's format. OpenCode additionally requires a
 `mode:` and a `permission:` block, and the installer generates those from that single source
 at install time, so there is no second copy of an agent to keep in sync.
+
+The philosophy installs to `~/.claude/rules/`, which Claude Code reads in every repo with no
+per-repo setup. The spine carries no `paths:` frontmatter, so it is always loaded; each pack
+carries one, so it loads only when the agent touches a file it matches — a smart-contract repo
+gets the spine and is never lectured about Postgres. OpenCode has no equivalent, so it gets the
+same files via the `instructions` array in `opencode.json` and loads the packs unconditionally.
 
 `CLAUDE.md` is installed to `~/.claude/CLAUDE.md` and, under OpenCode's own name for the same
 thing, to `~/.config/opencode/AGENTS.md`.
