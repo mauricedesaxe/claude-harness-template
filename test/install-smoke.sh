@@ -31,6 +31,12 @@ body_of() {
   awk 'past { print } !past && NR > 1 && /^---$/ { past = 1 }' "$1"
 }
 
+# Empty for a rule Claude Code loads unconditionally, non-empty for one that scopes itself.
+rule_paths() {
+  [ "$(head -n 1 -- "$1")" = "---" ] || return 0
+  frontmatter_of "$1" | grep '^paths:'
+}
+
 TEST_HOME=$(mktemp -d)
 trap 'rm -rf -- "$TEST_HOME"' EXIT
 
@@ -46,6 +52,51 @@ assert_same_file "CLAUDE.md installs to Claude Code" \
   "$HARNESS_SOURCE/CLAUDE.md" "$claude/CLAUDE.md"
 assert_same_file "CLAUDE.md installs to OpenCode as AGENTS.md" \
   "$HARNESS_SOURCE/CLAUDE.md" "$opencode/AGENTS.md"
+
+assert_same_file "the spine installs as a Claude Code rule" \
+  "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$claude/rules/PHILOSOPHY.md"
+assert_same_file "the spine installs as an OpenCode rule" \
+  "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$opencode/rules/PHILOSOPHY.md"
+
+if [ -n "$(rule_paths "$claude/rules/PHILOSOPHY.md")" ]; then
+  fail "the spine carries no paths:, so it loads in every repo"
+else
+  pass "the spine carries no paths:, so it loads in every repo"
+fi
+
+missing_packs=""
+unscoped_packs=""
+for pack in "$HARNESS_SOURCE"/docs/packs/*.md; do
+  pack_name=$(basename -- "$pack")
+  for root in "$claude" "$opencode"; do
+    installed="$root/rules/packs/$pack_name"
+    if [ -f "$installed" ]; then
+      cmp -s -- "$pack" "$installed" || missing_packs="$missing_packs $installed(differs)"
+    else
+      missing_packs="$missing_packs $installed"
+    fi
+  done
+  [ -n "$(rule_paths "$claude/rules/packs/$pack_name")" ] ||
+    unscoped_packs="$unscoped_packs $pack_name"
+done
+
+if [ -z "$missing_packs" ]; then
+  pass "every pack installs to both runtimes"
+else
+  fail "every pack installs to both runtimes:$missing_packs"
+fi
+
+# Only Claude Code acts on `paths:`; OpenCode gets the same bytes and loads them unconditionally.
+if [ -z "$unscoped_packs" ]; then
+  pass "every pack carries paths:, so Claude Code applies it by paradigm"
+else
+  fail "every pack carries paths:, so Claude Code applies it by paradigm:$unscoped_packs"
+fi
+
+assert_contains "opencode.json instructions point at the spine" \
+  '~/.config/opencode/rules/PHILOSOPHY.md' "$opencode/opencode.json"
+assert_contains "opencode.json instructions point at the packs" \
+  '~/.config/opencode/rules/packs/*.md' "$opencode/opencode.json"
 
 assert_same_file "lazar-tldraw installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$claude/skills/lazar-tldraw/SKILL.md"
@@ -133,6 +184,12 @@ else
 fi
 
 touch "$claude/skills/lazar-tldraw/STALE.md"
+touch "$claude/rules/packs/stale-pack.md"
+jq '.model = "anthropic/claude-opus-4-5"
+  | .instructions += ["~/notes/house-style.md", "~/.config/opencode/rules/OLD-SPINE.md"]' \
+  "$opencode/opencode.json" >"$opencode/opencode.json.seeded"
+mv "$opencode/opencode.json.seeded" "$opencode/opencode.json"
+
 HOME="$TEST_HOME" "$HARNESS_SOURCE/install.sh" >/dev/null || fail "installing twice is safe"
 
 if [ -e "$claude/skills/lazar-tldraw/STALE.md" ]; then
@@ -140,6 +197,31 @@ if [ -e "$claude/skills/lazar-tldraw/STALE.md" ]; then
 else
   pass "reinstalling purges a file the source no longer carries"
 fi
+
+if [ -e "$claude/rules/packs/stale-pack.md" ]; then
+  fail "reinstalling purges a pack the source no longer carries"
+else
+  pass "reinstalling purges a pack the source no longer carries"
+fi
+
+harness_entries=$(jq '[.instructions[] | select(startswith("~/.config/opencode/rules/"))] | length' \
+  "$opencode/opencode.json")
+if [ "$harness_entries" -eq 2 ]; then
+  pass "reinstalling does not duplicate the harness instructions"
+else
+  fail "reinstalling does not duplicate the harness instructions: got $harness_entries entries"
+fi
+
+if grep -qF -- '~/.config/opencode/rules/OLD-SPINE.md' "$opencode/opencode.json"; then
+  fail "reinstalling drops a harness instructions entry the source no longer carries"
+else
+  pass "reinstalling drops a harness instructions entry the source no longer carries"
+fi
+
+assert_contains "reinstalling keeps an instructions entry the user added" \
+  '~/notes/house-style.md' "$opencode/opencode.json"
+assert_contains "reinstalling keeps unrelated opencode.json keys" \
+  'anthropic/claude-opus-4-5' "$opencode/opencode.json"
 
 if [ "$failures" -eq 0 ]; then
   echo "install-smoke: all assertions passed"
