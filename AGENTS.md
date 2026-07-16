@@ -1,29 +1,27 @@
 # AGENTS.md
 
-Guidance for Codex and OpenAI agents working in this repository.
+Guidance for Codex, OpenCode, and any other agent working in **this** repository.
 
-<!-- BEGIN CLAUDE HARNESS CODEX BRIDGE -->
-## Claude Mirror
+`CLAUDE.md` here is not this repo's rules file. It's the **payload**: the instructions
+`install.sh` writes to `~/.claude/CLAUDE.md` and, under OpenCode's name for the same thing,
+`~/.config/opencode/AGENTS.md`. Read it as both, because a harness that doesn't hold in its own
+repo doesn't hold anywhere.
 
-This repository is bootstrapped from `lazar-harness`. `CLAUDE.md` is the
-canonical project guidance for both Claude Code and Codex. Treat it as if its
-contents were copied here, unless higher-priority Codex instructions or a more
-specific nested `AGENTS.md` conflicts.
+It points at the philosophy rather than restating it, and the philosophy is installed, not carried
+by a repo: `~/.claude/rules/PHILOSOPHY.md` with the packs under `~/.claude/rules/packs/`, or the
+same files under `~/.config/opencode/rules/`. This repo also holds their **source**, at
+`docs/PHILOSOPHY.md` and `docs/packs/`. Edit the source here; read the installed copy anywhere
+else. `§N` numbers are stable IDs, so a citation resolves through the spine's Section index.
 
-At the start of substantive work:
+What's specific to this repo, and easy to get wrong:
 
-- Read `CLAUDE.md`.
-- Read the relevant `docs/PHILOSOPHY.md` (and its `docs/packs/*.md`) sections when
-  `CLAUDE.md` references them or when a rule needs its reasoning. `§` numbers are stable
-  IDs; the spine's Section index says which file each lives in.
-- When the user invokes a workflow — `work`, `research`, `review`, `commit`, `ship`,
-  `setup`, or `capture` (Codex: `$work`; Claude Code: `/work`) — read the matching
-  `.claude/skills/<name>/SKILL.md` and follow it as workflow guidance. These skills
-  live under `.claude/` and are intentionally not duplicated into `.agents/skills`;
-  read them from here so there's a single source of truth.
-- When a workflow references reviewer agents in `.claude/agents/`, use those files
-  as the review prompt or checklist.
-
-Keep durable project rules in `CLAUDE.md`. Keep this file thin; it exists so Codex
-loads the same project guidance that Claude Code loads.
-<!-- END CLAUDE HARNESS CODEX BRIDGE -->
+- **`CLAUDE.md` has a line budget**, asserted by `test/install-smoke.sh`: under 200 lines, because
+  adherence drops as it grows. Make budget by pointing at the philosophy or at `/matt-ask-matt`,
+  not by dropping a rule.
+- **Its `surface:local` block is generated per surface.** `install.sh` swaps it for the sandbox
+  default. Edit the block, and the sandbox text in `install.sh`, together.
+- **Nothing under `skills/matt-*` or `skills/lazar-tldraw` is hand-edited.** Both are vendored and
+  regenerated. Edit upstream or `patches/lazar-tldraw.patch`, then re-run `./vendor-skills.sh`.
+- **Never run `install.sh` by hand.** It honours `$HOME`, `$CLAUDE_CONFIG_DIR`, and
+  `$XDG_CONFIG_HOME`, so it will overwrite a live harness. Run `bash test/install-smoke.sh`, which
+  scrubs the environment first.
