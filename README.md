@@ -14,9 +14,18 @@ Supported runtimes: [Claude Code](https://claude.com/claude-code) and
 ./install.sh
 ```
 
-Needs `bash` and `jq`. It writes to `~/.claude/` (skills, agents, rules, `CLAUDE.md`) and
-`~/.config/opencode/` (skills, agents, rules, `AGENTS.md`, `opencode.json`), reading
-everything from this repo:
+Needs `bash` and `jq`. It writes to Claude Code's config home (skills, agents, rules,
+`CLAUDE.md`) and OpenCode's (skills, agents, rules, `AGENTS.md`, `opencode.json`), reading
+everything from this repo. Each is resolved the way the runtime itself resolves it, so the
+harness lands where it is actually read:
+
+| Runtime     | Config home                                 |
+| ----------- | ------------------------------------------- |
+| Claude Code | `${CLAUDE_CONFIG_DIR:-~/.claude}`           |
+| OpenCode    | `${XDG_CONFIG_HOME:-~/.config}/opencode`    |
+
+With neither variable set that is `~/.claude/` and `~/.config/opencode/`, which is what the
+paths below assume.
 
 ```
 install.sh                  the whole install path

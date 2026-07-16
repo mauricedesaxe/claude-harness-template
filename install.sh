@@ -2,12 +2,18 @@
 set -euo pipefail
 
 HARNESS_SOURCE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-CLAUDE_HOME="$HOME/.claude"
+CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CLAUDE_RULES="$CLAUDE_HOME/rules"
-OPENCODE_HOME="$HOME/.config/opencode"
+OPENCODE_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
 OPENCODE_RULES="$OPENCODE_HOME/rules"
-# OpenCode resolves `~` itself, so its config keeps pointing at the rules after $HOME moves.
-OPENCODE_RULES_REF='~/.config/opencode/rules'
+
+# The instructions merge drops its own previous entries by matching this prefix, so changing the
+# spelling orphans an existing install's rather than replacing them. `~` is what OpenCode expands
+# and what is already on disk; only rules landing outside $HOME need the absolute form.
+case "$OPENCODE_RULES" in
+"$HOME"/*) OPENCODE_RULES_REF="~/${OPENCODE_RULES#"$HOME"/}" ;;
+*) OPENCODE_RULES_REF="$OPENCODE_RULES" ;;
+esac
 
 die() {
   printf 'install.sh: %s\n' "$1" >&2
