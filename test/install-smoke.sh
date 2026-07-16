@@ -60,10 +60,11 @@ canary_before=$(canary_digest)
 
 # An allowlist, not a blocklist: only HOME and PATH reach the installer, so a redirect variable
 # added to install.sh later is neutralised without this test having to learn its name.
+#
 run_installer() {
   local home=$1
   shift
-  env -i PATH="$PATH" HOME="$home" "$@" "$HARNESS_SOURCE/install.sh"
+  env -i PATH="$PATH" HOME="$home" "$@" "$HARNESS_SOURCE/install.sh" --install
 }
 
 run_installer "$TEST_HOME" >/dev/null || {
@@ -412,7 +413,20 @@ for root in "$claude" "$opencode"; do
   printf -- 'stale\n' >"$root/skills/lazar-work/scripts/run.sh"
 done
 
-run_installer "$TEST_HOME" >/dev/null || fail "installing twice is safe"
+reinstall_report=$(run_installer "$TEST_HOME") || fail "installing twice is safe"
+
+# The run that applies it prints the same list as the run that only reports, which is the half a
+# --install caller ever sees: the suite reaches this path without going through the bare form once,
+# and so would anyone who read the README's second line first.
+claude_real=$(cd -- "$claude" && pwd -P)
+
+for reported in "skills/lazar-work" "agents/code-reviewer.md" "skills/lazar-tldraw/STALE.md"; do
+  if printf '%s\n' "$reinstall_report" | grep -qF -- "delete  $claude_real/$reported"; then
+    pass "the run that installs names $reported before purging it"
+  else
+    fail "the run that installs names $reported before purging it"
+  fi
+done
 
 if [ -e "$claude/skills/lazar-tldraw/STALE.md" ]; then
   fail "reinstalling purges a file the source no longer carries"
@@ -632,6 +646,109 @@ else
 fi
 
 rm -rf -- "$REDIRECT_HOME"
+
+# The unsafe invocation, driven rather than described: no --install, with CLAUDE_CONFIG_DIR
+# pointing at a live harness. install.sh carries why that shape cost someone their config.
+#
+# Deliberately not run_installer: that appends --install, and what is under test is the run that
+# does not. The scrub is the same, because the hole was never the environment.
+UNGUARDED_HOME=$(mktemp -d)
+live_claude="$UNGUARDED_HOME/live-claude"
+live_xdg="$UNGUARDED_HOME/live-xdg"
+live_skills="$UNGUARDED_HOME/real-skills"
+
+# Symlinked the way this machine really is, so the report has to resolve to say anything true: the
+# path handed in names a link that survives, and the tree that loses the skill is the one behind it.
+# Left unlinked, the resolution would only have teeth where /var happens to resolve to /private/var,
+# which is the laptop and not the Linux sandbox this same suite runs in.
+mkdir -p -- "$live_claude/agents" "$live_xdg/opencode" \
+  "$live_skills/hand-written-skill" "$live_skills/lazar-tldraw"
+ln -s -- "$live_skills" "$live_claude/skills"
+
+printf -- '---\nname: hand-written-skill\n---\n' >"$live_skills/hand-written-skill/SKILL.md"
+printf -- '---\nname: lazar-tldraw\n---\n' >"$live_skills/lazar-tldraw/SKILL.md"
+printf -- '---\nname: hand-written-agent\n---\n' >"$live_claude/agents/hand-written-agent.md"
+printf 'a live harness lives here\n' >"$live_claude/CLAUDE.md"
+
+live_digest() {
+  find "$UNGUARDED_HOME" | sort
+  find "$UNGUARDED_HOME" -type f -exec cksum {} + | sort
+}
+
+live_before=$(live_digest)
+unguarded_report=$(env -i PATH="$PATH" HOME="$UNGUARDED_HOME" \
+  CLAUDE_CONFIG_DIR="$live_claude" XDG_CONFIG_HOME="$live_xdg" \
+  "$HARNESS_SOURCE/install.sh" 2>&1)
+unguarded_status=$?
+
+if [ "$(live_digest)" = "$live_before" ]; then
+  pass "an install.sh run with no --install writes nothing into a live config home"
+else
+  fail "an install.sh run with no --install writes nothing into a live config home"
+fi
+
+# Knowable before it is deleted. The entry is matched with its verb and its column, so a report
+# that named it under some other heading does not pass, and the paths are the resolved ones because
+# that is what replace_dir would delete.
+live_real=$(cd -- "$live_claude" && pwd -P)
+live_skills_real=$(cd -- "$live_skills" && pwd -P)
+
+for doomed in "$live_skills_real/hand-written-skill" "$live_real/agents/hand-written-agent.md"; do
+  if printf '%s\n' "$unguarded_report" | grep -qF -- "delete  $doomed"; then
+    pass "a run with no --install names ${doomed##*/} as a deletion"
+  else
+    fail "a run with no --install names ${doomed##*/} as a deletion"
+  fi
+done
+
+# The incident took three things and the third was a hand-written CLAUDE.md, which is replaced
+# rather than deleted and so has to be named under its own verb or the report covers two thirds.
+if printf '%s\n' "$unguarded_report" | grep -qF -- "replace $live_real/CLAUDE.md"; then
+  pass "a run with no --install names the CLAUDE.md it would replace"
+else
+  fail "a run with no --install names the CLAUDE.md it would replace"
+fi
+
+# The other half of a true list: a report that condemned everything would satisfy every assertion
+# above while telling the reader nothing. lazar-tldraw is shipped, so it survives, so it must not
+# be named.
+if printf '%s\n' "$unguarded_report" | grep -qF -- "delete  $live_skills_real/lazar-tldraw"; then
+  fail "a run with no --install leaves a skill the harness ships out of the delete list"
+else
+  pass "a run with no --install leaves a skill the harness ships out of the delete list"
+fi
+
+# A refusal that exits non-zero reads as an invocation to fix, and the agent that fixes it is the
+# agent this guard exists to stop. A report that exits 0 has already answered the question.
+if [ "$unguarded_status" -eq 0 ]; then
+  pass "a run with no --install exits 0 rather than inviting a retry"
+else
+  fail "a run with no --install exits 0 rather than inviting a retry: $unguarded_status"
+fi
+
+rm -rf -- "$UNGUARDED_HOME"
+
+# --install is the only spelling that authorises a write, so a near miss has to land on the refusal
+# and not on the install. A typo that fell through to APPLY=false would report and exit 0, which
+# reads as success to whatever ran it.
+BOGUS_ARG_HOME=$(mktemp -d)
+
+for bogus in --install=true -install --INSTALL --force; do
+  if env -i PATH="$PATH" HOME="$BOGUS_ARG_HOME" \
+    "$HARNESS_SOURCE/install.sh" "$bogus" >/dev/null 2>&1; then
+    fail "$bogus is refused rather than taken for --install"
+  else
+    pass "$bogus is refused rather than taken for --install"
+  fi
+done
+
+if [ -e "$BOGUS_ARG_HOME/.claude" ]; then
+  fail "an argument the installer does not take writes nothing at all"
+else
+  pass "an argument the installer does not take writes nothing at all"
+fi
+
+rm -rf -- "$BOGUS_ARG_HOME"
 
 if [ "$(canary_digest)" = "$canary_before" ]; then
   pass "the installer writes nothing outside the home the test gave it"

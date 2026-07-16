@@ -22,6 +22,7 @@ What's specific to this repo, and easy to get wrong:
   default. Edit the block, and the sandbox text in `install.sh`, together.
 - **Nothing under `skills/matt-*` or `skills/lazar-tldraw` is hand-edited.** Both are vendored and
   regenerated. Edit upstream or `patches/lazar-tldraw.patch`, then re-run `./vendor-skills.sh`.
-- **Never run `install.sh` by hand.** It honours `$HOME`, `$CLAUDE_CONFIG_DIR`, and
-  `$XDG_CONFIG_HOME`, so it will overwrite a live harness. Run `bash test/install-smoke.sh`, which
-  scrubs the environment first.
+- **Never pass `--install` to `install.sh` here.** It honours `$HOME`, `$CLAUDE_CONFIG_DIR` and
+  `$XDG_CONFIG_HOME`, so with the flag it overwrites whatever live harness the shell you are
+  standing in is configured with. Exercise it with `bash test/install-smoke.sh`, which scrubs the
+  environment first. Without the flag it only reports, so running it bare is safe.
