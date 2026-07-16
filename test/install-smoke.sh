@@ -307,6 +307,26 @@ else
   fail "the per-repo reviewers install nowhere globally:$leaked"
 fi
 
+# Every skill deleted with the per-repo bootstrap was unprefixed, and every skill the harness
+# still ships is `lazar-` (mine) or `matt-` (vendored). So the prefix rule is what keeps a
+# deleted name from returning, and asserting the rule outlives asserting a list of dead names,
+# which would need hand-editing at every future deletion and says nothing about the next one.
+unprefixed_skill=""
+for root in "$claude" "$opencode"; do
+  for installed in "$root"/skills/*/; do
+    case "$(basename -- "${installed%/}")" in
+    lazar-* | matt-*) ;;
+    *) unprefixed_skill="$unprefixed_skill ${installed%/}" ;;
+    esac
+  done
+done
+
+if [ -z "${unprefixed_skill// /}" ]; then
+  pass "every installed skill is prefixed, so no deleted skill returns under its old name"
+else
+  fail "every installed skill is prefixed:$unprefixed_skill"
+fi
+
 touch "$claude/skills/lazar-tldraw/STALE.md"
 touch "$claude/rules/packs/stale-pack.md"
 jq '.model = "anthropic/claude-opus-4-5"
