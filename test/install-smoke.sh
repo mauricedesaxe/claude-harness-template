@@ -389,6 +389,14 @@ mv "$opencode/opencode.json.seeded" "$opencode/opencode.json"
 printf -- '---\nname: code-reviewer\n---\n' >"$claude/agents/code-reviewer.md"
 printf -- '---\nmode: subagent\n---\n' >"$opencode/agents/code-reviewer.md"
 
+# Same for a skill: deleting lazar-work from the repo does nothing for the disk of someone who
+# installed it while the harness still shipped it, and it keeps loading until an install removes it.
+for root in "$claude" "$opencode"; do
+  mkdir -p -- "$root/skills/lazar-work/scripts"
+  printf -- '---\nname: lazar-work\n---\n' >"$root/skills/lazar-work/SKILL.md"
+  printf -- 'stale\n' >"$root/skills/lazar-work/scripts/run.sh"
+done
+
 run_installer "$TEST_HOME" >/dev/null || fail "installing twice is safe"
 
 if [ -e "$claude/skills/lazar-tldraw/STALE.md" ]; then
@@ -432,6 +440,24 @@ if [ -z "${stale// /}" ]; then
 else
   fail "reinstalling purges an agent the harness no longer ships:$stale"
 fi
+
+stale_skill=""
+for root in "$claude" "$opencode"; do
+  [ -e "$root/skills/lazar-work" ] && stale_skill="$stale_skill $root/skills/lazar-work"
+done
+
+if [ -z "${stale_skill// /}" ]; then
+  pass "reinstalling purges a skill the harness no longer ships"
+else
+  fail "reinstalling purges a skill the harness no longer ships:$stale_skill"
+fi
+
+# The purge is a whole-tree replace, so the same install that drops lazar-work must still land
+# every skill the harness does ship, supporting files and all.
+assert_same_file "reinstalling keeps a skill the harness still ships" \
+  "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$claude/skills/lazar-tldraw/SKILL.md"
+assert_same_file "reinstalling keeps a still-shipped skill's supporting files" \
+  "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$opencode/skills/lazar-tldraw/LICENSE"
 
 for agent in git-hygiene-reviewer clarity-reviewer yagni-reviewer; do
   assert_agent_installs "$agent"
