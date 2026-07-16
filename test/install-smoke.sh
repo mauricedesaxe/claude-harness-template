@@ -136,6 +136,11 @@ assert_same_file "lazar-standup installs to Claude Code" \
 assert_same_file "lazar-standup installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-standup/SKILL.md" "$opencode/skills/lazar-standup/SKILL.md"
 
+assert_same_file "lazar-research installs to Claude Code" \
+  "$HARNESS_SOURCE/skills/lazar-research/SKILL.md" "$claude/skills/lazar-research/SKILL.md"
+assert_same_file "lazar-research installs to OpenCode" \
+  "$HARNESS_SOURCE/skills/lazar-research/SKILL.md" "$opencode/skills/lazar-research/SKILL.md"
+
 assert_same_file "lazar-review installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-review/SKILL.md" "$claude/skills/lazar-review/SKILL.md"
 assert_same_file "lazar-review installs to OpenCode" \
