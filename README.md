@@ -11,8 +11,19 @@ Supported runtimes: [Claude Code](https://claude.com/claude-code) and
 ## Install
 
 ```sh
-./install.sh
+./install.sh            # says what it would do to this machine, writes nothing
+./install.sh --install  # does it
 ```
+
+Writing is opt-in, and the run without the flag is the one to read first: it prints the two config
+homes it resolved, the files it would replace, and **every entry it would delete**, then exits
+having touched nothing. An install replaces `skills/`, `agents/` and `rules/packs/` whole, so
+anything in them this repo has no name for goes, down to a file hand-edited inside a skill that
+otherwise stays. That list is worth reading before it happens rather than after, and the run that
+applies it prints the same one.
+
+A script that installs when you merely run it is a script that installs when nobody meant to.
+`install.sh` carries the story of the install nobody meant.
 
 Needs `bash` and `jq`. It writes to Claude Code's config home (skills, agents, rules,
 `CLAUDE.md`) and OpenCode's (skills, agents, rules, `AGENTS.md`, `opencode.json`), reading
@@ -68,10 +79,10 @@ same files via the `instructions` array in `opencode.json` and loads the packs u
 `CLAUDE.md` is installed to `~/.claude/CLAUDE.md` and, under OpenCode's own name for the same
 thing, to `~/.config/opencode/AGENTS.md`.
 
-It is authored for a laptop, and `HARNESS_SURFACE=sandbox ./install.sh` generates the one block
-that differs in an Open-Inspect sandbox: which jj workspace to work in. `§28` states the isolation
-principle for both, so only the default is generated, the same way an OpenCode agent's frontmatter
-is. `install.sh` carries the reasoning at the transform.
+It is authored for a laptop, and `HARNESS_SURFACE=sandbox ./install.sh --install` generates the one
+block that differs in an Open-Inspect sandbox: which jj workspace to work in. `§28` states the
+isolation principle for both, so only the default is generated, the same way an OpenCode agent's
+frontmatter is. `install.sh` carries the reasoning at the transform.
 
 ## Machine-local repo notes
 
@@ -174,7 +185,7 @@ compiled. The `lazar-tldraw` skill additionally needs `@kitschpatrol/tldraw-cli`
 There used to be a `/bootstrap-harness` skill that cloned this repo into whatever project you
 ran it in and copied the harness there. Every run minted another fork that started drifting the
 day it landed, which is the problem this repo now exists to end. It is deleted, along with the
-`.claude/` skill tree it installed. Both are readable in git history. Use `./install.sh`.
+`.claude/` skill tree it installed. Both are readable in git history. Use `./install.sh --install`.
 
 Improvements still land here first (open a PR against
 `mauricedesaxe/claude-harness-template`), and they reach you by reinstalling rather than by

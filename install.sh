@@ -25,14 +25,73 @@ die() {
   exit 1
 }
 
+APPLY=false
+
+# `rm -rf` unlinks a symlink rather than following it, so a destination that is one has to be
+# resolved before it is replaced, and named as what it resolves to before it is reported: on this
+# machine ~/.claude-personal/skills is a link to ~/.claude/skills, and both the deletion and the
+# report are only true of the target. CDPATH would print the directory it matched on a relative
+# path, and this is a command substitution, so it would land in the caller's variable.
+resolve_dir() {
+  CDPATH='' cd -- "$1" && pwd -P
+}
+
+# A destination is replaced wholesale, so whatever is in it that the source has no name for is
+# what an install costs, and it is the same list either way: the run that applies it prints it too.
+# Recursive, because the replace reaches all the way down and a report that stopped at the top
+# would keep quiet about a file hand-edited inside a directory the harness does still ship. It
+# prunes at the shallowest name that goes, so an orphan skill is one line rather than its whole
+# tree, and it never reads the report out of a directory it could not read.
+report_replace() {
+  local dest=$1 source=$2 entries entry name
+  [ -d "$dest" ] || return 0
+  dest=$(resolve_dir "$dest")
+  entries=$(find "$dest" -mindepth 1 -maxdepth 1 2>/dev/null | sort || true)
+  [ -n "$entries" ] || return 0
+  while IFS= read -r entry; do
+    name=${entry##*/}
+    if [ ! -e "$source/$name" ]; then
+      printf '  %-7s %s\n' delete "$entry"
+    elif [ -d "$entry" ] && [ -d "$source/$name" ]; then
+      report_replace "$entry" "$source/$name"
+    fi
+  done <<<"$entries"
+}
+
+# Resolved through its parent for the same reason report_replace resolves: one report naming the
+# same directory two ways is a report the reader has to check rather than read.
+report_write() {
+  local dest=$1 verb=${2:-replace}
+  if [ -e "$dest" ]; then
+    printf '  %-7s %s/%s\n' "$verb" "$(resolve_dir "$(dirname -- "$dest")")" "${dest##*/}"
+  fi
+}
+
+report_plan() {
+  printf 'install.sh: %s\n' "$1"
+  printf '  claude    %s\n' "$CLAUDE_HOME"
+  printf '  opencode  %s\n' "$OPENCODE_HOME"
+  printf '  surface   %s\n' "$HARNESS_SURFACE"
+  report_write "$CLAUDE_HOME/CLAUDE.md"
+  report_write "$OPENCODE_HOME/AGENTS.md"
+  report_write "$CLAUDE_RULES/PHILOSOPHY.md"
+  report_write "$OPENCODE_RULES/PHILOSOPHY.md"
+  report_write "$OPENCODE_HOME/opencode.json" merge
+  report_replace "$CLAUDE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
+  report_replace "$OPENCODE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
+  report_replace "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
+  report_replace "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
+  report_replace "$CLAUDE_HOME/agents" "$HARNESS_SOURCE/agents"
+  report_replace "$OPENCODE_HOME/agents" "$HARNESS_SOURCE/agents"
+}
+
 # Stage the copy before deleting anything: a destination that resolves back into the source
 # (a symlinked ~/.claude/skills, say) would otherwise have the payload deleted out from under it.
-# Resolve a symlinked destination first, because `rm -rf` unlinks a symlink rather than following
-# it: dropping a real directory over the link would leave the tree it pointed at untouched, and a
-# tree replaced wholesale that way purges nothing a runtime reading the other path still loads.
+# Dropping a real directory over a link would leave the tree it pointed at untouched, and a tree
+# replaced wholesale that way purges nothing a runtime reading the other path still loads.
 replace_dir() {
   local dest=$1 source=$2 staged
-  [ -d "$dest" ] && dest=$(cd -- "$dest" && pwd -P)
+  [ -d "$dest" ] && dest=$(resolve_dir "$dest")
   mkdir -p -- "$(dirname -- "$dest")"
   staged=$(mktemp -d -- "$(dirname -- "$dest")/.install-XXXXXX")
   cp -R -- "$source" "$staged/payload"
@@ -182,12 +241,40 @@ install_agents() {
   rm -rf -- "$built"
 }
 
-command -v jq >/dev/null || die "jq is needed to merge OpenCode's instructions array"
+# Writing is opt-in because not writing has to be what a script nobody has read does. A
+# code-reviewer subagent ran this file with no argument while CLAUDE_CONFIG_DIR pointed at a live
+# harness, and the purge wiped it: 12 skills, 5 agents and a hand-written CLAUDE.md, off the
+# machine it was reviewing on. It had been told not to; the brief reached the agent that spawned it
+# and stopped there, which is the whole reason this is a line of code and not a line of prose.
+#
+# The flag rides argv rather than the environment on purpose. The test scrubs with `env -i` and
+# passes it alongside, so the one thing that authorises a write is the one thing that cannot arrive
+# by inheritance from the shell an agent happens to be standing in. A `HARNESS_INSTALL=1` would
+# read the same and hand that back.
+for arg in "$@"; do
+  case "$arg" in
+  --install) APPLY=true ;;
+  *) die "$arg is not an argument this takes; it takes --install and nothing else" ;;
+  esac
+done
 
 case "$HARNESS_SURFACE" in
 local | sandbox) ;;
 *) die "HARNESS_SURFACE is $HARNESS_SURFACE; it takes local or sandbox" ;;
 esac
+
+# Only the merge needs it, so a run that reports and stops is not the place to insist on it.
+[ "$APPLY" = false ] ||
+  command -v jq >/dev/null ||
+  die "jq is needed to merge OpenCode's instructions array"
+
+if [ "$APPLY" = false ]; then
+  report_plan "this is what installing would do to this machine"
+  printf 'install.sh: nothing was written. Re-run with --install to apply it.\n'
+  exit 0
+fi
+
+report_plan "installing"
 
 install_instructions
 install_philosophy
