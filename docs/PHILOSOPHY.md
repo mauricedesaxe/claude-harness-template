@@ -654,6 +654,31 @@ Don't write comments that:
   belongs in the commit message and rots as the codebase evolves.
 - Restate the function signature in prose above the function.
 
+**A comment that earns its keep is native.** Clearing the bar above isn't enough;
+the comment also has to sit where the reader will meet it. You read code at the
+call site, so an explanation the editor can't surface when you hover the symbol
+lives somewhere you aren't looking. A comment about a **symbol** (a function,
+class, constant, type, field) therefore attaches to that symbol in the form the
+language's tooling reads: a docstring in Python, `/** */` or `///` in
+TypeScript, Rust, Go, Java, C#. A banner ribbon above the symbol, a why-comment
+orphaned from it by blank lines or decorators or an import block, a file-top note
+explaining one function buried below, a plain `//` where the language has a doc
+form. Each of those fails even when its content is correct, because correct
+content nobody hovers is a doc that rots unread. The fix is always to move it,
+never to delete it.
+
+The test is one question: hover the symbol in an editor, does this text come up?
+Three things that look like violations aren't, and the rule doesn't reach them:
+
+- **A *why* about one line or one branch, sitting on that line** inside the body.
+  It's already where it's read; there's no hover to miss. It is local, not
+  floating.
+- **Comments where no doc form reaches**: inside a function body, beside a
+  config entry, on a shell / YAML / SQL / Dockerfile line, above a regex. Judge
+  these on content alone.
+- **A file- or module-level comment about the file or module.** Its subject is
+  the file, so the file's top *is* its symbol.
+
 **Commit messages.** Same rule, harder discipline. The subject line *is* the
 *what* in compressed form (Conventional Commits). The body — when present —
 explains the **why** and the **how-if-non-obvious**. Skip the body when the
