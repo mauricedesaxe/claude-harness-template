@@ -79,6 +79,22 @@ assert_same_file "CLAUDE.md installs to Claude Code" \
 assert_same_file "CLAUDE.md installs to OpenCode as AGENTS.md" \
   "$HARNESS_SOURCE/CLAUDE.md" "$opencode/AGENTS.md"
 
+# Adherence drops as the file grows, and the smart zone is not there to be spent on rules. The
+# budget only holds while the file points at the philosophy and the router instead of restating them.
+if [ "$(wc -l <"$claude/CLAUDE.md")" -lt 200 ]; then
+  pass "the installed CLAUDE.md stays under 200 lines"
+else
+  fail "the installed CLAUDE.md stays under 200 lines: $(wc -l <"$claude/CLAUDE.md")"
+fi
+
+# The skeleton this file grew out of shipped its TODOs to every install, which is what made the
+# installer unrunnable against a real harness.
+if grep -q 'TODO' "$claude/CLAUDE.md"; then
+  fail "the installed CLAUDE.md carries no unfilled TODO"
+else
+  pass "the installed CLAUDE.md carries no unfilled TODO"
+fi
+
 assert_same_file "the spine installs as a Claude Code rule" \
   "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$claude/rules/PHILOSOPHY.md"
 assert_same_file "the spine installs as an OpenCode rule" \
