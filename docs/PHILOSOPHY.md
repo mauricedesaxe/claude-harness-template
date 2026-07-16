@@ -812,49 +812,48 @@ when the wider team is on plain git: the shared history is git, the local
 working copy is jj, and `jj git push` / `jj git fetch` bridge the two. Most
 single-author projects can be jj end to end.
 
+The operational rules live in `CLAUDE.md`: the verbs, where a workspace is cut,
+how bookmarks are named, how a PR is pushed and merged. This section is why
+they're shaped that way, so read it when one of them looks arbitrary or an edge
+case falls outside it.
+
 **The isolation unit is the workspace, not the worktree** (this is the load-
 bearing reason jj changes §14). jj has a *single* working-copy commit `@` per
-workspace. A git worktree gives you a second checkout of the files but it does
-**not** give you a second `@` — run jj from inside a git worktree and it
-snapshots and mutates the *default* workspace's `@`. So concurrent agents
-sharing one jj repo must each get their own **`jj workspace`**, not a git
-worktree:
-
-- `jj workspace add --name <slug> --revision 'trunk()' <path>` — new workspace
-  with its own `@` based on freshly-fetched trunk (run `jj git fetch` first;
-  `mkdir -p` the parent, since `jj workspace add` won't create it).
-- Work there, then `jj workspace forget <slug>` and remove the directory when
-  done. All workspaces share one repository, so a jj GUI (e.g. GG) still shows
-  every workspace's `@` in a single graph.
+workspace. A git worktree gives you a second checkout of the files but no second
+`@`, so jj run from inside one snapshots and mutates the *default* workspace's
+`@`. Two agents sharing an `@` therefore collide even though their files are
+separate: each one's edits land in the other's snapshot, and a commit picks up
+the wrong directory's work. A branch isn't isolation either, since one workspace
+has one working copy no matter how many branches point into it. Isolation means
+a **`jj workspace`**, which carries its own `@`, and all workspaces share one
+repository, so a jj GUI still shows every `@` in a single graph.
 
 **Snapshot model, not staging.** jj auto-snapshots the working directory into
-`@` on every command — there is no index, no `git add`. The consequences ripple
-through the skills:
+`@` on every command. There is no index and no `git add`, and the consequences
+ripple through the workflow:
 
-- A commit is `jj commit [paths] -m "..."` (finalizes `@`, or just the named
-  paths, into a commit and leaves a fresh `@` on top). No staging step to get
-  wrong, and atomic splitting is `jj commit <paths>` per logical unit.
-- Folding a fix into an earlier commit is `jj squash --from <rev> --into <rev>`,
-  never a git `--fixup` dance.
-- The reviewable diff of a branch — committed *and* uncommitted at once — is
-  `jj diff --from 'trunk()' --to @`, because uncommitted edits already live in
-  `@`. One command replaces git's staged/unstaged/committed three-way gather.
+- Splitting a change into atomic commits is a property of the commit verb, not a
+  staging ritual you can get wrong.
+- Folding a fix into an earlier commit is a first-class operation, not a
+  `--fixup` dance.
+- The reviewable diff of a branch is one command, because uncommitted edits
+  already live in the graph.
 
-**Bookmarks are branches.** jj's named pointers are *bookmarks*. The branch you
-open a PR from is a bookmark pointing at your tip commit: `jj bookmark set
-<branch> -r @-` then `jj git push --bookmark <branch>` (auto-tracks the remote,
-does the safe force-with-lease). Rebasing onto advanced trunk is
-`jj git fetch && jj rebase -d 'trunk()'` then a plain `jj git push` — jj's push
-is force-with-lease by default, so there is no `--force` to fumble. The PR
-itself is still `gh` (jj has no PR concept), and the merge is still
-`gh pr merge --rebase` on the pushed git commits.
+git's staged / unstaged / committed three-way gather has no analogue here to
+lose track of.
+
+**Bookmarks are branches, and pushing is safe by default.** jj's named pointers
+are *bookmarks*, and the branch a PR opens from is a bookmark pointing at your
+tip commit. jj's push is force-with-lease by default, so rebasing onto advanced
+trunk and re-pushing carries no `--force` to fumble. jj has no PR concept, so the
+PR and the merge stay `gh`'s job, operating on the git commits jj pushed.
 
 **jj does not fire git hooks.** A colocated repo's `pre-commit` / `commit-msg`
-hooks do **not** run under `jj commit`. So the two guarantees those hooks
-normally give — conventional-commit format and a green lint/typecheck/test gate
-— move into the workflow itself: the `commit` skill validates the message shape
-and runs the project's checks before finalizing, and CI re-enforces both
-server-side (§24). Don't assume a hook caught what jj silently skipped.
+hooks do **not** run under `jj commit`, because there's no staging step for them
+to hang on. The two guarantees those hooks normally give, conventional-commit
+format and a green lint/typecheck/test gate, therefore have to move into the
+workflow itself and into CI (§24). Don't assume a hook caught what jj silently
+skipped.
 
 **Why.** jj makes the §14 habits (small atomic commits, isolated concurrent
 work, fearless rebasing) cheap enough that they actually happen. The cost is one
