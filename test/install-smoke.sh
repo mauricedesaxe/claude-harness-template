@@ -105,6 +105,33 @@ assert_same_file "lazar-tldraw installs to OpenCode" \
 assert_same_file "a skill's supporting files travel with it" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$claude/skills/lazar-tldraw/LICENSE"
 
+assert_same_file "lazar-standup installs to Claude Code" \
+  "$HARNESS_SOURCE/skills/lazar-standup/SKILL.md" "$claude/skills/lazar-standup/SKILL.md"
+assert_same_file "lazar-standup installs to OpenCode" \
+  "$HARNESS_SOURCE/skills/lazar-standup/SKILL.md" "$opencode/skills/lazar-standup/SKILL.md"
+
+# Both runtimes read the same instructions byte for byte (asserted above), so pinning the note
+# path once pins it for both. Read the root back out of what was installed rather than restating
+# it here, or the assertion just agrees with itself.
+note_path=$(grep -m1 -E '^~/\S+/repos/<host>/<owner>/<repo>\.md$' "$claude/CLAUDE.md" || true)
+
+if [ -n "$note_path" ]; then
+  pass "Claude Code is told where the machine-local note lives"
+else
+  fail "Claude Code is told where the machine-local note lives"
+fi
+
+# Under ~/.claude or ~/.config/opencode the note would be owned by one runtime and invisible to
+# the other, which is the failure it exists to avoid.
+case "${note_path#\~/}" in
+'' | .claude/* | .config/*)
+  fail "the note path sits outside any single runtime's home"
+  ;;
+*)
+  pass "the note path sits outside any single runtime's home"
+  ;;
+esac
+
 pinned=$(lockfile_skills)
 if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 22 ]; then
   pass "skills-lock.json pins Matt's 22 skills"
