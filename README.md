@@ -228,7 +228,7 @@ re-bootstrapping each repo.
 - **Commercial readiness** is declared per project. Commercial-ready ⇒ RBAC + RLS
   + audit logging + authorization-matrix tests required.
 - **Frontend (when app-shaped):** TanStack Query + Zustand + Tailwind +
-  `neobrutalist-pop` + TanStack Form. Local-first feel under the Doherty
+  TanStack Form. Local-first feel under the Doherty
   threshold; keyboard-first. Skip the stack on small surfaces — simplicity wins.
 - **Version control is jj (Jujutsu), colocated with git.** Isolated work happens in a
   jj **workspace** (not a git worktree — the workspace is jj's isolation unit); commits

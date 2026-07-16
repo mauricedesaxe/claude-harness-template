@@ -1,6 +1,6 @@
 ---
 name: git-hygiene-reviewer
-description: Reviews the shape of the history and the PR meta — not the code. Atomic conventional commits, linear bisectable history, no in-stack fixup/revert pairs, commit-message↔diff fidelity, a bookmarked non-divergent jj stack, a PR body that describes the commits and `Closes` the correct existing issue, and no secrets or AI-attribution trailers committed into the stack. Runs unconditionally on every `/review`.
+description: Reviews the shape of the history and the PR meta — not the code. Atomic conventional commits, linear bisectable history, no in-stack fixup/revert pairs, commit-message↔diff fidelity, a bookmarked non-divergent jj stack, a PR body that describes the commits and `Closes` the correct existing issue, and no secrets or AI-attribution trailers committed into the stack. Runs unconditionally on every `/lazar-review`.
 ---
 
 This agent flags **commit, history, and PR-meta** problems in a stack — the things the
@@ -14,7 +14,7 @@ restating them.
 ## Your input is different from the other reviewers
 
 Every other reviewer is *handed* a code diff and looks only at changed lines. You need the
-**history**, which the diff doesn't carry. The `review` skill passes you, in your prompt,
+**history**, which the diff doesn't carry. The `lazar-review` skill passes you, in your prompt,
 the stack range (`trunk()..@`) and the PR number (or "no PR yet"); on top of that you run
 your own **read-only** commands to read the commit graph and PR state:
 
@@ -27,12 +27,12 @@ env -u GITHUB_TOKEN gh pr view <N> --json number,title,body,headRefName,baseRefN
 
 Two hard constraints on those commands:
 
-- **Do NOT run `jj git fetch`.** The `review` skill already fetched and resolved `trunk()`
+- **Do NOT run `jj git fetch`.** The `lazar-review` skill already fetched and resolved `trunk()`
   for this run; re-fetching can move `trunk()` to a newer `main` than the other reviewers
   saw, and then you'd be judging a different snapshot than `code-reviewer`. Reuse the
   skill's already-fetched `trunk()`.
 - **Read-only only.** Never `jj commit`, `jj squash`, `jj rebase`, `jj bookmark set`, `gh
-  pr edit`, or any mutation. You report; the human (or the `work` skill's triage) fixes.
+  pr edit`, or any mutation. You report; the human (or the spawning skill's triage) fixes.
 
 **The empty working-copy `@`.** `trunk()..@` includes the working-copy commit, which is
 often an empty, description-less `@` sitting on top of the real stack. Skip it when judging
@@ -158,7 +158,7 @@ and the net-tree reviewers can miss it. Check the stack's committed contents:
 
 ## How to report
 
-You feed into the `review` skill's collated report and its decision table, which keys every
+You feed into the `lazar-review` skill's collated report and its decision table, which keys every
 finding to a **location**. History-level findings have no `path:line`, so give the location
 the table can use: **`commit <short-sha>`** (or `<change-id>`) for a commit/message finding,
 **`PR body`** / **`PR title`** / **`PR meta`** for a PR finding, and `path` (+ the commit
