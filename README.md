@@ -76,13 +76,18 @@ route `/prototype/<name>` are left alone.
 
 ```sh
 bash test/install-smoke.sh
+bash test/prefix-rewrite.sh
 ```
 
-One end-to-end pass: it runs the installer with `HOME` pointed at a temp directory and asserts
-what landed on disk — that both runtimes got the skills, the agent, and the instructions, that
-every skill the lockfile pins is installed under its `matt-` name and none under its upstream
-one, and that the OpenCode agent carries the generated frontmatter while its prompt still
-matches the source byte for byte.
+`install-smoke.sh` is one end-to-end pass: it runs the installer with `HOME` pointed at a temp
+directory and asserts what landed on disk — that both runtimes got the skills, the agent, and the
+instructions, that every skill the lockfile pins is installed under its `matt-` name with no
+body still dispatching to an unprefixed one, and that the OpenCode agent carries the generated
+frontmatter while its prompt still matches the source byte for byte.
+
+`prefix-rewrite.sh` drives the vendor script's rename over a fixture, offline. It is the seam
+where the prefix is decided, so it is the seam that pins which `/name` is a reference to rewrite
+and which is a path or a built-in to leave alone.
 
 `docs/PHILOSOPHY.md` is the load-bearing reference doc — read it once, then let
 `CLAUDE.md` point at its section numbers (§1 Earn its keep, §3 Single-instance
