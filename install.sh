@@ -27,8 +27,12 @@ die() {
 
 # Stage the copy before deleting anything: a destination that resolves back into the source
 # (a symlinked ~/.claude/skills, say) would otherwise have the payload deleted out from under it.
+# Resolve a symlinked destination first, because `rm -rf` unlinks a symlink rather than following
+# it: dropping a real directory over the link would leave the tree it pointed at untouched, and a
+# tree replaced wholesale that way purges nothing a runtime reading the other path still loads.
 replace_dir() {
   local dest=$1 source=$2 staged
+  [ -d "$dest" ] && dest=$(cd -- "$dest" && pwd -P)
   mkdir -p -- "$(dirname -- "$dest")"
   staged=$(mktemp -d -- "$(dirname -- "$dest")/.install-XXXXXX")
   cp -R -- "$source" "$staged/payload"

@@ -541,6 +541,36 @@ fi
 rm -rf -- "$BOGUS_HOME"
 rm -rf -- "$SANDBOX_HOME"
 
+# `~/.claude-personal/skills` is a symlink to `~/.claude/skills` on the machine this harness is
+# being installed onto, so the skills dir the installer is handed genuinely resolves elsewhere.
+# Replacing the link with a real directory would purge nothing: the tree the other path reads
+# would keep every skill this install exists to take off the disk.
+LINKED_HOME=$(mktemp -d)
+linked_target="$LINKED_HOME/real-skills"
+
+mkdir -p -- "$linked_target/lazar-work" "$LINKED_HOME/.claude"
+printf -- '---\nname: lazar-work\n---\n' >"$linked_target/lazar-work/SKILL.md"
+ln -s -- "$linked_target" "$LINKED_HOME/.claude/skills"
+
+run_installer "$LINKED_HOME" >/dev/null || fail "the installer runs against a symlinked skills dir"
+
+if [ -L "$LINKED_HOME/.claude/skills" ]; then
+  pass "installing leaves a symlinked skills dir a symlink"
+else
+  fail "installing leaves a symlinked skills dir a symlink"
+fi
+
+assert_same_file "installing lands skills in the symlink's target" \
+  "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$linked_target/lazar-tldraw/SKILL.md"
+
+if [ -e "$linked_target/lazar-work" ]; then
+  fail "installing purges a stale skill through a symlinked skills dir"
+else
+  pass "installing purges a stale skill through a symlinked skills dir"
+fi
+
+rm -rf -- "$LINKED_HOME"
+
 REDIRECT_HOME=$(mktemp -d)
 redirect_claude="$REDIRECT_HOME/claude-config-dir"
 redirect_xdg="$REDIRECT_HOME/xdg-config-home"
