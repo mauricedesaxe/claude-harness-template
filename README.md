@@ -39,6 +39,7 @@ agents/
   git-hygiene-reviewer.md   atomic conventional commits, linear history, PR meta
   yagni-reviewer.md         speculative generality, in a diff or in a plan
 skills/
+  lazar-research/           an issue's open questions → /deep-research + matt-prototype → a verdict
   lazar-review/             the one review: global agents + the repo's own + matt-code-review
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
