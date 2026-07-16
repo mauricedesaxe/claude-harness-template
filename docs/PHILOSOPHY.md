@@ -59,7 +59,6 @@ clause (when deviation is allowed, and what bar a deviation has to clear).
 | §26 | Avoid double state | Spine |
 | §27 | AI / LLM integration | packs/ai.md |
 | §28 | Version control — jj (colocated) | Spine |
-| §29 | Shaping, appetite, and betting | Spine |
 | §30 | Felt outcome and writing | Spine |
 
 ---
@@ -844,96 +843,6 @@ and plain git — the skills are jj-native by default, so a non-jj repo is the
 deviation, not the rule. Reach for raw `git` mutations inside a jj repo only for
 something jj genuinely can't express; nearly everything has a jj verb, and
 mixing the two is how divergent duplicate commits appear.
-
----
-
-
-## §29. Shaping, appetite, and betting
-
-**Rule.** Work runs at **two altitudes**, and the planning machinery lives at the
-upper one. An **initiative** (a GitHub *milestone*) is the unit you shape, bet on,
-and circuit-break; an **issue** is the granular unit you capture, research, and
-build. Shape Up's planning verbs operate on milestones (`shape`, `bet`, `prune`);
-the per-issue skills (`capture`, `research`, `work`, `commit`, `ship`) operate on
-issues. Don't push betting, appetite, or scope-hammering down into `work` — that
-skill is deliberately granular and runs to completion on one issue.
-
-Adapted from 37signals' Shape Up to a solo, agent-driven shop. The parts that
-assume a full-time team in a room — the betting *meeting*, hill-chart status
-broadcasts, the fixed six-week calendar cycle, cool-down weeks, the 40-hour-week
-culture — are dropped or reshaped. The load-bearing ideas are kept: fixed appetite
-with variable scope, shaping before committing, a hard circuit breaker, no runaway
-projects.
-
-**Appetite, measured in sittings.** Every initiative (and optionally every issue)
-carries an **appetite**: a deliberate cap on how much of the scarce resource you'll
-spend, *not* an estimate of how long it'll take. In an agent-driven solo shop the
-scarce resource is **your supervision attention** — not labor-hours and not agent
-compute. You fire the agent and go do other work; agent wall-time is abundant and
-nearly free, while your return visits to check and redirect it are what's scarce.
-So appetite is counted in **sittings**: one sitting is one time you sit down, check
-the agent, redirect it, and leave. The name is literal — one sitting is one
-sit-down at the work. Three fuzzy bands, never auto-counted:
-
-- **S — one sitting.** Fire it once, one check, done.
-- **M — a few sittings.** A handful of agent-runs and checks over a couple of days.
-- **L — many sittings.** Many check-ins over a week or more of real calendar time.
-
-It's a cap you *declare*, not a number you measure, so you never have to estimate
-hours. Any time-tracking or session markers you keep are **soft context you
-eyeball**, never a meter the harness reads automatically — fuzzy is the point.
-The appetite system stands alone.
-
-**Shaping.** Before an initiative can be bet on it must be *shaped*: name the felt
-outcome, set its appetite, sketch which issues are in vs out, and hunt the **rabbit
-hole** — the one unknown that could blow the appetite — resolving or de-scoping it
-up front. Shaping can conclude "don't build this," and that's a success, not a
-waste. The `research` skill is the rabbit-hole hunt at the milestone altitude; it
-runs at both altitudes (milestone-scale shaping research and single-issue
-research). The `shape` skill produces a shaped milestone whose description *is*
-the pitch.
-
-**Betting, with a WIP cap.** Shaping and betting are separate acts: you might shape
-several initiatives in one sitting, then later sit down to bet across all the shaped
-ones. A **bet** commits a milestone to the active set and sets its cutoff. **One to
-three bets may be active at once** (some initiatives parallelize); **never more than
-three** — a fourth is refused until one resolves. `bet` always shows the active bets
-(with cutoffs) and the recently-finished ones *before* the table, because how full
-the pipe is and what you just shipped both inform what to take on next.
-
-**Circuit breaker.** Fixed appetite, variable scope: when an initiative reaches its
-cutoff (or has plainly burned past its appetite in sittings), it does **not**
-auto-extend. The breaker is the first step inside `bet` — before placing a new bet
-you resolve any expired or over-budget one: **ship what's done, re-shape it** (back
-to the drawing board, Shape Up's step 6), **or drop it.** The default is *the
-project loses, the appetite holds*, never *the deadline silently moves* — that's
-what forces scope to get hammered down during the work rather than after. You ship
-fast, so you'll rarely trip it; it's the guardrail against the silent runaway, not
-an everyday event.
-
-**The backlog stays — deliberately.** Shape Up kills the backlog; we don't. This is
-a solo side project you don't touch daily, so the backlog is your **re-entry
-state** — where you left off and what was next — and deleting it would delete your
-memory of the work. Instead it gets a periodic **prune** (`prune`): kill the
-genuinely dead, keep the live. A future agent must not "tidy" the backlog out of
-existence; the backlog-as-memory is precisely why it's allowed to exist against
-Shape Up's grain.
-
-**Why.** Two altitudes keep the planning machinery from contaminating the build
-loop: `work` stays a clean, granular, runs-to-completion skill, while the decisions
-about *what's even worth building* live one level up where they belong.
-Appetite-in-sittings makes "how much is this worth" answerable without a time
-estimate you can't give. The breaker is the single rule that makes fixed-appetite
-real — without it, "appetite" is just a wish. The WIP cap of three stops a solo from
-fragmenting attention across more initiatives than one person can hold.
-
-**Earn-its-keep.** This whole layer is optional scaffolding tuned to *this* working
-style; a different project can ignore it and run plain `capture` → `work`. Reach for
-the initiative layer when work clusters into multi-issue efforts worth shaping and
-betting on (a platform migration, a framework migration, a new service kind of
-effort); skip it for one-off issues that don't need a milestone.
-The bands and the cap are fuzzy on purpose — making them precise would be false
-precision that earns nothing.
 
 ---
 
