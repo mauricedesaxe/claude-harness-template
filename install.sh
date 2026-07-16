@@ -106,14 +106,22 @@ install_skills() {
   done
 }
 
+# An agent the harness stops shipping has to stop reviewing, so each directory is replaced
+# rather than copied into.
 install_agents() {
-  local agent name
-  mkdir -p -- "$CLAUDE_HOME/agents" "$OPENCODE_HOME/agents"
+  local built agent name
+  built=$(mktemp -d)
+  mkdir -p -- "$built/claude" "$built/opencode"
+
   for agent in "$HARNESS_SOURCE"/agents/*.md; do
     name=$(basename -- "$agent")
-    cp -- "$agent" "$CLAUDE_HOME/agents/$name"
-    write_opencode_agent "$agent" "$OPENCODE_HOME/agents/$name"
+    cp -- "$agent" "$built/claude/$name"
+    write_opencode_agent "$agent" "$built/opencode/$name"
   done
+
+  replace_dir "$CLAUDE_HOME/agents" "$built/claude"
+  replace_dir "$OPENCODE_HOME/agents" "$built/opencode"
+  rm -rf -- "$built"
 }
 
 command -v jq >/dev/null || die "jq is needed to merge OpenCode's instructions array"

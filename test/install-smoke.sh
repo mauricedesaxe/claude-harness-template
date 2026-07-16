@@ -186,28 +186,50 @@ else
   fail "no installed Matt skill dispatches to an unprefixed name:$dangling"
 fi
 
-source_agent="$HARNESS_SOURCE/agents/clarity-reviewer.md"
-claude_agent="$claude/agents/clarity-reviewer.md"
-opencode_agent="$opencode/agents/clarity-reviewer.md"
+assert_agent_installs() {
+  local name=$1
+  local source_agent="$HARNESS_SOURCE/agents/$name.md"
+  local claude_agent="$claude/agents/$name.md"
+  local opencode_agent="$opencode/agents/$name.md"
 
-assert_same_file "clarity-reviewer installs to Claude Code verbatim" \
-  "$source_agent" "$claude_agent"
+  if [ ! -f "$source_agent" ]; then
+    fail "$name is authored at agents/$name.md"
+    return
+  fi
 
-assert_contains "OpenCode agent declares mode: subagent" \
-  "mode: subagent" "$opencode_agent"
-assert_contains "OpenCode agent denies edit" "edit: deny" "$opencode_agent"
-assert_contains "OpenCode agent keeps the authored description" \
-  "$(grep -m1 '^description:' "$source_agent")" "$opencode_agent"
-if frontmatter_of "$opencode_agent" | grep -q '^name:'; then
-  fail "OpenCode agent drops Claude Code's name key"
+  assert_same_file "$name installs to Claude Code verbatim" "$source_agent" "$claude_agent"
+  assert_contains "$name declares mode: subagent for OpenCode" \
+    "mode: subagent" "$opencode_agent"
+  assert_contains "$name denies edit for OpenCode" "edit: deny" "$opencode_agent"
+  assert_contains "$name keeps the authored description in OpenCode" \
+    "$(grep -m1 '^description:' "$source_agent")" "$opencode_agent"
+
+  if frontmatter_of "$opencode_agent" | grep -q '^name:'; then
+    fail "$name drops Claude Code's name key for OpenCode"
+  else
+    pass "$name drops Claude Code's name key for OpenCode"
+  fi
+
+  if diff -q <(body_of "$source_agent") <(body_of "$opencode_agent") >/dev/null; then
+    pass "$name's transform rewrites frontmatter and leaves the prompt alone"
+  else
+    fail "$name's transform rewrites frontmatter and leaves the prompt alone"
+  fi
+}
+
+# These reviewers judge a repo against that repo's standards, so a global copy would review
+# every repo against opinions it never agreed to.
+leaked=""
+for agent in code-reviewer data-reviewer plan-reviewer security-reviewer test-reviewer; do
+  for root in "$claude" "$opencode"; do
+    [ -e "$root/agents/$agent.md" ] && leaked="$leaked $root/agents/$agent.md"
+  done
+done
+
+if [ -z "${leaked// /}" ]; then
+  pass "the per-repo reviewers install nowhere globally"
 else
-  pass "OpenCode agent drops Claude Code's name key"
-fi
-
-if diff -q <(body_of "$source_agent") <(body_of "$opencode_agent") >/dev/null; then
-  pass "the transform rewrites frontmatter and leaves the prompt alone"
-else
-  fail "the transform rewrites frontmatter and leaves the prompt alone"
+  fail "the per-repo reviewers install nowhere globally:$leaked"
 fi
 
 touch "$claude/skills/lazar-tldraw/STALE.md"
@@ -216,6 +238,11 @@ jq '.model = "anthropic/claude-opus-4-5"
   | .instructions += ["~/notes/house-style.md", "~/.config/opencode/rules/OLD-SPINE.md"]' \
   "$opencode/opencode.json" >"$opencode/opencode.json.seeded"
 mv "$opencode/opencode.json.seeded" "$opencode/opencode.json"
+
+# An agent the harness used to ship is only really dropped once an upgrade takes it off the
+# disk of someone who installed it back when it was global.
+printf -- '---\nname: code-reviewer\n---\n' >"$claude/agents/code-reviewer.md"
+printf -- '---\nmode: subagent\n---\n' >"$opencode/agents/code-reviewer.md"
 
 HOME="$TEST_HOME" "$HARNESS_SOURCE/install.sh" >/dev/null || fail "installing twice is safe"
 
@@ -249,6 +276,21 @@ assert_contains "reinstalling keeps an instructions entry the user added" \
   '~/notes/house-style.md' "$opencode/opencode.json"
 assert_contains "reinstalling keeps unrelated opencode.json keys" \
   'anthropic/claude-opus-4-5' "$opencode/opencode.json"
+
+stale=""
+for root in "$claude" "$opencode"; do
+  [ -e "$root/agents/code-reviewer.md" ] && stale="$stale $root/agents/code-reviewer.md"
+done
+
+if [ -z "${stale// /}" ]; then
+  pass "reinstalling purges an agent the harness no longer ships"
+else
+  fail "reinstalling purges an agent the harness no longer ships:$stale"
+fi
+
+for agent in git-hygiene-reviewer clarity-reviewer yagni-reviewer; do
+  assert_agent_installs "$agent"
+done
 
 if [ "$failures" -eq 0 ]; then
   echo "install-smoke: all assertions passed"
