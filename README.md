@@ -161,17 +161,16 @@ load-bearing one is the **browser MCP (Playwright)**: the review flow verifies U
 driving a real browser (navigate, snapshot, screenshot) instead of trusting that the code
 compiled. The `lazar-tldraw` skill additionally needs `@kitschpatrol/tldraw-cli` on your PATH.
 
-## Legacy: the per-repo bootstrap
+## The per-repo bootstrap is gone
 
-`bootstrap-harness/`, and the `.claude/` skills and agents beside it, are the previous model:
-`/bootstrap-harness` cloned this repo into whatever project you ran it in and copied the
-harness there. That is what produced the drifting copies this repo now exists to end, so the
-skill is frozen, its manifest is no longer authoritative, and it is being removed. Use
-`./install.sh`.
+There used to be a `/bootstrap-harness` skill that cloned this repo into whatever project you
+ran it in and copied the harness there. Every run minted another fork that started drifting the
+day it landed, which is the problem this repo now exists to end. It is deleted, along with the
+`.claude/` skill tree it installed. Both are readable in git history. Use `./install.sh`.
 
-Improvements still land here first — open a PR against
-`mauricedesaxe/claude-harness-template` — but they now reach you by reinstalling rather than
-by re-bootstrapping each repo.
+Improvements still land here first (open a PR against
+`mauricedesaxe/claude-harness-template`), and they reach you by reinstalling rather than by
+re-bootstrapping each repo.
 
 ## Philosophy in one breath
 
