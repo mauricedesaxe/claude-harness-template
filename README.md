@@ -26,6 +26,7 @@ CLAUDE.md                   the instructions both runtimes load
 agents/
   clarity-reviewer.md       docs/comment + self-explanatory-code discipline (§21)
 skills/
+  lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
   matt-*/                   Matt Pocock's 22 skills, vendored (see below)
 docs/
@@ -47,6 +48,13 @@ same files via the `instructions` array in `opencode.json` and loads the packs u
 
 `CLAUDE.md` is installed to `~/.claude/CLAUDE.md` and, under OpenCode's own name for the same
 thing, to `~/.config/opencode/AGENTS.md`.
+
+## Machine-local repo notes
+
+Skills need to know which tracker owns a repo. Where the repo can't carry that itself, they keep
+a note per repo at `~/.lazar-harness/repos/<host>/<owner>/<repo>.md`. Nothing installs these —
+a skill writes one the first and only time it has to ask, and reads it forever after.
+`CLAUDE.md` carries the resolution order and the note's format.
 
 ## Vendored skills
 
