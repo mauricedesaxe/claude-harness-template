@@ -65,6 +65,11 @@ same files via the `instructions` array in `opencode.json` and loads the packs u
 `CLAUDE.md` is installed to `~/.claude/CLAUDE.md` and, under OpenCode's own name for the same
 thing, to `~/.config/opencode/AGENTS.md`.
 
+It is authored for a laptop, and `HARNESS_SURFACE=sandbox ./install.sh` generates the one block
+that differs in an Open-Inspect sandbox: which jj workspace to work in. `§28` states the isolation
+principle for both, so only the default is generated, the same way an OpenCode agent's frontmatter
+is. `install.sh` carries the reasoning at the transform.
+
 ## Machine-local repo notes
 
 Skills need to know which tracker owns a repo. Where the repo can't carry that itself, they keep

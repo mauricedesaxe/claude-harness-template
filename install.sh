@@ -2,6 +2,11 @@
 set -euo pipefail
 
 HARNESS_SOURCE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Which environment the installed instructions are for, not which runtime reads them: Claude Code
+# and OpenCode both run on a laptop and both run inside a sandbox, and it is the environment that
+# decides whether the working copy is shared. A sandbox image build passes `sandbox` when it
+# invokes this script; everything else gets the laptop default.
+HARNESS_SURFACE="${HARNESS_SURFACE:-local}"
 CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 CLAUDE_RULES="$CLAUDE_HOME/rules"
 OPENCODE_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
@@ -59,10 +64,56 @@ write_opencode_agent() {
     die "$source: frontmatter never closes, so no OpenCode mode was generated"
 }
 
+# `§28` states the isolation principle for every surface; only the default action differs, and a
+# sandbox is a checkout of its own, so the workspace-per-agent rule that keeps concurrent local
+# agents off a shared `@` buys nothing there.
+# Reaches awk through the environment because `awk -v` runs escape processing over its value and
+# the one-true-awk rejects a literal newline in it outright.
+SANDBOX_WORKSPACE_DEFAULT=$(
+  cat <<'MD'
+**Work the default workspace directly with `jj edit`.** The sandbox is the isolation: this checkout
+is mine alone, and a workspace inside it would buy nothing. Reach for `jj workspace add` only when
+fanning out concurrent subagents that edit at once, which is the one case where a shared `@` still
+collides (`§28`).
+MD
+)
+
+# CLAUDE.md is authored for the local surface the way agents/ is authored for Claude Code: whichever
+# target needs the other dialect has it generated, so no second copy is hand-kept.
+write_instructions() {
+  local dest=$1 source="$HARNESS_SOURCE/CLAUDE.md" staged
+
+  if [ "$HARNESS_SURFACE" = local ]; then
+    cp -- "$source" "$dest"
+    return
+  fi
+
+  # An unclosed block leaves awk skipping to EOF, which truncates the file rather than failing.
+  grep -qxF -- '<!-- /surface:local -->' "$source" ||
+    die "CLAUDE.md's surface:local block never closes, so $dest would be truncated at the marker"
+
+  # Staged like every other write here, so a failed transform leaves the previous install in place
+  # rather than a half-generated file. Substituting anything but exactly once means the markers
+  # moved, and the alternative to failing on that is silently shipping a sandbox the local default.
+  staged=$(mktemp -- "$dest.XXXXXX")
+  SANDBOX_WORKSPACE_DEFAULT="$SANDBOX_WORKSPACE_DEFAULT" awk '
+    BEGIN { block = ENVIRON["SANDBOX_WORKSPACE_DEFAULT"] }
+    /^<!-- surface:local\./ { print block; substituted++; skipping = 1; next }
+    $0 == "<!-- /surface:local -->" { skipping = 0; next }
+    !skipping
+    END { exit substituted == 1 ? 0 : 1 }
+  ' "$source" >"$staged" || {
+    rm -f -- "$staged"
+    die "CLAUDE.md has no single surface:local block, so no $HARNESS_SURFACE default was generated"
+  }
+
+  mv -- "$staged" "$dest"
+}
+
 install_instructions() {
   mkdir -p -- "$CLAUDE_HOME" "$OPENCODE_HOME"
-  cp -- "$HARNESS_SOURCE/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md"
-  cp -- "$HARNESS_SOURCE/CLAUDE.md" "$OPENCODE_HOME/AGENTS.md"
+  write_instructions "$CLAUDE_HOME/CLAUDE.md"
+  write_instructions "$OPENCODE_HOME/AGENTS.md"
 }
 
 # OpenCode has no equivalent of `paths:`, so every instructions entry loads in every session and
@@ -132,9 +183,15 @@ install_agents() {
 
 command -v jq >/dev/null || die "jq is needed to merge OpenCode's instructions array"
 
+case "$HARNESS_SURFACE" in
+local | sandbox) ;;
+*) die "HARNESS_SURFACE is $HARNESS_SURFACE; it takes local or sandbox" ;;
+esac
+
 install_instructions
 install_philosophy
 install_skills
 install_agents
 
-printf 'lazar-harness installed to %s and %s\n' "$CLAUDE_HOME" "$OPENCODE_HOME"
+printf 'lazar-harness installed to %s and %s for the %s surface\n' \
+  "$CLAUDE_HOME" "$OPENCODE_HOME" "$HARNESS_SURFACE"
