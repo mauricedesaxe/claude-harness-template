@@ -385,7 +385,7 @@ a single-form landing page) skip them.
 |---|---|---|
 | Server state | **TanStack Query** | Cache, refetch, optimistic update, suspense — the boring middle layer of every app |
 | Local UI state | **Zustand**, or React's built-ins | `useState`/`useReducer` for component-scoped; Zustand for app-wide UI state |
-| Styling | **Tailwind + `neobrutalist-pop`** | Tailwind for the system, the skill for the look |
+| Styling | **Tailwind** | Tailwind for the system; the look is the project's own call |
 | Forms | **TanStack Form** | Type-safe, server-action-friendly, lower ergonomic tax than the alternatives |
 | Routing | Whatever §8's chosen architecture brings | React Router for the SPA / SSR monolith, the framework's router for Astro |
 
@@ -399,8 +399,8 @@ Simplicity is the tier-1 value.
 **Local-first feel.** The Doherty target shapes how the UI behaves:
 
 - **Keyboard-first.** Every primary action has a shortcut. Show the shortcut
-  in the UI (the `.brut-kbd` element from the `neobrutalist-pop` skill, or
-  equivalent). `⌘K` focuses search, `Space` toggles the primary action,
+  in the UI, in a visible `kbd` element next to the action it triggers.
+  `⌘K` focuses search, `Space` toggles the primary action,
   `Esc` cancels, `Enter` confirms, single letters for nav.
 - **Optimistic updates.** Local state mutates the moment the user acts; the
   server reconciles in the background. Failures show as a toast with retry /
