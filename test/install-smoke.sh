@@ -38,9 +38,33 @@ rule_paths() {
 }
 
 TEST_HOME=$(mktemp -d)
-trap 'rm -rf -- "$TEST_HOME"' EXIT
+CANARY=$(mktemp -d)
+trap 'rm -rf -- "$TEST_HOME" "$CANARY"' EXIT
 
-HOME="$TEST_HOME" "$HARNESS_SOURCE/install.sh" >/dev/null || {
+# A run that escapes the sandbox lands in these decoys instead of the real harness this shell
+# is configured with.
+export CLAUDE_CONFIG_DIR="$CANARY/claude-config-dir"
+export XDG_CONFIG_HOME="$CANARY/xdg-config-home"
+
+for decoy in "$CLAUDE_CONFIG_DIR" "$XDG_CONFIG_HOME/opencode"; do
+  mkdir -p -- "$decoy/skills" "$decoy/agents"
+  printf 'a live harness lives here\n' >"$decoy/CLAUDE.md"
+done
+
+canary_digest() {
+  find "$CANARY" | sort
+  find "$CANARY" -type f -exec cksum {} + | sort
+}
+
+canary_before=$(canary_digest)
+
+# An allowlist, not a blocklist: only HOME and PATH reach the installer, so a redirect variable
+# added to install.sh later is neutralised without this test having to learn its name.
+run_installer() {
+  env -i PATH="$PATH" HOME="$TEST_HOME" "$HARNESS_SOURCE/install.sh"
+}
+
+run_installer >/dev/null || {
   echo "FAIL install.sh exited non-zero" >&2
   exit 1
 }
@@ -244,7 +268,7 @@ mv "$opencode/opencode.json.seeded" "$opencode/opencode.json"
 printf -- '---\nname: code-reviewer\n---\n' >"$claude/agents/code-reviewer.md"
 printf -- '---\nmode: subagent\n---\n' >"$opencode/agents/code-reviewer.md"
 
-HOME="$TEST_HOME" "$HARNESS_SOURCE/install.sh" >/dev/null || fail "installing twice is safe"
+run_installer >/dev/null || fail "installing twice is safe"
 
 if [ -e "$claude/skills/lazar-tldraw/STALE.md" ]; then
   fail "reinstalling purges a file the source no longer carries"
@@ -291,6 +315,12 @@ fi
 for agent in git-hygiene-reviewer clarity-reviewer yagni-reviewer; do
   assert_agent_installs "$agent"
 done
+
+if [ "$(canary_digest)" = "$canary_before" ]; then
+  pass "the installer writes nothing outside the home the test gave it"
+else
+  fail "the installer writes nothing outside the home the test gave it"
+fi
 
 if [ "$failures" -eq 0 ]; then
   echo "install-smoke: all assertions passed"
