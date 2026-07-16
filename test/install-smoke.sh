@@ -424,6 +424,63 @@ else
   fail "every § the installed harness cites resolves to a section of the philosophy:$unresolved"
 fi
 
+# The surface is the environment, not the runtime, so it has to reach both runtimes' instructions.
+# `§28` owns the principle either way; what is generated here is only which default follows from it.
+SANDBOX_HOME=$(mktemp -d)
+
+run_installer "$SANDBOX_HOME" HARNESS_SURFACE=sandbox >/dev/null ||
+  fail "the installer runs for the sandbox surface"
+
+for instructions in "$SANDBOX_HOME/.claude/CLAUDE.md" "$SANDBOX_HOME/.config/opencode/AGENTS.md"; do
+  target=$(basename -- "$instructions")
+
+  # Anchored on text only the generated block carries. `jj edit` also appears in the jj command
+  # list above it, so asserting on that would pass on a transform that deleted the local block and
+  # inserted nothing, which is the failure actually worth catching.
+  assert_contains "the sandbox $target works the default workspace directly" \
+    'The sandbox is the isolation' "$instructions"
+
+  if grep -qF -- 'off fresh trunk' "$instructions"; then
+    fail "the sandbox $target drops the local workspace-per-agent default"
+  else
+    pass "the sandbox $target drops the local workspace-per-agent default"
+  fi
+
+  if grep -q 'surface:local' "$instructions"; then
+    fail "the sandbox $target carries no leftover surface marker"
+  else
+    pass "the sandbox $target carries no leftover surface marker"
+  fi
+done
+
+assert_contains "the local CLAUDE.md cuts a workspace off fresh trunk" \
+  'off fresh trunk' "$claude/CLAUDE.md"
+
+if cmp -s -- "$claude/CLAUDE.md" "$SANDBOX_HOME/.claude/CLAUDE.md"; then
+  fail "the two surfaces install different workspace defaults"
+else
+  pass "the two surfaces install different workspace defaults"
+fi
+
+# write_instructions treats every value that is not `local` as the sandbox, so a typo would install
+# sandbox text on a laptop if this guard ever regressed.
+BOGUS_HOME=$(mktemp -d)
+
+if run_installer "$BOGUS_HOME" HARNESS_SURFACE=bogus >/dev/null 2>&1; then
+  fail "an unknown HARNESS_SURFACE stops the install rather than picking a surface"
+else
+  pass "an unknown HARNESS_SURFACE stops the install rather than picking a surface"
+fi
+
+if [ -e "$BOGUS_HOME/.claude/CLAUDE.md" ]; then
+  fail "an unknown HARNESS_SURFACE writes no instructions at all"
+else
+  pass "an unknown HARNESS_SURFACE writes no instructions at all"
+fi
+
+rm -rf -- "$BOGUS_HOME"
+rm -rf -- "$SANDBOX_HOME"
+
 REDIRECT_HOME=$(mktemp -d)
 redirect_claude="$REDIRECT_HOME/claude-config-dir"
 redirect_xdg="$REDIRECT_HOME/xdg-config-home"
