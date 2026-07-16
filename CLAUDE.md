@@ -77,6 +77,7 @@ the durable "when to reach for which".
 | `setup` | A fresh clone — install deps, bring up the stack, set keys, verify build + tests. |
 | `neobrutalist-pop` | Building or styling any UI — the neo-brutalist look (thick borders, hard shadows, candy accents). |
 | `lazar-tldraw` | Talking through a diagram or a low-fi UI wireframe — system/API/DB diagrams and product sketches on a tldraw canvas (needs `@kitschpatrol/tldraw-cli`). |
+| `lazar-standup` | Writing the daily 3 Ps (Progress / Problems / Priorities) — reconciles merged PRs, tracker issues, and unpushed local work into a post in my voice. |
 | `shape` | A raw idea is really a multi-issue effort — shape it into a bettable milestone (felt outcome, appetite in sittings, in/out scope, the rabbit hole). Can conclude "don't build it". |
 | `bet` | Committing a shaped milestone to the active set with a cutoff — runs the circuit breaker on expired bets first. Hard WIP cap of 1–3. |
 | `prune` | The backlog is bloated — cull only the genuinely dead, surface dups. Read-then-recommend; never closes without approval. |
@@ -131,6 +132,59 @@ Plus `matt-prototype`, `matt-diagnosing-bugs`, `matt-triage`, `matt-handoff`,
 They're **issue-tracker-agnostic**: run `/matt-setup-matt-pocock-skills` once per repo — it
 writes `docs/agents/issue-tracker.md` (GitHub / GitLab / local / other) that the rest read
 from.
+
+## Tracker resolution
+
+Any skill that needs to know which tracker owns a repo resolves it in this order. **Asking is
+a last resort, and it happens at most once per repo**:
+
+1. **The repo's own config** — `docs/agents/issue-tracker.md`, where the repo permits such a
+   file. This one is written by `/matt-setup-matt-pocock-skills`.
+2. **The machine-local note** (below), for shared work repos where committing harness config
+   isn't an option.
+3. **Inference** — the remote host, issue-key patterns in branch names and commit messages,
+   and which tracker MCPs are connected.
+4. **Ask** — and **write the answer to the note**, so the same question is never asked twice.
+
+### The machine-local note
+
+One markdown file per repo, keyed by the git remote, at:
+
+```
+~/.lazar-harness/repos/<host>/<owner>/<repo>.md
+```
+
+Derive the key from `git remote get-url origin`, normalised: drop the scheme, any user
+(`git@`), and the trailing `.git`, so `git@github.com:iconicshift/platform.git` and
+`https://github.com/iconicshift/platform` both key to
+`~/.lazar-harness/repos/github.com/iconicshift/platform.md`. A repo with no remote has no key,
+so it gets no note — infer, and ask if you must, but there's nowhere to remember the answer.
+
+It's a plain file under `$HOME`, read with `cat` and written with `mkdir -p` + a redirect.
+`$HOME` is the one thing Claude Code, OpenCode, and an Open-Inspect sandbox all agree on. The
+note lives under neither `~/.claude/` nor `~/.config/opencode/`, so no runtime owns it, and
+Claude Code's auto-memory is **not** used — auto-memory would cover Claude Code alone and leave
+the other two asking every session forever.
+
+The note records what the harness must not guess at:
+
+```markdown
+# iconicshift/platform
+
+- tracker: Linear, team ICON, via `mcp__linear__*`
+- issue key: `ICON-<n>`
+- vcs: jj, colocated with git
+- standup: Slack, #eng-standup
+
+## Conventions
+
+- A system design doc lives in the Linear issue, not as an ADR in the repo. An ADR is a
+  different artifact with a different lifecycle (§21: a temporary decision record, archived
+  once the decision lands).
+```
+
+Add a convention the moment a repo teaches you one. Editing the note by hand is expected — it's
+mine, not the agent's.
 
 ## Hard rules
 
