@@ -51,7 +51,7 @@ patches/
   lazar-tldraw.patch        the local divergence from tldraw-skill, re-applied at vendor time
 CLAUDE.md                   the instructions both runtimes load
 hooks/
-  enforce-jj.sh             PreToolUse: steers git mutations and worktree isolation to jj
+  enforce-jj.sh             PreToolUse: allows read-only git, steers the rest to jj
 agents/
   clarity-reviewer.md       docs/comment + self-explanatory-code discipline (§21)
   git-hygiene-reviewer.md   atomic conventional commits, linear history, PR meta
@@ -85,6 +85,27 @@ every agent at every depth, so it is the only enforcement this harness has.
 `hooks/` is therefore an install target alongside `skills/` and `agents/`, with the same purge:
 a hook this repo stops shipping comes off the disk, and the same install takes its wiring out of
 `settings.json`, because a wired command whose file is gone fires on every prompt and fails there.
+
+**`enforce-jj.sh` is an allow list, and that is a deliberate trade.** It knows the git subcommands
+that only read — `status`, `log`, `diff`, `show`, the plumbing, and the read spelling of the ones
+that read or write depending on their arguments — and denies every other git subcommand in a jj
+repo. A deny list only ever holds the mutations someone thought of, and this file shipped for
+months with `git clean -fd`, `git stash`, `git checkout -b` and `git restore` in no list at all:
+`git clean -fd` deletes untracked files, and jj has already snapshotted those into `@`, so they are
+part of the working-copy commit rather than junk git can regenerate. The two directions fail
+differently, and that is the whole argument — a missing allow-list entry costs a denial with a
+message and a one-line fix, a missing deny-list entry costs the working copy, silently. So expect
+it to deny the occasional harmless git command. Add it to `GIT_READ` when it does.
+
+It also **refuses when `jq` is missing** rather than allowing everything, since jq is what parses
+the payload and a guard that cannot read the call cannot clear it. That refusal is scoped to jj
+repos, so one absent binary cannot brick every session on the machine.
+
+It matches at the **command position**, so a mutation handed to another program as an argument
+(`sudo git clean -fd`, `xargs git commit`, `bash -c '…'`) is not interpreted and goes through. That
+is deliberate and unchanged by the allow list: another program's arguments have no closed set to
+them, and this hook guards the accident, not the adversary. The enforcement that matters is that
+the obvious spelling steers to jj.
 
 Hooks are the one target that does not resolve through the runtime's config home. `settings.json`
 names a hook by absolute path rather than discovering it under a home, so a single
