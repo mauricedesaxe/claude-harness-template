@@ -26,9 +26,9 @@ A script that installs when you merely run it is a script that installs when nob
 `install.sh` carries the story of the install nobody meant.
 
 Needs `bash` and `jq`. It writes to Claude Code's config home (skills, agents, rules,
-`CLAUDE.md`) and OpenCode's (skills, agents, rules, `AGENTS.md`, `opencode.json`), reading
-everything from this repo. Each is resolved the way the runtime itself resolves it, so the
-harness lands where it is actually read:
+`CLAUDE.md`, `settings.json`) and OpenCode's (skills, agents, rules, `AGENTS.md`,
+`opencode.json`), reading everything from this repo. Each is resolved the way the runtime itself
+resolves it, so the harness lands where it is actually read:
 
 | Runtime     | Config home                                 |
 | ----------- | ------------------------------------------- |
@@ -38,6 +38,11 @@ harness lands where it is actually read:
 With neither variable set that is `~/.claude/` and `~/.config/opencode/`, which is what the
 paths below assume.
 
+`settings.json` and `opencode.json` are **merged**, not replaced: they carry model choice,
+plugins and auth-adjacent config that are none of the harness's business. Each install drops the
+entries a previous one wrote and adds back what ships now, so nothing accumulates and nothing
+else is touched.
+
 ```
 install.sh                  the whole install path
 vendor-skills.sh            re-vendors mattpocock/skills as matt-*, tldraw-skill as lazar-tldraw
@@ -45,6 +50,8 @@ skills-lock.json            the source and content hash every vendored skill is 
 patches/
   lazar-tldraw.patch        the local divergence from tldraw-skill, re-applied at vendor time
 CLAUDE.md                   the instructions both runtimes load
+hooks/
+  enforce-jj.sh             PreToolUse: steers git mutations and worktree isolation to jj
 agents/
   clarity-reviewer.md       docs/comment + self-explanatory-code discipline (§21)
   git-hygiene-reviewer.md   atomic conventional commits, linear history, PR meta
@@ -64,7 +71,36 @@ docs/
   packs/                    per-paradigm packs, each scoped by its own `paths:`
 test/
   install-smoke.sh          runs install.sh under a temp HOME, asserts the tree
+  enforce-jj.sh             drives the hook with synthetic PreToolUse payloads
 ```
+
+## Enforcement
+
+Everything else here is guidance, and guidance dies at the first delegation boundary: `CLAUDE.md`
+and `~/.claude/rules/` are **not inherited by subagents**, so a rule written there reaches a main
+loop and stops. An agent that had been told not to run `install.sh` complied, then spawned a
+reviewer subagent that ran it and wiped a live config directory. A `PreToolUse` hook fires for
+every agent at every depth, so it is the only enforcement this harness has.
+
+`hooks/` is therefore an install target alongside `skills/` and `agents/`, with the same purge:
+a hook this repo stops shipping comes off the disk, and the same install takes its wiring out of
+`settings.json`, because a wired command whose file is gone fires on every prompt and fails there.
+
+Hooks are the one target that does not resolve through the runtime's config home. `settings.json`
+names a hook by absolute path rather than discovering it under a home, so a single
+`~/.claude/hooks/` serves every Claude Code profile on the machine that points at it.
+`HARNESS_SURFACE=sandbox` has one config home and no profiles, so there it resolves like
+everything else.
+
+**Install every profile in one go.** A run purges that shared directory but rewrites only the
+`settings.json` it was pointed at, because that is the only one it can see. So between the first
+profile's install and the last, a profile not yet installed still wires a hook that is already
+gone, and fires it on every prompt. The plan is worth reading before the first run rather than
+between the second and the third.
+
+**OpenCode gets none of this.** It has no hook equivalent, so enforcement is Claude Code's alone
+and OpenCode keeps guidance. Enforcement where it is available beats enforcement nowhere; the
+asymmetry is chosen.
 
 An agent is authored **once**, in Claude Code's format. OpenCode additionally requires a
 `mode:` and a `permission:` block, and the installer generates those from that single source
@@ -149,6 +185,7 @@ the licence belongs next to the text it covers.
 
 ```sh
 bash test/install-smoke.sh
+bash test/enforce-jj.sh
 bash test/prefix-rewrite.sh
 bash test/tldraw-patch.sh
 ```
@@ -158,6 +195,12 @@ directory and asserts what landed on disk — that both runtimes got the skills,
 instructions, that every skill the lockfile pins is installed under its `matt-` or `lazar-` name
 with no body still dispatching to an unprefixed one, and that the OpenCode agent carries the
 generated frontmatter while its prompt still matches the source byte for byte.
+
+`enforce-jj.sh` drives the hook with the `PreToolUse` payloads Claude Code sends it and reads the
+decision back out of its JSON. Synthetic, because the alternative is proving a matcher by
+attempting the mutations it exists to stop. The two seams are separate on purpose: this one pins
+what the hook decides, and `install-smoke.sh` pins that `settings.json`'s matcher hands it the
+calls to decide on — a hook can be perfectly correct about a tool it is never asked about.
 
 `prefix-rewrite.sh` drives the vendor script's rename over a fixture, offline. It is the seam
 where the prefix is decided, so it is the seam that pins which `/name` is a reference to rewrite
