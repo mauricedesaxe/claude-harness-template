@@ -250,6 +250,28 @@ assert_same_file "lazar-tldraw installs to OpenCode" \
 assert_same_file "a skill's supporting files travel with it" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$claude/skills/lazar-tldraw/LICENSE"
 
+# The skill this ticket ships, in both roots the harness fills. On its own this is the vacuous
+# half — it says a file landed where the installer put it, which the installer would satisfy while
+# OpenCode read a different copy out of a root that outranks this one. The claim that matters is
+# asserted against `opencode debug skill` in the parity block below.
+assert_same_file "use-railway installs to Claude Code" \
+  "$HARNESS_SOURCE/skills/use-railway/SKILL.md" "$claude/skills/use-railway/SKILL.md"
+assert_same_file "use-railway installs to OpenCode" \
+  "$HARNESS_SOURCE/skills/use-railway/SKILL.md" "$opencode/skills/use-railway/SKILL.md"
+assert_same_file "use-railway's references travel with it" \
+  "$HARNESS_SOURCE/skills/use-railway/references/deploy.md" \
+  "$claude/skills/use-railway/references/deploy.md"
+assert_same_file "use-railway's MIT licence travels with the text it licenses" \
+  "$HARNESS_SOURCE/skills/use-railway/LICENSE" "$claude/skills/use-railway/LICENSE"
+
+# The skill shells out to its own scripts, so one that arrived without its exec bit is installed,
+# resolved, and dead at the first call — the same fail-open the hook's exec-bit assertion catches.
+if [ -x "$claude/skills/use-railway/scripts/railway-api.sh" ]; then
+  pass "use-railway's scripts install executable"
+else
+  fail "use-railway's scripts install executable"
+fi
+
 assert_same_file "lazar-standup installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-standup/SKILL.md" "$claude/skills/lazar-standup/SKILL.md"
 assert_same_file "lazar-standup installs to OpenCode" \
@@ -352,10 +374,10 @@ case "${note_path#\~/}" in
 esac
 
 pinned=$(lockfile_skills)
-if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 23 ]; then
-  pass "skills-lock.json pins Matt's 22 skills and tldraw-skill"
+if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 24 ]; then
+  pass "skills-lock.json pins Matt's 22 skills, tldraw-skill and use-railway"
 else
-  fail "skills-lock.json pins Matt's 22 skills and tldraw-skill"
+  fail "skills-lock.json pins Matt's 22 skills, tldraw-skill and use-railway"
 fi
 
 # The reason lazar-tldraw is vendored rather than hand-kept: an upstream nobody pins is an
@@ -366,9 +388,19 @@ else
   fail "lazar-tldraw's upstream is pinned rather than hand-synced"
 fi
 
-# Everything of Matt's, judged as Matt's. tldraw-skill is pinned in the same lockfile but
-# installs under a lazar- name, so it is asserted separately.
-matt_pinned=$(printf '%s\n' "$pinned" | grep -vx 'tldraw-skill')
+# The open question #60 carried, settled and then pinned. The Railway CLI does not embed this
+# skill: it downloads railwayapp/railway-skills at install time (the binary carries the tarball
+# URL and the commits API URL it polls for a revision). So there is a real upstream to pin, and
+# the honest alternative — a vendored copy with a version written down by hand — is not needed.
+if grep -qF '"source": "railwayapp/railway-skills"' "$HARNESS_SOURCE/skills-lock.json"; then
+  pass "use-railway's upstream is pinned rather than hand-copied out of the CLI"
+else
+  fail "use-railway's upstream is pinned rather than hand-copied out of the CLI"
+fi
+
+# Everything of Matt's, judged as Matt's. tldraw-skill and use-railway are pinned in the same
+# lockfile but install under names of their own, so they are asserted separately.
+matt_pinned=$(printf '%s\n' "$pinned" | grep -vx 'tldraw-skill' | grep -vx 'use-railway')
 
 missing=""
 misnamed=""
@@ -479,21 +511,52 @@ fi
 # still ships is `lazar-` (mine) or `matt-` (vendored). So the prefix rule is what keeps a
 # deleted name from returning, and asserting the rule outlives asserting a list of dead names,
 # which would need hand-editing at every future deletion and says nothing about the next one.
+#
+# use-railway is the one exception, and it is named here rather than pattern-matched so that the
+# rule stays exactly one name wide: a second unprefixed skill fails this until someone argues for
+# it in the same place. The reason it cannot take a prefix is that the name is not this harness's
+# to choose — `railway skills install` writes `use-railway` into ~/.claude/skills and every other
+# tool dir it detects, so a `railway-use-railway` here would leave the CLI refilling the
+# unprefixed name for the next install to purge: the ping-pong survives, and there are two skills
+# where there was one. README's "use-railway, the skill that cannot take a prefix" carries the
+# reasoning; this is the assertion that stops the tidy-up.
+UNPREFIXED_BY_DESIGN="use-railway"
+
 unprefixed_skill=""
 for root in "$claude" "$opencode"; do
   for installed in "$root"/skills/*/; do
     case "$(basename -- "${installed%/}")" in
-    lazar-* | matt-*) ;;
+    lazar-* | matt-* | "$UNPREFIXED_BY_DESIGN") ;;
     *) unprefixed_skill="$unprefixed_skill ${installed%/}" ;;
     esac
   done
 done
 
 if [ -z "${unprefixed_skill// /}" ]; then
-  pass "every installed skill is prefixed, so no deleted skill returns under its old name"
+  pass "every installed skill is prefixed but the one that cannot be, so no deleted skill returns"
 else
-  fail "every installed skill is prefixed:$unprefixed_skill"
+  fail "every installed skill is prefixed but the one that cannot be:$unprefixed_skill"
 fi
+
+# The exemption is worth exactly one name, so the name has to be there to be exempt. Without this,
+# deleting the skill entirely would leave the rule above passing and the exception dangling as a
+# licence for the next unprefixed thing.
+for root in "$claude" "$opencode"; do
+  if [ -d "$root/skills/$UNPREFIXED_BY_DESIGN" ]; then
+    pass "$UNPREFIXED_BY_DESIGN installs under its interop name to ${root##*/}"
+  else
+    fail "$UNPREFIXED_BY_DESIGN installs under its interop name to ${root##*/}"
+  fi
+done
+
+# The prefixed spelling must not also exist: shipping both is the two-skills outcome the exception
+# exists to avoid, and each copy on its own satisfies every other assertion here.
+for root in "$claude" "$opencode"; do
+  for prefixed in "$root/skills/railway-$UNPREFIXED_BY_DESIGN" \
+    "$root/skills/matt-$UNPREFIXED_BY_DESIGN" "$root/skills/lazar-$UNPREFIXED_BY_DESIGN"; do
+    [ -e "$prefixed" ] && fail "$UNPREFIXED_BY_DESIGN ships in one spelling only: $prefixed"
+  done
+done
 
 touch "$claude/skills/lazar-tldraw/STALE.md"
 touch "$claude/rules/packs/stale-pack.md"
@@ -901,12 +964,28 @@ seed_skill() {
 # Seeded before the install, so what is under test is a cutover: the state a real machine is in on
 # the day the harness first claims these roots.
 #
-# neobrutalist-pop is the ticket's named survivor, and use-railway is the Railway CLI's own skill in
-# the Railway CLI's own directory — the one the harness takes from another tool, which is the cost
-# this purge is worth naming rather than the bug it would be if nobody had.
+# neobrutalist-pop is the ticket's named survivor: a skill the harness does not ship, seeded in a
+# root it purges.
 seed_skill "$PARITY_HOME/.agents/skills/neobrutalist-pop" "not a global default" "brutal"
-seed_skill "$PARITY_HOME/.agents/skills/use-railway" "railway's own" "rail"
 seed_skill "$PARITY_HOME/.config/opencode/skill/smuggled-skill" "via the singular dir" "smuggled"
+
+# use-railway seeded exactly as `railway skills install` leaves it, which is the state #60 is about.
+# The CLI always writes ~/.agents/skills, and that root outranks ~/.claude/skills in OpenCode, so
+# this copy is what OpenCode reads until the harness empties the root.
+#
+# Seeded with a body of its own rather than the harness's bytes, because that is the whole question:
+# both installers write the same *name*, and a check that use-railway is on disk passes whichever
+# copy won. This one loses only if the purge really happened — asserted through `opencode debug
+# skill` below, never through the filesystem.
+#
+# It also stands in for the drift the pin trades for, which is why the seeded body is a *newer*
+# revision rather than a corrupted one. Once upstream moves past the lockfile, this is exactly what
+# a `railway skills install` leaves behind: a newer copy in the root that outranks. The decision is
+# that the pin wins — the install empties the root and the older pinned copy is what resolves, the
+# same contract every other vendored skill has, with `./vendor-skills.sh --update` as the way out.
+# Asserting that here is what makes the downgrade a decision rather than an accident.
+seed_skill "$PARITY_HOME/.agents/skills/use-railway" \
+  "RAILWAY CLI copy, newer than the pin" "railway cli body, a revision ahead of the lockfile"
 
 # The shadow, and the reason a file-landed assertion is vacuous here. This is a name the harness
 # *does* ship, planted in the root that outranks the one the harness installs it to. Leave
@@ -946,6 +1025,16 @@ if command -v opencode >/dev/null 2>&1; then
     pass "before the install, ~/.agents/skills really does outrank the root the harness installs to"
   else
     fail "before the install, ~/.agents/skills really does outrank the root the harness installs to: got '$(before_location lazar-tldraw)'"
+  fi
+
+  # The same control for the skill this ticket ships, and the reason the ping-pong was real: a
+  # `railway skills install` puts its copy in the root that wins, so before the harness install
+  # OpenCode reads Railway's use-railway and not the pinned one. Without this line, the
+  # after-install assertion could pass on an OpenCode that never read ~/.agents at all.
+  if [ "$(before_location use-railway)" = "$parity_agents_unresolved/use-railway/SKILL.md" ]; then
+    pass "before the install, OpenCode reads the Railway CLI's use-railway out of ~/.agents/skills"
+  else
+    fail "before the install, OpenCode reads the Railway CLI's use-railway out of ~/.agents/skills: got '$(before_location use-railway)'"
   fi
 
   for live in neobrutalist-pop smuggled-skill; do
@@ -1072,6 +1161,32 @@ if command -v opencode >/dev/null 2>&1; then
   else
     fail "the lazar-tldraw OpenCode actually resolves is the one the harness ships, not the shadow: got '$tldraw_location'"
   fi
+
+  # #60's acceptance criterion, and the only assertion here that answers it. Both installers write
+  # a skill called `use-railway`; the question was never whether one is on disk but which one loads
+  # after both have run. Judged on the bytes OpenCode resolved, so the Railway copy seeded in the
+  # root that outranks ~/.claude/skills fails this while every file-landed check stays green.
+  railway_location=$(location_of use-railway)
+
+  if [ -n "$railway_location" ] &&
+    cmp -s -- "$HARNESS_SOURCE/skills/use-railway/SKILL.md" "$railway_location"; then
+    pass "the use-railway OpenCode resolves is the harness's pinned copy, not the Railway CLI's"
+  else
+    fail "the use-railway OpenCode resolves is the harness's pinned copy, not the Railway CLI's: got '$railway_location'"
+  fi
+
+  # And it resolves out of a root the harness fills, rather than surviving in ~/.agents by accident
+  # of the two copies happening to match. The pin is only authoritative while the copy that wins is
+  # one an install can replace.
+  case "$railway_location" in
+  "$PARITY_HOME/.config/opencode/skills/use-railway/SKILL.md" | \
+    "$PARITY_HOME/.claude/skills/use-railway/SKILL.md")
+    pass "the use-railway OpenCode resolves comes from a root the harness installs to"
+    ;;
+  *)
+    fail "the use-railway OpenCode resolves comes from a root the harness installs to: got '$railway_location'"
+    ;;
+  esac
 
   # The acceptance criterion, stated as the two sets rather than as a list of names: Claude Code
   # loads exactly what is in its skills dir, OpenCode loads what it resolved, and after a cutover
