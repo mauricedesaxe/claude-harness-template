@@ -93,7 +93,8 @@ else is touched.
 
 ```
 install.sh                  the whole install path
-vendor-skills.sh            re-vendors mattpocock/skills as matt-*, tldraw-skill as lazar-tldraw
+vendor-skills.sh            re-vendors mattpocock/skills as matt-*, tldraw-skill as lazar-tldraw,
+                            railway-skills as use-railway
 skills-lock.json            the source and content hash every vendored skill is pinned to
 patches/
   lazar-tldraw.patch        the local divergence from tldraw-skill, re-applied at vendor time
@@ -113,7 +114,8 @@ skills/
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
   matt-*/                   Matt Pocock's 22 skills, vendored (see below)
-                            both are generated — edit the upstream or the patch, not the file
+  use-railway/              Railway ops, vendored — unprefixed on purpose (see below)
+                            all are generated — edit the upstream or the patch, not the file
 docs/
   PHILOSOPHY.md             the paradigm-agnostic spine, installed as a rule
   packs/                    per-paradigm packs, each scoped by its own `paths:`
@@ -177,9 +179,10 @@ a skill writes one the first and only time it has to ask, and reads it forever a
 
 ## Vendored skills
 
-Two upstreams are vendored through the [`skills` CLI](https://skills.sh):
-[Matt Pocock's skills](https://github.com/mattpocock/skills) as `matt-*`, and
-[Agents365-ai/tldraw-skill](https://github.com/Agents365-ai/tldraw-skill) as `lazar-tldraw`.
+Three upstreams are vendored through the [`skills` CLI](https://skills.sh):
+[Matt Pocock's skills](https://github.com/mattpocock/skills) as `matt-*`,
+[Agents365-ai/tldraw-skill](https://github.com/Agents365-ai/tldraw-skill) as `lazar-tldraw`, and
+[railwayapp/railway-skills](https://github.com/railwayapp/railway-skills) as `use-railway`.
 Nothing here is hand-edited, so there is nothing to hand-merge and no local edits an update could
 lose:
 
@@ -209,6 +212,57 @@ hand-maintained, so it survives each future update without anyone remembering it
 vendored names are rewritten, so Claude Code's own `/compact` still means `/compact`, and only
 where a reference and not a path is being written, so `docs/agents/triage-labels.md` and the
 route `/prototype/<name>` are left alone.
+
+### use-railway, the skill that cannot take a prefix
+
+Provenance is readable from the name everywhere else here: `matt-` is Matt's, `lazar-` is mine,
+unprefixed is the runtime's. **`use-railway` is the one deliberate exception**, and it is the
+first thing a tidy-up will try to fix, so here is why it must not be.
+
+The name is not this harness's to choose. `railway skills install` reports, in its own help:
+
+> Always installs to `~/.agents/skills`. Additionally installs to any detected tool directories
+> (e.g. `~/.claude/skills`, `~/.cursor/skills`).
+
+So another tool's installer writes a skill called `use-railway` into a root this harness owns. The
+name is an **interop surface with that installer**, not a label. Rename the vendored copy to
+`railway-use-railway` and the CLI goes on writing plain `use-railway` into `~/.claude/skills` for
+the next harness install to purge — the ping-pong survives untouched, and now there are two skills
+where there was one. That is strictly worse than the problem.
+
+`skills/use-railway/` is therefore vendored under its upstream name, and the prefix rewrite skips
+it by never listing it in `UPSTREAM_SKILLS`. `test/prefix-rewrite.sh` asserts that rather than
+assuming it: adding the name to that list turns three assertions red.
+
+**Why the ping-pong stops, which is not the reason you would guess.** It is not that both
+installers write the same bytes. It is that Railway's installer **defers**: it records a SHA-256
+of every file it writes in `~/.railway/skills.json`, and on the next run a file whose hash it
+cannot verify is one it skips —
+
+```
+! 1 skill(s) skipped because of local changes. Re-run with railway skills update --force to overwrite them.
+```
+
+The harness's pinned copy differs from what the CLI would write (or, on a fresh machine, has no
+recorded hash at all), so `railway skills install` leaves it alone. Only `--force` overwrites it.
+The pinned copy in `~/.claude/skills` is therefore stable: the harness put it there, and Railway
+will not take it back.
+
+**`~/.agents/skills` stays emptied and never written into**, exactly as before. The two rules read
+like they conflict — "never write into `~/.agents`" and "`use-railway` must survive" — but they do
+not, because `~/.agents` does not have to *serve* the skill for the skill to survive. OpenCode
+reads `~/.claude/skills` directly, so the pinned copy is resolvable without a second tree; and
+`~/.agents/skills` **outranks** `~/.claude/skills` in OpenCode, so a copy left there would shadow
+the pinned one and hand the two runtimes different skills under one name. Emptying it is what makes
+the pinned copy authoritative in both. Writing the harness's copy into it would buy nothing and
+cost a third tree to drift.
+
+What remains is bounded and is the drift vendoring trades for. A `railway skills install` refills
+`~/.agents/skills/use-railway`, where it shadows OpenCode until the next harness install empties
+it again; and if upstream has moved past the pin by then, that install **downgrades** the skill
+back to the pinned revision. That is the lockfile working as intended rather than a bug — it is
+the same contract every other vendored skill has — and `./vendor-skills.sh --update` is the
+answer. The pin is set to the revision the CLI ships today, so there is no skew to start with.
 
 ### lazar-tldraw, which carries local patches
 
@@ -241,7 +295,8 @@ bash test/tldraw-patch.sh
 `install-smoke.sh` is one end-to-end pass: it runs the installer with `HOME` pointed at a temp
 directory and asserts what landed on disk — that both runtimes got the skills, the agent, and the
 instructions, that every skill the lockfile pins is installed under its `matt-` or `lazar-` name
-with no body still dispatching to an unprefixed one, and that the OpenCode agent carries the
+(bar `use-railway`, which is asserted to keep its interop name and to ship in that one spelling
+only) with no body still dispatching to an unprefixed one, and that the OpenCode agent carries the
 generated frontmatter while its prompt still matches the source byte for byte.
 
 It also drives `opencode debug skill` against that temp `HOME` and asserts what OpenCode

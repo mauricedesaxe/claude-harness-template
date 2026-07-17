@@ -178,7 +178,9 @@ Add a convention the moment a repo teaches you one. Editing the note by hand is 
 
 ## Skills
 
-`matt-*` is Matt Pocock's, `lazar-*` is mine, anything unprefixed is the runtime's or the repo's.
+`matt-*` is Matt Pocock's, `lazar-*` is mine, anything unprefixed is the runtime's or the repo's —
+bar `use-railway`, vendored and unprefixed **on purpose**, because Railway's own installer writes
+that name into `~/.claude/skills` and renaming it restarts the fight it ended. Leave it alone.
 Reach for Matt's through `/matt-ask-matt`, not from memory. Mine are seven:
 
 | Skill | Reach for it when |
