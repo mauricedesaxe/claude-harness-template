@@ -12,6 +12,34 @@ CLAUDE_RULES="$CLAUDE_HOME/rules"
 OPENCODE_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
 OPENCODE_RULES="$OPENCODE_HOME/rules"
 
+# The two roots OpenCode reads that the harness installs nothing into, and empties instead.
+#
+# OpenCode resolves skills from four global roots, in this order, highest first (probed by planting
+# colliding canaries and reading `opencode debug skill` back, not inferred):
+#
+#   $OPENCODE_HOME/skills  >  $OPENCODE_HOME/skill  >  ~/.agents/skills  >  ~/.claude/skills
+#
+# Claude Code reads only the last of those. So a skill in either root below loads in OpenCode and
+# not in Claude Code, which is the divergence this harness exists to prevent — and because both
+# outrank ~/.claude/skills, a name the harness *does* ship can be shadowed there by a different
+# copy, which diverges the two runtimes while every file the installer wrote is still on disk.
+#
+# Neither is installed into. OpenCode auto-loads ~/.claude/skills directly and unconditionally, so
+# the harness's skills already reach it without a second copy; adding one would be double state
+# that drifts (`§26`), which is the same reason bootstrap-harness tells Codex to read
+# .claude/skills through the bridge rather than mirror into .agents/skills.
+#
+# The two resolve differently on purpose. The singular is OpenCode's own, so it follows OpenCode's
+# home and honours XDG_CONFIG_HOME like everything else under it. ~/.agents answers to no config
+# home at all — OpenCode reads it straight off HOME, with nothing to redirect it — so it is the one
+# skills root that is shared across all three Claude Code profiles on this laptop rather than being
+# one profile's. That gives it the shape CLAUDE_HOOKS has and the same cost, stated where that one
+# states it: every profile's install purges this one directory, and none of them knows the others
+# exist. Unlike the hooks case there is nothing left dangling by that — an emptied root is emptied
+# for everyone, which is what all three profiles wanted anyway.
+AGENTS_SKILLS="$HOME/.agents/skills"
+OPENCODE_SKILL_SINGULAR="$OPENCODE_HOME/skill"
+
 # The instructions merge drops its own previous entries by matching this prefix, so changing the
 # spelling orphans an existing install's rather than replacing them. `~` is what OpenCode expands
 # and what is already on disk; only rules landing outside $HOME need the absolute form.
@@ -58,6 +86,20 @@ report_replace() {
   done <<<"$entries"
 }
 
+# A root that is emptied rather than replaced: everything in it goes, so the report never recurses.
+# It stops at the shallowest name, which is the whole name — an orphan skill is one line, not its
+# tree, and there is no surviving sibling underneath to keep quiet about.
+report_purge() {
+  local dest=$1 entries entry
+  [ -d "$dest" ] || return 0
+  dest=$(resolve_dir "$dest")
+  entries=$(find "$dest" -mindepth 1 -maxdepth 1 2>/dev/null | sort || true)
+  [ -n "$entries" ] || return 0
+  while IFS= read -r entry; do
+    printf '  %-7s %s\n' delete "$entry"
+  done <<<"$entries"
+}
+
 # Resolved through its parent for the same reason report_replace resolves: one report naming the
 # same directory two ways is a report the reader has to check rather than read.
 report_write() {
@@ -74,6 +116,15 @@ report_plan() {
   # Named on its own line because it is the one target that is not under either home above, and a
   # purge list is only knowable in advance if the reader knows which directory it is about to read.
   printf '  hooks     %s\n' "$CLAUDE_HOOKS"
+  # Same reason, and one more: this directory is the Railway CLI's, not the harness's. It is emptied
+  # and never written to, and `railway skills install` puts its skill straight back, so a reader who
+  # only saw the delete line below would not know who to expect it back from.
+  printf '  agents    %s (emptied; owned by the Railway CLI)\n' "$AGENTS_SKILLS"
+  # Named even though it sits under the opencode home above, because what that header implies is a
+  # directory that gets replaced, and this one gets emptied. An empty one prints no delete lines at
+  # all, so without this the only root the reader would never learn about is the invisible one.
+  printf '  skill     %s (emptied; OpenCode reads it, the harness ships nothing to it)\n' \
+    "$OPENCODE_SKILL_SINGULAR"
   printf '  surface   %s\n' "$HARNESS_SURFACE"
   report_write "$CLAUDE_HOME/CLAUDE.md"
   report_write "$OPENCODE_HOME/AGENTS.md"
@@ -85,6 +136,8 @@ report_plan() {
   report_replace "$OPENCODE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   report_replace "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
   report_replace "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
+  report_purge "$AGENTS_SKILLS"
+  report_purge "$OPENCODE_SKILL_SINGULAR"
   report_replace "$CLAUDE_HOME/agents" "$HARNESS_SOURCE/agents"
   report_replace "$OPENCODE_HOME/agents" "$HARNESS_SOURCE/agents"
   report_replace "$CLAUDE_HOOKS" "$HARNESS_SOURCE/hooks"
@@ -103,6 +156,54 @@ replace_dir() {
   rm -rf -- "$dest"
   mv -- "$staged/payload" "$dest"
   rmdir -- "$staged"
+}
+
+# The one arrangement in which emptying a root would empty the harness itself.
+#
+# The purged roots are named as paths and reached through whatever they turn out to be, so a link
+# from one onto a directory the installer fills is not a strange thing to imagine — it is the
+# obvious way to read "one source of truth", it is how ~/.claude-personal and ~/.claude-iconic
+# already reach ~/.claude/skills on this machine, and Railway installing to both ~/.agents/skills
+# and ~/.claude/skills is a standing invitation to tie them together. Left alone it is silent and
+# total: install_skills fills the skills tree, purge_dir resolves the link onto that same tree and
+# empties it, and the run prints its success line and exits 0 with every skill gone.
+#
+# The report does not save anyone either. report_purge would list all of them under `delete`,
+# which reads exactly like the orphan lines beside it.
+#
+# So it stops, before the plan rather than during the install: it is a machine that is wired wrong
+# rather than a state to reconcile, and there is no answer here that is not a guess at which of the
+# two directories was meant. Skipping the purge instead would leave OpenCode reading the root this
+# ticket exists to close.
+assert_purge_root_distinct() {
+  local root=$1 resolved target
+  [ -d "$root" ] || return 0
+  resolved=$(resolve_dir "$root")
+  for target in "$CLAUDE_HOME/skills" "$OPENCODE_HOME/skills"; do
+    [ -d "$target" ] || continue
+    [ "$resolved" = "$(resolve_dir "$target")" ] || continue
+    die "$root resolves to $resolved, which is where this installer puts the skills it ships, so
+emptying it would take every one of them with it. Point it somewhere of its own or remove it:
+OpenCode reads $CLAUDE_HOME/skills directly, so a link from here to there buys nothing it does
+not already have."
+  done
+}
+
+# Emptied, not removed. The directory itself is left standing for the same reason its contents are
+# not: ~/.agents is the Railway CLI's — it created it, and `railway skills` documents that it
+# "always installs to ~/.agents/skills" — so taking the directory away is a decision about another
+# tool's layout that the harness has no standing to make, and no purpose either, since Railway
+# recreates it on the next run. What the harness has standing to say is which skills load in the
+# runtimes it configures, and that is what emptying it says.
+#
+# Resolved first for the same reason replace_dir resolves: on this machine a skills dir can be a
+# symlink, and `rm -rf` unlinks a link rather than following it, so an unresolved purge would take
+# the link and leave every skill it pointed at loading.
+purge_dir() {
+  local dest=$1
+  [ -d "$dest" ] || return 0
+  dest=$(resolve_dir "$dest")
+  find "$dest" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 }
 
 # OpenCode rejects an agent without `mode`. Every agent this harness ships is a reviewer,
@@ -245,9 +346,18 @@ install_philosophy() {
 
 # A skill the harness stops shipping has to stop loading, so the whole tree is replaced rather
 # than each shipped name in turn, which never touches a destination the source has no name for.
+#
+# Replacing those two is only half of it: OpenCode reads two further roots that Claude Code does
+# not, and both outrank ~/.claude/skills. A skill left in either goes on loading in one runtime and
+# not the other, which the file-level assertions above this cannot see — every file the installer
+# wrote is exactly where it put it, and the runtimes still disagree. So the roots the harness does
+# not ship into are emptied, and what proves it is `opencode debug skill` resolving the same set of
+# names Claude Code has, not a directory listing.
 install_skills() {
   replace_dir "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
   replace_dir "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
+  purge_dir "$AGENTS_SKILLS"
+  purge_dir "$OPENCODE_SKILL_SINGULAR"
 }
 
 # The tools enforce-jj.sh decides on. Claude Code only hands a hook the calls its matcher names, so
@@ -366,6 +476,11 @@ esac
 [ "$APPLY" = false ] ||
   command -v jq >/dev/null ||
   die "jq is needed to merge OpenCode's instructions array and Claude Code's hooks"
+
+# Before the plan, not before the purge: a report that listed every installed skill under `delete`
+# would be answered by the reader, not the script, and the answer it invites is to run it anyway.
+assert_purge_root_distinct "$AGENTS_SKILLS"
+assert_purge_root_distinct "$OPENCODE_SKILL_SINGULAR"
 
 if [ "$APPLY" = false ]; then
   report_plan "this is what installing would do to this machine"

@@ -38,6 +38,54 @@ resolves it, so the harness lands where it is actually read:
 With neither variable set that is `~/.claude/` and `~/.config/opencode/`, which is what the
 paths below assume.
 
+### Every global root a runtime reads skills from
+
+A config home is not the whole story for skills. OpenCode auto-loads two roots that sit outside its
+own home, and both **outrank** the ones the installer writes, so a skill in either loads in OpenCode
+and not in Claude Code — and can shadow a skill the harness ships while every file the installer
+wrote is exactly where it put it. Probed by planting colliding canaries and reading
+`opencode debug skill` back, highest precedence first:
+
+| Root                              | Claude Code | OpenCode | Install action                |
+| --------------------------------- | ----------- | -------- | ----------------------------- |
+| `$OPENCODE_HOME/skills`           | no          | yes      | replaced whole                |
+| `$OPENCODE_HOME/skill` (singular) | no          | yes      | **emptied**, never written to |
+| `~/.agents/skills`                | no          | yes      | **emptied**, never written to |
+| `$CLAUDE_HOME/skills`             | yes         | yes      | replaced whole                |
+| `<built-in>`                      | no          | yes      | out of reach — see below      |
+
+Claude Code (2.1.209) reads the last directory alone: its binary carries 63 references to
+`.claude/skills` and none to `.agents/skills`. Neither runtime reads a singular `skill/` under
+`~/.claude` or `~/.agents` — the singular spelling is OpenCode's, and only under its own home.
+
+Two roots are emptied rather than installed into, because OpenCode reads `~/.claude/skills`
+directly and unconditionally: the harness's skills already reach it there, and a second copy would
+be double state that drifts (`§26`). Emptying is all that is needed and all that is right.
+
+**`~/.agents` is the Railway CLI's, not the harness's.** `railway skills` documents that it
+"always installs to `~/.agents/skills`", additionally installing to detected tool directories such
+as `~/.claude/skills`; it created the directory on this machine, and it treats it as the
+`Universal (.agents)` target shared with Codex, Cursor, Copilot and Factory Droid. So the harness
+**empties that directory and leaves it standing** — removing a directory another tool owns and
+recreates buys nothing. This is a purge with an owner on the other side of it: the next
+`railway skills install` puts its skill straight back, and the next harness install takes it out
+again. That is a standoff rather than a fix, and it is written here rather than left to be
+discovered. The install's plan names the directory and every entry it is about to delete from it,
+so it is readable before it happens instead of after.
+
+OpenCode also resolves one skill from no directory at all: `customize-opencode`, compiled into the
+binary, `location: "<built-in>"`, present with an empty `HOME` and no config. No installer can
+purge it, so the two runtimes can never resolve literally identical sets. The parity test excludes
+it by that sentinel, and by nothing else.
+
+**Do not link either emptied root onto a root the installer fills.** Symlinking
+`~/.agents/skills` at `~/.claude/skills` looks like "one source of truth" and is the exact shape
+`~/.claude-personal/skills` already has, but it would mean the install fills the skills tree and
+then empties it through the link — every skill gone, exit 0. The installer refuses that
+arrangement and stops before it prints a plan, because there is no way to tell which of the two
+directories was meant. Give each root its own directory, or remove the link: OpenCode reads
+`~/.claude/skills` directly, so linking to it from `~/.agents/skills` buys nothing.
+
 `settings.json` and `opencode.json` are **merged**, not replaced: they carry model choice,
 plugins and auth-adjacent config that are none of the harness's business. Each install drops the
 entries a previous one wrote and adds back what ships now, so nothing accumulates and nothing
@@ -195,6 +243,13 @@ directory and asserts what landed on disk — that both runtimes got the skills,
 instructions, that every skill the lockfile pins is installed under its `matt-` or `lazar-` name
 with no body still dispatching to an unprefixed one, and that the OpenCode agent carries the
 generated frontmatter while its prompt still matches the source byte for byte.
+
+It also drives `opencode debug skill` against that temp `HOME` and asserts what OpenCode
+**resolved**, which is the one thing a disk check cannot stand in for: a skill planted in
+`~/.agents/skills` shadows the harness's own copy of the same name, so every file assertion passes
+while the two runtimes run different skills under one name. That needs `opencode` on `PATH`; the
+run prints a loud `SKIP` and says so on its last line when it is missing, because a skipped
+resolution check that reads as a pass is the failure this suite exists to avoid.
 
 `enforce-jj.sh` drives the hook with the `PreToolUse` payloads Claude Code sends it and reads the
 decision back out of its JSON. Synthetic, because the alternative is proving a matcher by
