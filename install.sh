@@ -71,18 +71,23 @@ report_plan() {
   printf 'install.sh: %s\n' "$1"
   printf '  claude    %s\n' "$CLAUDE_HOME"
   printf '  opencode  %s\n' "$OPENCODE_HOME"
+  # Named on its own line because it is the one target that is not under either home above, and a
+  # purge list is only knowable in advance if the reader knows which directory it is about to read.
+  printf '  hooks     %s\n' "$CLAUDE_HOOKS"
   printf '  surface   %s\n' "$HARNESS_SURFACE"
   report_write "$CLAUDE_HOME/CLAUDE.md"
   report_write "$OPENCODE_HOME/AGENTS.md"
   report_write "$CLAUDE_RULES/PHILOSOPHY.md"
   report_write "$OPENCODE_RULES/PHILOSOPHY.md"
   report_write "$OPENCODE_HOME/opencode.json" merge
+  report_write "$CLAUDE_HOME/settings.json" merge
   report_replace "$CLAUDE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   report_replace "$OPENCODE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   report_replace "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
   report_replace "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
   report_replace "$CLAUDE_HOME/agents" "$HARNESS_SOURCE/agents"
   report_replace "$OPENCODE_HOME/agents" "$HARNESS_SOURCE/agents"
+  report_replace "$CLAUDE_HOOKS" "$HARNESS_SOURCE/hooks"
 }
 
 # Stage the copy before deleting anything: a destination that resolves back into the source
@@ -179,12 +184,34 @@ install_instructions() {
   write_instructions "$OPENCODE_HOME/AGENTS.md"
 }
 
+# A config the harness merges into rather than owns has to survive being absent and being empty. jq
+# reads empty stdin as no input at all: it prints nothing and exits 0, so a merge of an empty file
+# would stage an empty file, report success, and replace a config that carries someone's model
+# choice with nothing. Whitespace-only reads the same way.
+read_json_object() {
+  local existing=''
+  [ -f "$1" ] && existing=$(<"$1")
+  [ -n "${existing//[[:space:]]/}" ] || existing='{}'
+  printf '%s' "$existing"
+}
+
+# Belt to read_json_object's braces: jq can also stop after writing nothing for a reason neither of
+# them saw coming, and every one of those ends the same way — an empty file moved over a real one.
+commit_merge() {
+  local staged=$1 config=$2
+  [ -s "$staged" ] || {
+    rm -f -- "$staged"
+    die "merging $config produced an empty file, so $config was left alone"
+  }
+  mv -- "$staged" "$config"
+}
+
 # OpenCode has no equivalent of `paths:`, so every instructions entry loads in every session and
 # the packs cannot scope themselves there.
 write_opencode_instructions() {
-  local config="$OPENCODE_HOME/opencode.json" existing='{}' staged
+  local config="$OPENCODE_HOME/opencode.json" existing staged
 
-  [ -f "$config" ] && existing=$(<"$config")
+  existing=$(read_json_object "$config")
 
   staged=$(mktemp -- "$config.XXXXXX")
   printf '%s' "$existing" | jq \
@@ -200,7 +227,7 @@ write_opencode_instructions() {
     rm -f -- "$staged"
     die "could not merge $config"
   }
-  mv -- "$staged" "$config"
+  commit_merge "$staged" "$config"
 }
 
 # Claude Code reads every .md under its rules dir. A rule with no `paths:` frontmatter loads in
@@ -221,6 +248,59 @@ install_philosophy() {
 install_skills() {
   replace_dir "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
   replace_dir "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
+}
+
+# The tools enforce-jj.sh decides on. Claude Code only hands a hook the calls its matcher names, so
+# a tool missing here is a tool the hook never sees: `Agent` is on the list because `isolation:
+# "worktree"` cuts a git worktree through neither `Bash` nor `EnterWorktree`, which is how it walked
+# past the hand-wired matcher this replaces for as long as that matcher was hand-wired.
+JJ_HOOK_MATCHER='Bash|EnterWorktree'
+
+# A hook is the only rule the harness enforces rather than asks for: CLAUDE.md and the rules dir
+# are not inherited by subagents, so a rule written there reaches a main loop and dies at the first
+# delegation boundary, while a PreToolUse hook fires for every agent at every depth. That is not
+# theoretical — an agent told not to run this file complied, and the subagent it spawned ran it.
+#
+# OpenCode gets none of this. It has no hook equivalent, so it keeps guidance alone. Enforcement
+# where it is available beats enforcement nowhere, and that asymmetry is chosen, not overlooked.
+#
+# A hook the harness stops shipping has to stop firing, so the tree is replaced whole the way
+# skills and agents are. Taking the script off the disk is only half of it: write_claude_settings
+# takes the wiring with it, or every prompt would fire a file that is no longer there.
+install_hooks() {
+  replace_dir "$CLAUDE_HOOKS" "$HARNESS_SOURCE/hooks"
+}
+
+# settings.json is the profile's own file — model choice, enabledPlugins, extraKnownMarketplaces,
+# auth-adjacent config — and it is the file that genuinely differs between the profiles here, so it
+# is merged and never replaced. Same shape as write_opencode_instructions: drop what a previous run
+# of this installer wrote, recognised by the hooks directory it points into, then add back what the
+# harness ships now. A matcher group left with no hooks, and an event left with no groups, go too,
+# or the file grows an empty shell of every hook ever shipped.
+write_claude_settings() {
+  local config="$CLAUDE_HOME/settings.json" existing staged
+
+  existing=$(read_json_object "$config")
+
+  staged=$(mktemp -- "$config.XXXXXX")
+  printf '%s' "$existing" | jq \
+    --arg prefix "$CLAUDE_HOOKS/" \
+    --arg matcher "$JJ_HOOK_MATCHER" \
+    --arg command "$CLAUDE_HOOKS/enforce-jj.sh" '
+      def without_harness_hooks:
+        [ .[] | .hooks = [ (.hooks // [])[] | select((.command // "") | startswith($prefix) | not) ]
+              | select((.hooks | length) > 0) ];
+      .hooks = ((.hooks // {}) | with_entries(.value |= without_harness_hooks))
+      | .hooks.PreToolUse = ((.hooks.PreToolUse // []) + [{
+          matcher: $matcher,
+          hooks: [{ type: "command", command: $command }]
+        }])
+      | .hooks |= with_entries(select((.value | length) > 0))
+    ' >"$staged" || {
+    rm -f -- "$staged"
+    die "could not merge $config"
+  }
+  commit_merge "$staged" "$config"
 }
 
 # An agent the harness stops shipping has to stop reviewing, so each directory is replaced
@@ -258,15 +338,34 @@ for arg in "$@"; do
   esac
 done
 
+# Every other target resolves through the runtime's own config home, which is what lets one
+# installer serve the three Claude Code profiles on this laptop. Hooks are the deliberate exception,
+# and they can be: settings.json names a hook by absolute path rather than discovering it under a
+# config home, so one script serves every profile that points at it and three copies would only give
+# three things to drift. That is also why this is a plain shared path and not the symlink the skills
+# dir uses — a symlink is there to make a directory appear under a home that globs it, and nothing
+# globs this one, so the link would be indirection bought for a lookup that never happens.
+#
+# The exception is the topology's, not the harness's: a sandbox has one config home and no profiles,
+# so there is nothing to share with and it resolves like everything else.
+#
+# The cost of sharing, stated because it is real. This run purges a directory every profile reads
+# but only rewrites the settings.json of the profile it was pointed at, because that is the only one
+# it can see: nothing tells it the other two exist. So a run that drops a hook leaves the profiles it
+# was not run for wiring a file that is gone, until they are installed too. Every other target has
+# the same shape — a profile has last release's CLAUDE.md until its own run — but for those the
+# stale profile is merely behind, and for this one it fires a missing file on every prompt. Install
+# every profile in one go, and read the plan before the first, not between the second and the third.
 case "$HARNESS_SURFACE" in
-local | sandbox) ;;
+local) CLAUDE_HOOKS="$HOME/.claude/hooks" ;;
+sandbox) CLAUDE_HOOKS="$CLAUDE_HOME/hooks" ;;
 *) die "HARNESS_SURFACE is $HARNESS_SURFACE; it takes local or sandbox" ;;
 esac
 
-# Only the merge needs it, so a run that reports and stops is not the place to insist on it.
+# Only the merges need it, so a run that reports and stops is not the place to insist on it.
 [ "$APPLY" = false ] ||
   command -v jq >/dev/null ||
-  die "jq is needed to merge OpenCode's instructions array"
+  die "jq is needed to merge OpenCode's instructions array and Claude Code's hooks"
 
 if [ "$APPLY" = false ]; then
   report_plan "this is what installing would do to this machine"
@@ -281,5 +380,12 @@ install_philosophy
 install_skills
 install_agents
 
-printf 'lazar-harness installed to %s and %s for the %s surface\n' \
-  "$CLAUDE_HOME" "$OPENCODE_HOME" "$HARNESS_SURFACE"
+# The wiring before the disk. A merge that dies takes the whole run with it, and the order decides
+# which side of the purge it dies on: this way settings.json still names a hook that is still there,
+# and the run can be re-read and re-run. The other way round leaves the state this pair exists to
+# prevent — a hook purged off the disk and every profile still firing it on every prompt.
+write_claude_settings
+install_hooks
+
+printf 'lazar-harness installed to %s and %s for the %s surface, with hooks in %s\n' \
+  "$CLAUDE_HOME" "$OPENCODE_HOME" "$HARNESS_SURFACE" "$CLAUDE_HOOKS"
