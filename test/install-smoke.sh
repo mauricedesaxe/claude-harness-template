@@ -3,6 +3,9 @@ set -uo pipefail
 
 HARNESS_SOURCE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 failures=0
+# A skip is not a pass, and the one thing that would make it read as one is a run that ends
+# "all assertions passed" without mentioning it. Tracked so the last line has to name it.
+opencode_skipped=false
 
 pass() { printf 'ok   %s\n' "$1"; }
 
@@ -225,6 +228,20 @@ if [ -e "$opencode/hooks" ]; then
 else
   pass "hooks install only where there is something to run them"
 fi
+
+# TEST_HOME had no ~/.agents before this install, and must have none after. The harness empties
+# that directory where another tool has already made it, which is a claim about which skills load;
+# conjuring it on a machine whose owner never installed Railway would be a claim about that
+# machine's layout, which is not the harness's to make. Same for the singular skill/: OpenCode
+# reads it, the harness does not ship into it, and a directory neither of them wants exists only
+# to be found later and wondered about.
+for uninvited in "$TEST_HOME/.agents" "$opencode/skill"; do
+  if [ -e "$uninvited" ]; then
+    fail "installing creates no ${uninvited##*/} dir where there was none to empty"
+  else
+    pass "installing creates no ${uninvited##*/} dir where there was none to empty"
+  fi
+done
 
 assert_same_file "lazar-tldraw installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$claude/skills/lazar-tldraw/SKILL.md"
@@ -855,6 +872,348 @@ fi
 
 rm -rf -- "$LINKED_HOME"
 
+# ── Every global root either runtime reads skills from ──────────────────────────────────────────
+#
+# Probed with colliding canaries and `opencode debug skill` rather than inferred, because the
+# precedence is what decides which copy is read and nothing on disk shows it:
+#
+#   ~/.config/opencode/skills  >  ~/.config/opencode/skill  >  ~/.agents/skills  >  ~/.claude/skills
+#
+# Claude Code (2.1.209) reads the last of those alone: the binary carries 63 references to
+# `.claude/skills` and none at all to `.agents/skills`, and no singular spelling of either — the
+# singular is OpenCode's, and only under its own config home.
+#
+# The installer replaces the two ends and empties the two middles. What is asserted here is what
+# each runtime *resolved*, never what landed: a skill in ~/.agents/skills that outranks the
+# harness's own copy diverges the two runtimes while every file the installer wrote sits exactly
+# where it put it, so a disk check agrees with the installer and proves nothing about either
+# runtime. This is the assertion the ticket is built around.
+PARITY_HOME=$(mktemp -d)
+# A neutral cwd, because OpenCode also loads a project's own `.opencode/skill(s)` from the working
+# directory: run from the repo, this suite's own tree would resolve into the answer.
+NEUTRAL_CWD=$(mktemp -d)
+
+seed_skill() {
+  mkdir -p -- "$1"
+  printf -- '---\nname: %s\ndescription: %s\n---\n%s\n' "${1##*/}" "$2" "$3" >"$1/SKILL.md"
+}
+
+# Seeded before the install, so what is under test is a cutover: the state a real machine is in on
+# the day the harness first claims these roots.
+#
+# neobrutalist-pop is the ticket's named survivor, and use-railway is the Railway CLI's own skill in
+# the Railway CLI's own directory — the one the harness takes from another tool, which is the cost
+# this purge is worth naming rather than the bug it would be if nobody had.
+seed_skill "$PARITY_HOME/.agents/skills/neobrutalist-pop" "not a global default" "brutal"
+seed_skill "$PARITY_HOME/.agents/skills/use-railway" "railway's own" "rail"
+seed_skill "$PARITY_HOME/.config/opencode/skill/smuggled-skill" "via the singular dir" "smuggled"
+
+# The shadow, and the reason a file-landed assertion is vacuous here. This is a name the harness
+# *does* ship, planted in the root that outranks the one the harness installs it to. Leave
+# ~/.agents/skills alone and every assertion above still passes — lazar-tldraw's SKILL.md is on
+# disk, byte-identical to source, in both dirs the installer writes — while OpenCode reads this
+# copy instead and the two runtimes are running different skills under one name.
+seed_skill "$PARITY_HOME/.agents/skills/lazar-tldraw" "SHADOW not the harness copy" "shadow body"
+
+# Resolved before the install, not after: an installer that removed the directory instead of
+# emptying it would leave this `cd` with nothing to resolve, and the delete-line assertions below
+# would fail for that reason rather than their own, reporting the wrong thing about the right bug.
+# Two spellings of one directory, and both are needed, which is the whole hazard. install.sh's
+# report resolves what it will unlink, so the delete lines are `/private/var/...` here; OpenCode
+# builds its locations out of HOME as it was handed it and never resolves, so its locations are
+# `/var/...`. On Linux the two are one string and this reads as pedantry; on this Mac /var is a link
+# to /private/var, and matching an OpenCode location against the resolved form compares paths that
+# can never be equal — which does not fail, it passes, because the assertion it feeds is a negative.
+parity_agents_real=$(cd -- "$PARITY_HOME/.agents/skills" && pwd -P)
+parity_agents_unresolved="$PARITY_HOME/.agents/skills"
+
+# The negative control, and the reason the block below is worth anything. Every assertion after the
+# install is an absence, and an absence proves the purge only if the thing was there to begin with:
+# an OpenCode that had quietly stopped reading these roots, or a seed that never resolved, would
+# satisfy all of them while the purge did nothing at all. So the roots are shown to be live first —
+# the shadow really does outrank the harness's copy, and the singular really is read — and only
+# then is their silence afterwards evidence.
+if command -v opencode >/dev/null 2>&1; then
+  parity_before=$(mktemp)
+  (cd -- "$NEUTRAL_CWD" &&
+    env -i PATH="$PATH" HOME="$PARITY_HOME" opencode debug skill) >"$parity_before" 2>/dev/null
+
+  before_location() {
+    jq -r --arg n "$1" '.[] | select(.name == $n) | .location' "$parity_before"
+  }
+
+  if [ "$(before_location lazar-tldraw)" = "$parity_agents_unresolved/lazar-tldraw/SKILL.md" ]; then
+    pass "before the install, ~/.agents/skills really does outrank the root the harness installs to"
+  else
+    fail "before the install, ~/.agents/skills really does outrank the root the harness installs to: got '$(before_location lazar-tldraw)'"
+  fi
+
+  for live in neobrutalist-pop smuggled-skill; do
+    if [ -n "$(before_location "$live")" ]; then
+      pass "before the install, OpenCode really does read $live out of the root it was seeded in"
+    else
+      fail "before the install, OpenCode really does read $live out of the root it was seeded in"
+    fi
+  done
+
+  rm -f -- "$parity_before"
+fi
+
+parity_report=$(run_installer "$PARITY_HOME") || fail "the installer runs against seeded extra roots"
+
+for doomed in neobrutalist-pop use-railway lazar-tldraw; do
+  if printf '%s\n' "$parity_report" | grep -qF -- "delete  $parity_agents_real/$doomed"; then
+    pass "the install names ~/.agents/skills/$doomed before purging it"
+  else
+    fail "the install names ~/.agents/skills/$doomed before purging it"
+  fi
+done
+
+# The directory is another tool's. Emptying it is the harness's call; removing it is not, and
+# Railway would recreate it regardless.
+if [ -d "$PARITY_HOME/.agents/skills" ]; then
+  pass "the install empties ~/.agents/skills rather than removing a directory it does not own"
+else
+  fail "the install empties ~/.agents/skills rather than removing a directory it does not own"
+fi
+
+# Emptied, and not refilled. A harness copy here would be a third tree of the same skills, drifting
+# against the two the installer already keeps, in a directory another tool rewrites on its own
+# schedule. OpenCode reads ~/.claude/skills directly, so it would buy nothing either.
+left_in_agents=$(find "$PARITY_HOME/.agents/skills" -mindepth 1 -maxdepth 1 2>/dev/null)
+
+if [ -z "$left_in_agents" ]; then
+  pass "the harness installs nothing into ~/.agents/skills, so there is no third copy to drift"
+else
+  fail "the harness installs nothing into ~/.agents/skills:$left_in_agents"
+fi
+
+# Asserted to still be there before it is asserted to be empty: `find` on a directory that is gone
+# errors into /dev/null and reports nothing left, which is indistinguishable from a directory that
+# was emptied. Its ~/.agents counterpart is covered by the "leaves it standing" assertion above;
+# this root had no equivalent, so an installer that removed it passed for the wrong reason.
+if [ -d "$PARITY_HOME/.config/opencode/skill" ]; then
+  pass "the install empties the singular skill/ dir rather than removing it"
+else
+  fail "the install empties the singular skill/ dir rather than removing it"
+fi
+
+singular_left=$(find "$PARITY_HOME/.config/opencode/skill" -mindepth 1 -maxdepth 1 2>/dev/null)
+
+if [ -z "$singular_left" ]; then
+  pass "the singular skill/ dir cannot smuggle a skill past the harness"
+else
+  fail "the singular skill/ dir cannot smuggle a skill past the harness:$singular_left"
+fi
+
+# The seam the ticket names. The two checks just above do fail on an installer that empties
+# nothing — but they fail on the disk, and the disk is not the claim. The claim is that OpenCode
+# stops reading these skills, and the only thing that knows whether OpenCode reads a skill is
+# OpenCode. That gap is not hypothetical: the shadow seeded below leaves both of those checks
+# green, because the harness's own copy is on disk exactly where it belongs, while the copy
+# OpenCode actually resolves is somewhere else entirely.
+if command -v opencode >/dev/null 2>&1; then
+  # Redirected to a file rather than captured, and this is load-bearing rather than style. OpenCode
+  # 1.17.13 truncates this output at 64 KiB when stdout is a pipe — a `$(...)` capture of the tree
+  # below returns 65272 bytes of the 230147 it writes to a file, cut mid-string. jq then fails to
+  # parse, every lookup against it returns empty, and "OpenCode resolves no neobrutalist-pop" passes
+  # because nothing resolved at all. The truncation is silent and exit status stays 0.
+  opencode_skills=$(mktemp)
+  (cd -- "$NEUTRAL_CWD" &&
+    env -i PATH="$PATH" HOME="$PARITY_HOME" opencode debug skill) >"$opencode_skills" 2>/dev/null
+
+  # `<built-in>` is OpenCode's own `customize-opencode`, compiled into the binary and resolved with
+  # an empty HOME and no config at all. It is in no root, so no installer can purge it and the two
+  # runtimes can never resolve literally identical sets. Excluded by the sentinel OpenCode prints
+  # rather than by name, so a second built-in is excluded on the same grounds rather than silently
+  # failing this — and nothing on disk can claim the exemption, because a real skill has a path.
+  opencode_resolved() {
+    jq -r '.[] | select(.location != "<built-in>") | .name' "$opencode_skills" | sort
+  }
+
+  location_of() {
+    jq -r --arg n "$1" '.[] | select(.name == $n) | .location' "$opencode_skills"
+  }
+
+  # The guard the truncation above walks straight through, and the one every assertion below leans
+  # on: unparseable output makes each lookup return nothing, which reads as "the purge worked". So
+  # the resolution has to be shown to be a resolution — parseable, an array, and carrying the
+  # built-in OpenCode resolves even with an empty HOME — before an empty answer is allowed to mean
+  # anything. Truncation cuts the tail, so a whole-file parse is what catches it.
+  if [ "$(jq -r 'type' "$opencode_skills" 2>/dev/null)" = array ] &&
+    [ "$(jq -r '[.[] | select(.location == "<built-in>")] | length' "$opencode_skills")" -gt 0 ]; then
+    pass "opencode debug skill answers in full, so the assertions below read a real resolution"
+  else
+    fail "opencode debug skill answers in full, so the assertions below read a real resolution"
+  fi
+
+  # Named on its own because the ticket names it: neo-brutalism was decided against as a global
+  # default and belongs to lazar-ecosystem, and it survived the cutover in OpenCode alone. The set
+  # check below subsumes this — the harness ships no such skill, so parity cannot hold while it
+  # resolves — but a criterion worth writing down is worth failing by name rather than as a diff.
+  # use-railway and smuggled-skill are deliberately not asserted here for that reason: they carry no
+  # criterion of their own, and the set check already refuses them.
+  if [ -z "$(location_of neobrutalist-pop)" ]; then
+    pass "OpenCode resolves no neobrutalist-pop after a cutover install"
+  else
+    fail "OpenCode resolves no neobrutalist-pop after a cutover install: $(location_of neobrutalist-pop)"
+  fi
+
+  # The shadow, judged on what OpenCode read rather than where it read it. Content rather than path
+  # because content is the thing that matters: a copy in the shadow's place with the harness's bytes
+  # would be harmless, and a copy in the right place with someone else's bytes would not be. The
+  # seeded shadow carries a body of its own, so this fails on it, and the `-n` guard makes a
+  # resolution of nothing at all fail here too rather than pass by comparing against an empty path.
+  tldraw_location=$(location_of lazar-tldraw)
+
+  if [ -n "$tldraw_location" ] &&
+    cmp -s -- "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$tldraw_location"; then
+    pass "the lazar-tldraw OpenCode actually resolves is the one the harness ships, not the shadow"
+  else
+    fail "the lazar-tldraw OpenCode actually resolves is the one the harness ships, not the shadow: got '$tldraw_location'"
+  fi
+
+  # The acceptance criterion, stated as the two sets rather than as a list of names: Claude Code
+  # loads exactly what is in its skills dir, OpenCode loads what it resolved, and after a cutover
+  # install those agree. A new skill added to the harness needs no edit here.
+  claude_resolved=$(find "$PARITY_HOME/.claude/skills" -mindepth 1 -maxdepth 1 -type d \
+    -exec basename {} \; 2>/dev/null | sort)
+
+  if [ "$(opencode_resolved)" = "$claude_resolved" ]; then
+    pass "Claude Code and OpenCode resolve the same set of skill names after a cutover install"
+  else
+    fail "Claude Code and OpenCode resolve the same set of skill names after a cutover install: $(
+      diff <(printf '%s\n' "$claude_resolved") <(opencode_resolved) | tr '\n' ' '
+    )"
+  fi
+
+  rm -f -- "$opencode_skills"
+else
+  printf 'SKIP %s\n' "the OpenCode resolution assertions: opencode is not on PATH" >&2
+  opencode_skipped=true
+fi
+
+rm -rf -- "$PARITY_HOME" "$NEUTRAL_CWD"
+
+# The purged roots, symlinked — the shape the replaced ones are already asserted against above,
+# because a skills dir being a link is how this machine is already arranged: ~/.claude-personal and
+# ~/.claude-iconic both reach ~/.claude/skills through one, which is the habit that would link
+# these two the day a second profile or a second machine wants them shared.
+#
+# This is the trap the purge has that the replace does not. `rm -rf` unlinks a link rather than
+# following it, which is why replace_dir resolves; `find` is worse, because it does not descend a
+# starting point that is a symlink *and says nothing* — `[ -d ]` passes, the walk returns no
+# entries, and the purge reports nothing to delete and deletes nothing. Every other assertion in
+# this file stays green while both roots go on serving every skill they hold.
+#
+# So this block is what makes resolve_dir in purge_dir mean anything, and that is not a guess:
+# delete that line with this block removed and the suite still passes, which is the whole failure
+# this ticket is about. A line that no test can kill is a line the next reader deletes as dead.
+LINKED_PURGE_HOME=$(mktemp -d)
+linked_agents="$LINKED_PURGE_HOME/real-agents-skills"
+linked_singular="$LINKED_PURGE_HOME/real-singular-skills"
+
+mkdir -p -- "$linked_agents/stale-agents-skill" "$linked_singular/stale-singular-skill" \
+  "$LINKED_PURGE_HOME/.agents" "$LINKED_PURGE_HOME/.config/opencode"
+printf -- '---\nname: stale-agents-skill\n---\n' >"$linked_agents/stale-agents-skill/SKILL.md"
+printf -- '---\nname: stale-singular-skill\n---\n' >"$linked_singular/stale-singular-skill/SKILL.md"
+ln -s -- "$linked_agents" "$LINKED_PURGE_HOME/.agents/skills"
+ln -s -- "$linked_singular" "$LINKED_PURGE_HOME/.config/opencode/skill"
+
+# Resolved before the install for the same reason the parity block resolves before its own: these
+# name what the purge will unlink, and a purge that wrongly removed the target directory would
+# leave nothing here to resolve, failing these for a reason that is not what they are about.
+# `pwd -P` because the report resolves, and on a Mac these temp paths are under /var, which is a
+# link to /private/var — the spelling handed in is not the spelling deleted.
+linked_agents_real=$(cd -- "$linked_agents" && pwd -P)
+linked_singular_real=$(cd -- "$linked_singular" && pwd -P)
+
+linked_purge_report=$(run_installer "$LINKED_PURGE_HOME") ||
+  fail "the installer runs against symlinked purge roots"
+
+for doomed in "$linked_agents_real/stale-agents-skill" "$linked_singular_real/stale-singular-skill"; do
+  if printf '%s\n' "$linked_purge_report" | grep -qF -- "delete  $doomed"; then
+    pass "a symlinked purge root names ${doomed##*/} at the path it really sits at"
+  else
+    fail "a symlinked purge root names ${doomed##*/} at the path it really sits at"
+  fi
+done
+
+if [ -e "$linked_agents/stale-agents-skill" ]; then
+  fail "purging reaches through a symlinked ~/.agents/skills"
+else
+  pass "purging reaches through a symlinked ~/.agents/skills"
+fi
+
+if [ -e "$linked_singular/stale-singular-skill" ]; then
+  fail "purging reaches through a symlinked singular skill/ dir"
+else
+  pass "purging reaches through a symlinked singular skill/ dir"
+fi
+
+# The link is the user's arrangement, not something to replace with a real directory: doing that
+# would leave the tree behind it loading in OpenCode forever, which is the failure being prevented.
+if [ -L "$LINKED_PURGE_HOME/.agents/skills" ] && [ -L "$LINKED_PURGE_HOME/.config/opencode/skill" ]; then
+  pass "purging leaves a symlinked root a symlink"
+else
+  fail "purging leaves a symlinked root a symlink"
+fi
+
+rm -rf -- "$LINKED_PURGE_HOME"
+
+# A purge root linked onto a directory the installer fills, which is the one arrangement where
+# emptying a root empties the harness. Not a hypothetical: linking skills dirs together is how
+# ~/.claude-personal and ~/.claude-iconic already reach ~/.claude/skills here, "one source of
+# truth" argues for it, and Railway writing to both ~/.agents/skills and ~/.claude/skills is an
+# invitation to tie exactly these two together. Unguarded it is silent and total — the install
+# fills the skills tree, the purge resolves the link back onto it and empties it, and the run
+# prints its success line and exits 0 with every skill gone. Driven for both roots, because both
+# are reached through whatever they resolve to.
+for aliased in agents singular; do
+  ALIASED_HOME=$(mktemp -d)
+
+  run_installer "$ALIASED_HOME" >/dev/null || fail "the installer runs before a root is aliased"
+
+  case "$aliased" in
+  agents)
+    aliased_root="$ALIASED_HOME/.agents/skills"
+    aliased_onto="$ALIASED_HOME/.claude/skills"
+    mkdir -p -- "$ALIASED_HOME/.agents"
+    ;;
+  singular)
+    aliased_root="$ALIASED_HOME/.config/opencode/skill"
+    aliased_onto="$ALIASED_HOME/.config/opencode/skills"
+    ;;
+  esac
+
+  ln -s -- "$aliased_onto" "$aliased_root"
+  installed_before=$(find "$aliased_onto" -mindepth 1 -maxdepth 1 | sort)
+
+  if run_installer "$ALIASED_HOME" >/dev/null 2>&1; then
+    fail "an install stops when the $aliased root is aliased onto the skills it ships"
+  else
+    pass "an install stops when the $aliased root is aliased onto the skills it ships"
+  fi
+
+  # The whole point of stopping. An assertion on the exit status alone would pass on a run that
+  # emptied the tree and then complained about it.
+  if [ "$(find "$aliased_onto" -mindepth 1 -maxdepth 1 | sort)" = "$installed_before" ]; then
+    pass "an install stopped by an aliased $aliased root leaves every shipped skill in place"
+  else
+    fail "an install stopped by an aliased $aliased root leaves every shipped skill in place"
+  fi
+
+  # The dry run stops on it too. It is the run that is supposed to be safe to make sense of, and
+  # here it is the run that would print every installed skill under `delete` and read as normal.
+  if env -i PATH="$PATH" HOME="$ALIASED_HOME" "$HARNESS_SOURCE/install.sh" >/dev/null 2>&1; then
+    fail "a run with no --install stops on an aliased $aliased root rather than reporting a purge of everything"
+  else
+    pass "a run with no --install stops on an aliased $aliased root rather than reporting a purge of everything"
+  fi
+
+  rm -rf -- "$ALIASED_HOME"
+done
+
 REDIRECT_HOME=$(mktemp -d)
 redirect_claude="$REDIRECT_HOME/claude-config-dir"
 redirect_xdg="$REDIRECT_HOME/xdg-config-home"
@@ -1078,7 +1437,9 @@ else
   fail "the installer writes nothing outside the home the test gave it"
 fi
 
-if [ "$failures" -eq 0 ]; then
+if [ "$failures" -eq 0 ] && [ "$opencode_skipped" = true ]; then
+  echo "install-smoke: all assertions passed, but the OpenCode resolution assertions were skipped"
+elif [ "$failures" -eq 0 ]; then
   echo "install-smoke: all assertions passed"
 else
   printf 'install-smoke: %d assertion(s) failed\n' "$failures" >&2
