@@ -269,6 +269,64 @@ assert_survives() {
   fi
 }
 
+# A PATH with everything the hook runs except jq. Not an empty PATH: the hook shells out to cat,
+# dirname, grep and tr, and `#!/usr/bin/env bash` needs to find bash, so a PATH with nothing in it
+# would prove the hook denies when it cannot run *at all* — which every broken hook does — rather
+# than that it denies on this one missing dependency. Only the hook's PATH is reduced; the suite
+# keeps its own jq to read the decision back out.
+NOJQ_PATH=$(mktemp -d)
+trap 'rm -rf -- "$JJ_REPO" "$GIT_REPO" "$NOJQ_PATH"' EXIT
+for binary in bash cat dirname grep sed tr; do
+  ln -s "$(command -v "$binary")" "$NOJQ_PATH/$binary"
+done
+
+if [ -n "$(PATH="$NOJQ_PATH" command -v jq 2>/dev/null)" ]; then
+  fail 'the no-jq PATH really has no jq'
+else
+  pass 'the no-jq PATH really has no jq'
+fi
+
+nojq_response() {
+  (cd "$1" && printf '%s' "$2" | env PATH="$NOJQ_PATH" "$HOOK" 2>/dev/null)
+}
+
+# Without jq the hook cannot read the payload, so it cannot tell a mutation from a read — and the
+# answer to that is a refusal, not a shrug. Fail-open here was not a degraded guard, it was no
+# guard, reached silently and with no diagnostic; `install.sh` checks for jq, but that is a
+# different machine at a different time.
+#
+# The command is read-only on purpose: it is the one the hook allows when it can see it, so a hook
+# that denied it for the *matcher's* reason rather than for jq's would be indistinguishable from the
+# fix. Nothing in this payload can be seen at all, which is exactly why it has to deny.
+nojq_deny=$(nojq_response "$JJ_CWD" '{"tool_name":"Bash","cwd":"'"$JJ_CWD"'","tool_input":{"command":"git status"}}')
+
+if [ "$(decision_of "$nojq_deny")" = deny ]; then
+  pass 'deny: a missing jq fails closed rather than waving the payload through'
+else
+  fail 'deny: a missing jq fails closed rather than waving the payload through'
+fi
+
+# The deny JSON is built by the hook's own printf here, not by jq, so this also checks it is JSON a
+# consumer can read rather than a printf that lost a quote — the one response on the only path where
+# jq cannot be asked to format it.
+case "$(reason_of "$nojq_deny")" in
+*jq*)
+  pass 'the no-jq denial says jq is why it refused'
+  ;;
+*)
+  fail 'the no-jq denial says jq is why it refused'
+  ;;
+esac
+
+# Scoped to the repos this hook has an opinion in. A missing jq denying every Bash call everywhere
+# would make one absent binary brick every session on the machine, including the `brew install jq`
+# that fixes it — the guard has to fail closed where it guards and stay out of the way elsewhere.
+if [ "$(decision_of "$(nojq_response "$GIT_REPO" '{"tool_name":"Bash","tool_input":{"command":"git push"}}')")" = allow ]; then
+  pass "allow: a missing jq outside a jj repo is still none of this hook's business"
+else
+  fail "allow: a missing jq outside a jj repo is still none of this hook's business"
+fi
+
 assert_survives 'not JSON' 'not json at all'
 assert_survives 'a tool with no command' \
   '{"tool_name":"Read","tool_input":{"file_path":"/tmp/x"}}'
