@@ -66,6 +66,55 @@ assert_reason() {
   esac
 }
 
+# The verbs that sat in no list in this file at all and were allowed for it. `git clean` is the
+# sharp one: jj snapshots untracked files into `@`, so they are not junk git can regenerate, and
+# `git clean -fd` is what an agent reaches for when it wants a tidy tree. Each of these is denied by
+# a matcher of its own rather than by the catch-all, so each is named here rather than folded in.
+for unlisted in \
+  'git clean -fd' \
+  'git clean -fdx' \
+  'git clean -n' \
+  'git stash' \
+  'git stash push -m wip' \
+  'git stash pop' \
+  'git checkout -b feature' \
+  'git checkout main' \
+  'git checkout -- src/x.ts' \
+  'git switch -c feature' \
+  'git restore .' \
+  'git restore --staged src/x.ts'; do
+  assert_bash deny "$JJ_CWD" "$unlisted"
+done
+
+# The point of the direction change. None of these is in any list in the hook, and every one of them
+# writes; under a deny list each was allowed, silently, for as long as nobody thought of it. Under
+# an allow list the answer for an unrecognised subcommand is deny, so this set needs no maintenance
+# to keep working — which is the property being pinned, more than any one row.
+for unrecognised in \
+  'git gc --prune=now' \
+  'git rm -r --cached src' \
+  'git mv a b' \
+  'git apply patch.diff' \
+  'git update-ref refs/heads/x HEAD' \
+  'git filter-branch --tree-filter true HEAD' \
+  'git reflog expire --expire=now --all' \
+  'git remote add origin git@example.com:x/y' \
+  'git remote remove origin' \
+  'git tag v1.0.0' \
+  'git tag -d v1.0.0' \
+  'git notes add -m note' \
+  'git config user.email me@example.com' \
+  'git config --global --unset user.name' \
+  'git submodule update --init' \
+  'git fetch --prune' \
+  'git pull --rebase' \
+  'git prune' \
+  'git bisect start' \
+  'git replace a b' \
+  'git this-subcommand-does-not-exist'; do
+  assert_bash deny "$JJ_CWD" "$unrecognised"
+done
+
 # `git worktree add` and `git branch -D` are mutations too, but each is denied by a matcher of its
 # own with its own message, so each is named rather than folded into the list below.
 for mutation in \
@@ -109,31 +158,128 @@ for branch_mutation in \
   'git branch --delete old' \
   'git branch -m old new' \
   'git branch -M old new' \
-  'git branch --move old new'; do
+  'git branch --move old new' \
+  'git branch new-thing'; do
   assert_bash deny "$JJ_CWD" "$branch_mutation"
 done
 
-# The other half of that boundary: `git branch` without one of those flags lists or creates, which
-# is not a mutation of anything jj owns. Without this, a matcher that took every `git branch` would
-# satisfy every assertion above.
-assert_bash allow "$JJ_CWD" 'git branch new-thing'
+# The other half of that boundary. `git branch` given nothing but flags lists, and listing is a
+# read; given an operand it creates a ref jj would import as a bookmark it did not make, which is
+# the same "mutate state jj expects to own" as the row above. That distinction is the only thing
+# separating the two, so without these a matcher that took every `git branch` — or one that took
+# none — would satisfy the whole block above.
+for branch_read in \
+  'git branch' \
+  'git branch --list' \
+  'git branch -a' \
+  'git branch -vv'; do
+  assert_bash allow "$JJ_CWD" "$branch_read"
+done
 
+# Each denial names the jj command it is steering toward, because a denial that does not say what to
+# do instead is a denial an agent retries. The four the ticket added are pinned the same way the
+# three that predate it are.
 assert_reason 'jj workspace add' "$JJ_CWD" 'git worktree add ../iso'
 assert_reason 'jj bookmark delete' "$JJ_CWD" 'git branch -D old'
 assert_reason 'jj describe' "$JJ_CWD" 'git commit -m wip'
+assert_reason 'jj abandon' "$JJ_CWD" 'git clean -fd'
+assert_reason 'jj new' "$JJ_CWD" 'git stash'
+assert_reason 'jj edit' "$JJ_CWD" 'git checkout -b feature'
+assert_reason 'jj restore' "$JJ_CWD" 'git restore .'
+
+# `git clean` is denied for a reason no other verb here shares, and the message has to carry it or
+# the agent reads "use jj" and reaches for `rm -rf` next.
+assert_reason 'untracked files into the working-copy commit' "$JJ_CWD" 'git clean -fd'
+
+# The catch-all names the subcommand it did not recognise. A default-deny whose message is the same
+# for everything tells an agent it is blocked but not what it is blocked on, and this is the one
+# message no author will have thought about the specific case for.
+assert_reason "'git gc'" "$JJ_CWD" 'git gc --prune=now'
+assert_reason "'git this-subcommand-does-not-exist'" "$JJ_CWD" 'git this-subcommand-does-not-exist'
 
 # The whole point of the rule: git is only steered where jj owns the working copy, and a mutation
 # is a mutation. Read-only git is how an agent reads the repo it is standing in, and `gh` is how the
 # work lands — `gh pr merge` names a mutation this hook denies through a route it permits, which is
 # what makes it the gh spelling worth pinning rather than one with no `git` in it to get wrong.
+#
+# Default-deny is only affordable if the reads it keeps are actually kept, so **every entry in the
+# hook's GIT_READ is driven here, and nothing is in GIT_READ that is not driven here**. An
+# allow-list entry no assertion exercises is a hole that would ship green, which is the failure this
+# suite exists to prevent, pointed at the list rather than at the matcher.
 for allowed in \
   'git status' \
   'git log --oneline -5' \
   'git diff HEAD' \
   'git show abc123' \
+  'git show-ref --heads' \
+  'git blame src/x.ts' \
+  'git grep -n needle' \
+  'git shortlog -sn' \
+  'git describe --tags' \
+  'git version' \
+  'git ls-files' \
+  'git ls-tree -r HEAD' \
+  'git ls-remote --heads origin' \
+  'git cat-file -p HEAD' \
+  'git rev-parse --show-toplevel' \
+  'git rev-list --count HEAD' \
+  'git merge-base main HEAD' \
+  'git for-each-ref --format="%(refname)"' \
+  'git diff-tree --no-commit-id --name-only -r HEAD' \
+  'git check-ignore -v target' \
   'gh pr merge 12 --squash' \
   'jj git push --bookmark feature'; do
   assert_bash allow "$JJ_CWD" "$allowed"
+done
+
+# `git help commit` names a denied verb in an argument, so it also pins that the read is decided by
+# the subcommand at command position and not by a verb appearing anywhere in the segment.
+assert_bash allow "$JJ_CWD" 'git help commit'
+
+# Subcommands that read in one spelling and write in another. The read spelling has to survive, or
+# default-deny costs more than it is worth; the write spelling is denied above. `git stash list` in
+# particular: `git stash` is denied by a matcher broad enough to take every spelling, so its own
+# read form is the thing most likely to have been taken with it.
+#
+# Each of these is carried by exactly one of the hook's two lists. `git config --list` and
+# `git remote -v` were briefly on both, which made them vacuous — either entry could be deleted and
+# they stayed green, so they pinned neither.
+for mode_switching_read in \
+  'git stash list' \
+  'git stash show' \
+  'git config --get remote.origin.url' \
+  'git config --list' \
+  'git remote -v' \
+  'git remote show origin' \
+  'git worktree list' \
+  'git reflog show' \
+  'git reflog' \
+  'git tag' \
+  'git tag --list'; do
+  assert_bash allow "$JJ_CWD" "$mode_switching_read"
+done
+
+# A read that is redirected or trailed by a comment is still a read. The flags-only rule anchors on
+# the end of the segment, so without saying so it would read `> /tmp/out` as the operand that makes
+# `git branch` a write — denying a listing for the file it was being written into. `main` allowed
+# these, so getting this wrong is a regression rather than a new restriction. `|` needs no such
+# handling: it is a separator, so it has already ended the segment.
+for redirected_read in \
+  'git branch -a > /tmp/out' \
+  'git branch -a 2>/dev/null' \
+  'git branch -a # list them all' \
+  'git tag --list > /tmp/tags' \
+  'git config --list >/tmp/cfg' \
+  'git branch -a | head -5'; do
+  assert_bash allow "$JJ_CWD" "$redirected_read"
+done
+
+# ...and the redirect does not become a way to smuggle an operand past the flags-only rule.
+for redirected_write in \
+  'git branch new-thing > /tmp/out' \
+  'git tag v1.0.0 2>/dev/null' \
+  'git branch -D old # tidy up'; do
+  assert_bash deny "$JJ_CWD" "$redirected_write"
 done
 
 # The false positive, which is the half of this that cost real work. The old matcher took `git`
@@ -152,7 +298,11 @@ for mention in \
   'echo "never git merge in a jj repo"' \
   'cat notes.md # git commit is mentioned here' \
   '# git push is what this line is about' \
-  'sed -i "" "s/git commit -m/jj commit -m/" README.md'; do
+  'sed -i "" "s/git commit -m/jj commit -m/" README.md' \
+  'gh issue create --title "hook allows git clean -fd and fails open without jq"' \
+  'gh issue comment 57 --body "git stash moves work somewhere jj will not look for it"' \
+  "rg -n 'git checkout -b ' hooks/" \
+  'echo "git restore . overwrites what jj snapshotted"'; do
   assert_bash allow "$JJ_CWD" "$mention"
 done
 
@@ -160,9 +310,18 @@ done
 # still be denied is the one that runs.
 assert_bash deny "$JJ_CWD" 'echo "$(git push)"'
 
+# Contract, not coverage. #17 scoped this hook to the command position: a mutation handed to another
+# command as an argument is not interpreted, because another program's arguments have no closed set
+# to them and this hook guards the accident rather than the adversary. Default-deny does not widen
+# that — `git clean` reaches the matcher through `sudo` exactly as `git push` always did — and the
+# scope is easier to argue with than to notice, so it is pinned rather than left to be rediscovered
+# as a hole. If this row ever has to flip, it should flip because someone decided it, in a ticket.
+assert_bash allow "$JJ_CWD" 'sudo git clean -fd'
+
 # Every repo that is not this one. The hook has no opinion there, and a hook with an opinion
 # everywhere is a hook that gets turned off.
-for anywhere in 'git commit -m real' 'git push' 'git worktree add ../x'; do
+for anywhere in 'git commit -m real' 'git push' 'git worktree add ../x' 'git clean -fd' 'git stash' \
+  'git checkout -b feature' 'git restore .' 'git gc --prune=now'; do
   assert_bash allow "$GIT_REPO" "$anywhere"
 done
 
@@ -270,8 +429,8 @@ assert_survives() {
 }
 
 # A PATH with everything the hook runs except jq. Not an empty PATH: the hook shells out to cat,
-# dirname, grep and tr, and `#!/usr/bin/env bash` needs to find bash, so a PATH with nothing in it
-# would prove the hook denies when it cannot run *at all* — which every broken hook does — rather
+# dirname, grep, sed and tr, and `#!/usr/bin/env bash` needs to find bash, so a PATH with nothing in
+# it would prove the hook denies when it cannot run *at all* — which every broken hook does — rather
 # than that it denies on this one missing dependency. Only the hook's PATH is reduced; the suite
 # keeps its own jq to read the decision back out.
 NOJQ_PATH=$(mktemp -d)
@@ -286,18 +445,19 @@ else
   pass 'the no-jq PATH really has no jq'
 fi
 
+# The reduced PATH is only a jq test if the hook still works on it, otherwise every assertion below
+# passes for a hook that crashed on a missing `tr`.
 nojq_response() {
   (cd "$1" && printf '%s' "$2" | env PATH="$NOJQ_PATH" "$HOOK" 2>/dev/null)
 }
 
 # Without jq the hook cannot read the payload, so it cannot tell a mutation from a read — and the
-# answer to that is a refusal, not a shrug. Fail-open here was not a degraded guard, it was no
-# guard, reached silently and with no diagnostic; `install.sh` checks for jq, but that is a
-# different machine at a different time.
+# whole point of the ticket is that the answer to that is a refusal, not a shrug. Fail-open here was
+# not a degraded guard, it was no guard, reached silently and with no diagnostic.
 #
 # The command is read-only on purpose: it is the one the hook allows when it can see it, so a hook
 # that denied it for the *matcher's* reason rather than for jq's would be indistinguishable from the
-# fix. Nothing in this payload can be seen at all, which is exactly why it has to deny.
+# fix. Nothing in the payload can be seen at all, which is exactly why it has to deny.
 nojq_deny=$(nojq_response "$JJ_CWD" '{"tool_name":"Bash","cwd":"'"$JJ_CWD"'","tool_input":{"command":"git status"}}')
 
 if [ "$(decision_of "$nojq_deny")" = deny ]; then
@@ -306,9 +466,9 @@ else
   fail 'deny: a missing jq fails closed rather than waving the payload through'
 fi
 
-# The deny JSON is built by the hook's own printf here, not by jq, so this also checks it is JSON a
-# consumer can read rather than a printf that lost a quote — the one response on the only path where
-# jq cannot be asked to format it.
+# The deny JSON is built by the hook itself here, not by jq, so it is worth checking it is JSON a
+# consumer can read and not a printf that lost a quote — this is the one response on the only path
+# where jq cannot be asked to format it.
 case "$(reason_of "$nojq_deny")" in
 *jq*)
   pass 'the no-jq denial says jq is why it refused'
