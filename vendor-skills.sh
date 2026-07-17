@@ -18,6 +18,20 @@ TLDRAW_PATCH="$HARNESS_SOURCE/patches/lazar-tldraw.patch"
 # not come with it. Fetching it here keeps it beside the code it licenses.
 TLDRAW_LICENSE_URL="https://raw.githubusercontent.com/$TLDRAW_UPSTREAM/HEAD/LICENSE"
 
+# The third upstream, and the one that keeps its upstream name. `railway skills install` writes
+# `use-railway` into ~/.agents/skills and every tool dir it detects, ~/.claude/skills included, so
+# the name is an interop surface with another installer rather than a label this harness chooses.
+# Vendor it as `railway-use-railway` and the CLI goes on writing plain `use-railway` for the
+# harness to purge: the ping-pong survives and there are now two skills. See README's
+# "use-railway, the skill that cannot take a prefix".
+#
+# Not a special case in the rewrite so much as absent from the set it runs over: the prefix loop
+# walks UPSTREAM_SKILLS, and this skill is not in it. test/prefix-rewrite.sh pins that rather than
+# trusting it.
+RAILWAY_UPSTREAM="railwayapp/railway-skills"
+RAILWAY_SKILL="use-railway"
+RAILWAY_LICENSE_URL="https://raw.githubusercontent.com/$RAILWAY_UPSTREAM/HEAD/LICENSE"
+
 # Upstream's engineering/ and productivity/ sets. Its in-progress/, personal/ and deprecated/
 # skills are deliberately not vendored.
 UPSTREAM_SKILLS=(
@@ -73,6 +87,8 @@ fetch_upstream() {
     die "the skills CLI failed to fetch $UPSTREAM"
   (cd -- "$into" && npx -y "$SKILLS_CLI" add "$TLDRAW_UPSTREAM" -a claude-code --copy -y -s "$TLDRAW_SKILL") >/dev/null ||
     die "the skills CLI failed to fetch $TLDRAW_UPSTREAM"
+  (cd -- "$into" && npx -y "$SKILLS_CLI" add "$RAILWAY_UPSTREAM" -a claude-code --copy -y -s "$RAILWAY_SKILL") >/dev/null ||
+    die "the skills CLI failed to fetch $RAILWAY_UPSTREAM"
 }
 
 # The prefix has to reach the frontmatter too: Claude Code invokes a skill by its declared
@@ -123,10 +139,10 @@ Nothing has been written, so skills/$TLDRAW_VENDORED still holds the last good v
 }
 
 fetch_license() {
-  local into=$1
-  curl -fsSL -o "$into/LICENSE" -- "$TLDRAW_LICENSE_URL" ||
-    die "could not fetch $TLDRAW_UPSTREAM's LICENSE from $TLDRAW_LICENSE_URL"
-  [ -s "$into/LICENSE" ] || die "$TLDRAW_UPSTREAM's LICENSE came back empty"
+  local into=$1 url=$2 upstream=$3
+  curl -fsSL -o "$into/LICENSE" -- "$url" ||
+    die "could not fetch $upstream's LICENSE from $url"
+  [ -s "$into/LICENSE" ] || die "$upstream's LICENSE came back empty"
 }
 
 lockfile_skills() {
@@ -135,7 +151,8 @@ lockfile_skills() {
 
 assert_pinned_set() {
   local fetched=$1 expected actual
-  expected=$(printf '%s\n%s\n' "${UPSTREAM_SKILLS[*]}" "$TLDRAW_SKILL" | tr ' ' '\n' | LC_ALL=C sort)
+  expected=$(printf '%s\n%s\n%s\n' "${UPSTREAM_SKILLS[*]}" "$TLDRAW_SKILL" "$RAILWAY_SKILL" |
+    tr ' ' '\n' | LC_ALL=C sort)
   actual=$(lockfile_skills "$fetched" | LC_ALL=C sort)
   [ "$expected" = "$actual" ] ||
     die "the skills CLI resolved a different set than this script asked for"
@@ -168,7 +185,7 @@ regen_patch() {
 }
 
 main() {
-  local update=false regen=false skill staged vendored tldraw_staged
+  local update=false regen=false skill staged vendored tldraw_staged railway_staged
 
   case "${1-}" in
   "") ;;
@@ -185,6 +202,9 @@ main() {
 
   tldraw_staged="$staging/.claude/skills/$TLDRAW_SKILL"
   [ -d "$tldraw_staged" ] || die "$TLDRAW_SKILL: the skills CLI installed no such skill"
+
+  railway_staged="$staging/.claude/skills/$RAILWAY_SKILL"
+  [ -d "$railway_staged" ] || die "$RAILWAY_SKILL: the skills CLI installed no such skill"
 
   if [ "$regen" = true ]; then
     regen_patch "$tldraw_staged/SKILL.md"
@@ -206,22 +226,25 @@ main() {
 
   # Before anything is removed, so a rejected patch leaves the last good vendor in place.
   apply_local_patch "$tldraw_staged"
-  fetch_license "$tldraw_staged"
+  fetch_license "$tldraw_staged" "$TLDRAW_LICENSE_URL" "$TLDRAW_UPSTREAM"
+  fetch_license "$railway_staged" "$RAILWAY_LICENSE_URL" "$RAILWAY_UPSTREAM"
 
   for vendored in "$HARNESS_SOURCE/skills/$PREFIX"*/; do
     if [ -d "$vendored" ]; then rm -rf -- "$vendored"; fi
   done
-  rm -rf -- "$HARNESS_SOURCE/skills/$TLDRAW_VENDORED"
+  rm -rf -- "$HARNESS_SOURCE/skills/$TLDRAW_VENDORED" "$HARNESS_SOURCE/skills/$RAILWAY_SKILL"
 
   for skill in "${UPSTREAM_SKILLS[@]}"; do
     mv -- "$staging/.claude/skills/$skill" "$HARNESS_SOURCE/skills/$PREFIX$skill"
   done
   mv -- "$tldraw_staged" "$HARNESS_SOURCE/skills/$TLDRAW_VENDORED"
+  mv -- "$railway_staged" "$HARNESS_SOURCE/skills/$RAILWAY_SKILL"
 
   cp -- "$staging/skills-lock.json" "$LOCKFILE"
 
-  printf 'vendored %d skills from %s as %s*, and %s from %s\n' \
-    "${#UPSTREAM_SKILLS[@]}" "$UPSTREAM" "$PREFIX" "$TLDRAW_VENDORED" "$TLDRAW_UPSTREAM"
+  printf 'vendored %d skills from %s as %s*, %s from %s, and %s from %s\n' \
+    "${#UPSTREAM_SKILLS[@]}" "$UPSTREAM" "$PREFIX" "$TLDRAW_VENDORED" "$TLDRAW_UPSTREAM" \
+    "$RAILWAY_SKILL" "$RAILWAY_UPSTREAM"
 }
 
 # Sourceable so the tests can drive the transforms without going to the network.
