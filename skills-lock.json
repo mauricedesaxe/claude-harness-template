@@ -127,6 +127,12 @@
       "skillPath": "skills/engineering/triage/SKILL.md",
       "computedHash": "7c923b6a677cfe689500721f08307e2a4c46797ff169dc55ef6c34a431a0d533"
     },
+    "use-railway": {
+      "source": "railwayapp/railway-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/railway/skills/use-railway/SKILL.md",
+      "computedHash": "cfdc4787e6a7b163af71eefd1f02fcbfe2b8dcd94430c434b28f9c752831ce85"
+    },
     "wayfinder": {
       "source": "mattpocock/skills",
       "sourceType": "github",
