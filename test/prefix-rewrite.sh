@@ -34,6 +34,7 @@ Run `/compact` when the context fills up.
 Route each issue through `/triage` first.
 The handler lives in src/triage/handler.ts, per `docs/agents/triage-labels.md`.
 The throwaway route under `/prototype/<name>` mounts the same switcher.
+Deploy it with `/use-railway`, then check /use-railway for the logs.
 EOF
 
 apply_prefix_to_references "$fixture"
@@ -48,6 +49,42 @@ assert_contains "a built-in Claude Code command is left alone" 'Run `/compact` w
 assert_contains "a path ending in a skill name is left alone" 'src/triage/handler.ts'
 assert_contains "a backticked path is left alone" '`docs/agents/triage-labels.md`'
 assert_contains "a route starting with a skill name is left alone" '`/prototype/<name>`'
+
+# The exception to the prefix rule, driven rather than assumed. `use-railway` is the name Railway's
+# own installer writes, so a rewrite to `matt-use-railway` or `railway-use-railway` would leave the
+# CLI refilling the unprefixed name for the harness to purge — the ping-pong #60 exists to end.
+# The rewrite skips it because it is absent from UPSTREAM_SKILLS, which is a property of a list a
+# future agent can extend by hand: add `use-railway` to it and both of these go red, which is the
+# only reason they are worth writing.
+assert_contains "the prefix rewrite leaves a backticked /use-railway alone" '`/use-railway`'
+assert_contains "the prefix rewrite leaves a bare /use-railway alone" 'check /use-railway for'
+
+# What makes the rewrite skip it: the loop that renames a directory, its `name:` frontmatter and its
+# cross-references walks UPSTREAM_SKILLS alone. That is a hand-kept list, and adding this name to it
+# is the one edit that would silently start prefixing the skill, so the list is what is asserted.
+if printf '%s\n' "${UPSTREAM_SKILLS[@]}" | grep -qx "$RAILWAY_SKILL"; then
+  fail "$RAILWAY_SKILL is not in the set the prefix rewrite renames"
+else
+  pass "$RAILWAY_SKILL is not in the set the prefix rewrite renames"
+fi
+
+# The vendored artifact itself, not a fixture: a fixture written by this file and grepped by this
+# file would agree with itself no matter what the vendor did. This is the file install.sh ships, and
+# the name in it is what Claude Code registers the skill under — a re-vendor that prefixed it, by
+# hand or by adding it to the list above, lands here.
+railway_vendored="$HARNESS_SOURCE/skills/$RAILWAY_SKILL/SKILL.md"
+
+if [ -f "$railway_vendored" ] && grep -qx "name: $RAILWAY_SKILL" "$railway_vendored"; then
+  pass "the vendored $RAILWAY_SKILL declares the unprefixed name Railway's installer writes"
+else
+  fail "the vendored $RAILWAY_SKILL declares the unprefixed name Railway's installer writes"
+fi
+
+if [ -d "$HARNESS_SOURCE/skills/$PREFIX$RAILWAY_SKILL" ]; then
+  fail "$RAILWAY_SKILL is vendored under no prefixed directory name"
+else
+  pass "$RAILWAY_SKILL is vendored under no prefixed directory name"
+fi
 
 if [ "$failures" -eq 0 ]; then
   echo "prefix-rewrite: all assertions passed"
