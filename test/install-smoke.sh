@@ -206,7 +206,7 @@ fi
 # missing here is a tool the hook is never asked about, and the hook's own logic for it is dead
 # code that goes on reading correctly.
 jj_matcher=$(matcher_of PreToolUse "$hooks/enforce-jj.sh")
-for tool in Bash EnterWorktree; do
+for tool in Bash EnterWorktree Agent; do
   case "|$jj_matcher|" in
   *"|$tool|"*)
     pass "the hook's matcher reaches $tool"
