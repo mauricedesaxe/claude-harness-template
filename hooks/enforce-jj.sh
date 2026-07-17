@@ -10,21 +10,24 @@ set -uo pipefail
 
 input=$(cat)
 
-tool=$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null || true)
-cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null || true)
-[ -n "$cwd" ] || cwd=$PWD
+NOTE="This is a jujutsu (jj) repo; use jj, not git, for version control."
 
-# Enforce only inside a jj repo: walk up from cwd looking for a .jj directory.
-dir=$cwd
-in_jj=0
-while [ -n "$dir" ] && [ "$dir" != "/" ]; do
-  if [ -d "$dir/.jj" ]; then
-    in_jj=1
-    break
-  fi
-  dir=$(dirname "$dir")
-done
-[ "$in_jj" -eq 1 ] || exit 0
+WORKSPACE="Isolate with 'jj workspace add <path>' instead (work there, then 'jj workspace forget \
+<name>' and remove the dir when done). A git worktree isolates files but not jj's working copy: jj \
+run from inside one still operates on the default workspace, so concurrent agents collide on one \
+'@' and snapshots bleed between them."
+
+# Enforce only inside a jj repo: walk up looking for a .jj directory.
+in_jj_repo() {
+  local dir=$1
+  while [ -n "$dir" ] && [ "$dir" != "/" ]; do
+    if [ -d "$dir/.jj" ]; then
+      return 0
+    fi
+    dir=$(dirname "$dir")
+  done
+  return 1
+}
 
 deny() {
   jq -n --arg r "$1" \
@@ -32,12 +35,37 @@ deny() {
   exit 0
 }
 
-NOTE="This is a jujutsu (jj) repo; use jj, not git, for version control."
+# jq parses the payload, so without it this hook cannot tell a mutation from a read — and a guard
+# that cannot tell refuses rather than waving everything through. Fail-open here is not a degraded
+# guard, it is no guard, arrived at silently: the first sign would be the damage. It is also the
+# whole harness's blind spot at once, since hooks are the only rule that reaches subagents.
+#
+# install.sh checks for jq too, but that is a different machine at a different time — the hook's
+# runtime PATH is not the installer's, and a hook reaches machines that never ran the installer.
+#
+# Scoped to jj repos, the only place this hook has an opinion at all, so one absent binary cannot
+# brick every session on the machine — including the `brew install jq` that would fix it. The cwd
+# has to come from $PWD here, since reading it out of the payload is the thing that needs jq.
+#
+# The one response this hook builds without jq, because jq is what is missing. printf and not
+# jq means the reason is escaped by hand, so it is a constant with no quote or backslash in it
+# rather than an argument — deny() above stays the way every other message is built.
+NO_JQ_REASON="$NOTE This hook needs jq to read the PreToolUse payload, and jq is not on PATH. It \
+cannot tell a git mutation from a read, so it is refusing rather than letting one through unseen. \
+Install jq (brew install jq, apt-get install jq) and retry."
 
-WORKSPACE="Isolate with 'jj workspace add <path>' instead (work there, then 'jj workspace forget \
-<name>' and remove the dir when done). A git worktree isolates files but not jj's working copy: jj \
-run from inside one still operates on the default workspace, so concurrent agents collide on one \
-'@' and snapshots bleed between them."
+if ! command -v jq >/dev/null 2>&1; then
+  in_jj_repo "$PWD" || exit 0
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' \
+    "$NO_JQ_REASON"
+  exit 0
+fi
+
+tool=$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null || true)
+cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null || true)
+[ -n "$cwd" ] || cwd=$PWD
+
+in_jj_repo "$cwd" || exit 0
 
 # EnterWorktree: isolate with a jj workspace instead of a git worktree.
 if [ "$tool" = "EnterWorktree" ]; then
