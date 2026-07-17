@@ -85,8 +85,10 @@ staging, why jj fires no git hooks. The rules it produces:
   Read-only git (`status`, `log`, `diff`, `show`) and `gh` are fine. A repo without `.jj` uses git
   normally.
 - **No git mutations in a jj repo**: commit, push, rebase, merge, reset, cherry-pick, branch
-  delete/move. `~/.claude/hooks/enforce-jj.sh` blocks them; if it blocks something I asked for, say
-  it's blocked instead of routing around it.
+  delete/move, clean, stash, checkout, switch, restore. `git clean -fd` hurts most: jj snapshotted
+  those untracked files into `@`, so git will not put them back. `~/.claude/hooks/enforce-jj.sh`
+  allows only the git commands that read and denies the rest, so expect it to block something
+  harmless now and then. If it blocks something I asked for, say so instead of routing around it.
 - **Fold a fix with `jj squash --from/--into`**, never `git commit --fixup`.
 - **Bookmark a stack on its first commit**, not at push time: `jj bookmark create <name> -r @` the
   moment the change is worth keeping. The bookmark is the anchor; pushing is a separate, later step.
