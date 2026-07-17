@@ -254,7 +254,7 @@ install_skills() {
 # a tool missing here is a tool the hook never sees: `Agent` is on the list because `isolation:
 # "worktree"` cuts a git worktree through neither `Bash` nor `EnterWorktree`, which is how it walked
 # past the hand-wired matcher this replaces for as long as that matcher was hand-wired.
-JJ_HOOK_MATCHER='Bash|EnterWorktree'
+JJ_HOOK_MATCHER='Bash|EnterWorktree|Agent'
 
 # A hook is the only rule the harness enforces rather than asks for: CLAUDE.md and the rules dir
 # are not inherited by subagents, so a rule written there reaches a main loop and dies at the first
