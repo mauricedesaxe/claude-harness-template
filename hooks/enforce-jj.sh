@@ -58,22 +58,60 @@ fi
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null || true)
 [ -n "$cmd" ] || exit 0
 
-# Neutralize jj's own subcommands ("jj git push/fetch/import/export/...") so the
-# literal "git" inside them is not mistaken for a git invocation.
-scan=$(printf '%s' "$cmd" | sed -E 's/(^|[^[:alnum:]_])jj[[:space:]]+git/\1jjgit/g')
+# A shell starts a command at the start of the text and after each of these separators, and nowhere
+# else. Splitting on them puts every command at the start of its own segment, which is what lets the
+# matcher below anchor and so tell an invocation from a mention. `$(` and a backtick open a command
+# too, and each is split by a character of its own, so `"$(git push)"` still lands at a start.
+#
+# Everything a shell treats as data carries no separator, so the `git` inside it never reaches the
+# start of a segment: a quoted body, a `#` comment, a `--body "..."` that quotes the very string it
+# is reporting. That is the bug this replaced. The old matcher took `git` after any non-word
+# character, so it denied `grep -rn 'git reset --hard' docs/`, denied the probe that found the Agent
+# hole above, and denied the `gh issue edit` that filed the ticket for both, because the ticket text
+# quotes the string. It could not tell an invocation from a mention.
+#
+# A newline is a separator too and is not in the set below, because grep already reads a line at a
+# time: mapping it to itself would only look load-bearing. That is also the one shape data still
+# reaches a start through — a line of a heredoc or a multi-line string that itself begins with
+# `git <mutation>` — and it has to stay that way, since a multi-line Bash command is ordinary and
+# its second line is a real command. Write such a body to a file and pass the path.
+#
+# jj's own subcommands need no special handling: `jj git push` starts with `jj`, so `git` is not at
+# the start of the segment and never matches. The matcher this replaced needed a substitution to
+# rewrite them out of the way first, which is the same thing it needed to tell prose from a command
+# and never had.
+segments=$(printf '%s' "$cmd" | tr ';&|(){}`' '\n')
+
+# What a shell allows between a start and the command's own name, and nothing else. Two closed sets,
+# both POSIX's rather than a list of things noticed one at a time:
+#
+#   - reserved words that introduce a command. `if [ -n "$x" ]; then git push; fi` and
+#     `for f in a b; do git commit -m "$f"; done` are ordinary spellings, and a matcher that missed
+#     them would be missing the shape an agent actually reaches for.
+#   - variable assignments, whose value may be quoted: `GIT_SSH_COMMAND="ssh -i key" git push` is
+#     the spelling that variable is normally given, and an unquoted-only rule would catch only the
+#     one nobody types.
+#
+# What is deliberately not here: a command handed to *another command* as an argument
+# (`sudo git push`, `xargs git commit`, `bash -c '...'`, `eval git push`). Interpreting another
+# program's arguments has no closed set to it, and this hook guards the accident, not the
+# adversary — `g=git; $g push` was always through too. The enforcement that matters is that the
+# obvious spelling steers to jj.
+KEYWORD='((!|then|else|elif|do|if|while|until)[[:space:]]+)*'
+ASSIGN='([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:]]*)[[:space:]]+)*'
 
 # `git`, optionally with global flags, then the target subcommand.
-GIT='(^|[^[:alnum:]_])git([[:space:]]+(-[A-Za-z]+|--[A-Za-z][A-Za-z-]*(=[^[:space:]]+)?|-C[[:space:]]+[^[:space:]]+|-c[[:space:]]+[^[:space:]]+))*[[:space:]]+'
+GIT="^[[:space:]]*${KEYWORD}${ASSIGN}git([[:space:]]+(-[A-Za-z]+|--[A-Za-z][A-Za-z-]*(=[^[:space:]]+)?|-C[[:space:]]+[^[:space:]]+|-c[[:space:]]+[^[:space:]]+))*[[:space:]]+"
 
-if printf '%s' "$scan" | grep -Eq "${GIT}worktree[[:space:]]+add([[:space:]]|\$)"; then
+if printf '%s' "$segments" | grep -Eq "${GIT}worktree[[:space:]]+add([[:space:]]|\$)"; then
   deny "$NOTE Don't make a git worktree. $WORKSPACE"
 fi
 
-if printf '%s' "$scan" | grep -Eq "${GIT}(commit|push|rebase|merge|reset|cherry-pick|revert|am)([[:space:]]|\$)"; then
+if printf '%s' "$segments" | grep -Eq "${GIT}(commit|push|rebase|merge|reset|cherry-pick|revert|am)([[:space:]]|\$)"; then
   deny "$NOTE Use jj: jj describe / jj commit, jj git push, jj rebase, jj squash, jj new / jj edit, jj bookmark. Read-only git (status/log/diff/show) and gh stay allowed. If the user explicitly asked for git here, tell them it is blocked so they can lift it."
 fi
 
-if printf '%s' "$scan" | grep -Eq "${GIT}branch[[:space:]]+(-d|-D|-m|-M|--delete|--move)([[:space:]]|\$)"; then
+if printf '%s' "$segments" | grep -Eq "${GIT}branch[[:space:]]+(-d|-D|-m|-M|--delete|--move)([[:space:]]|\$)"; then
   deny "$NOTE Use 'jj bookmark delete/move/set' instead of 'git branch -d/-D/-m'."
 fi
 
