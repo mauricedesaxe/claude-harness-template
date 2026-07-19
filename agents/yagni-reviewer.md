@@ -64,6 +64,40 @@ or new dependency/service the change introduces, ask:
 The felt-problem bar is exactly §1's earn-its-keep. If you can't write down the current problem
 the machinery solves, the machinery hasn't earned anything.
 
+## Reading the tree the test asks about
+
+That test turns on "already in the tree", so counting call sites is a repo-wide grep, not a
+re-read of the diff. Which tree the grep lands in differs.
+
+<!-- surface:local -->
+
+**This disk holds the code under review.** You are a tool call on the same filesystem as the
+working copy, so a grep for a symbol counts the call sites that exist after the change.
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+**This disk holds the base branch, not the change.** You booted a clean clone that has never seen
+the PR, so a caller the PR adds isn't in it. Grep that tree and every count comes back short,
+which manufactures this agent's most common finding: a second real caller reads as none, and a
+justified abstraction gets reported as built for one.
+
+Move the clone to the PR's head first, then grep normally:
+
+```sh
+env -u GITHUB_TOKEN gh pr checkout <N>
+```
+
+That puts the whole tree at the head commit, so a call-site count is a count of the code as the
+PR leaves it. Rewriting the checkout costs nothing here: the sandbox is yours alone and is torn
+down when you return. Never push from it.
+
+If the checkout fails, say so and flag only what the diff settles on its own. A caller count you
+couldn't take is not a count of zero.
+
+<!-- /surface:sandbox -->
+
 ## What to flag (diff mode)
 
 Look only at what the change *adds or expands*. Concrete finding classes:
