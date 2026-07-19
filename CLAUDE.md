@@ -111,7 +111,7 @@ staging, why jj fires no git hooks. The rules it produces:
 
 ### Workspace isolation
 
-<!-- surface:local. install.sh generates the sandbox default in place of this block. -->
+<!-- surface:local -->
 
 **Cut a jj workspace off fresh trunk for any non-trivial work**, before touching a file. The repo is
 never mine alone: I run several agents at once and they share one `@` unless each takes its own
@@ -122,6 +122,15 @@ call, and never `cd` into the main checkout, whose `@` belongs to another agent.
 `EnterWorktree` is blocked (`§28`).
 
 <!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+**Work the default workspace directly with `jj edit`.** The sandbox is the isolation: this checkout
+is mine alone, and a workspace inside it would buy nothing. Reach for `jj workspace add` only when
+fanning out concurrent subagents that edit at once, which is the one case where a shared `@` still
+collides (`§28`).
+
+<!-- /surface:sandbox -->
 
 Isolation covers the working copy and nothing else. `.jj` and `.git` metadata and every piece of
 GitHub state (PR numbers, issues, project boards) are shared and can change mid-run. So reuse the

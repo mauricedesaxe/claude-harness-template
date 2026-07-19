@@ -186,10 +186,41 @@ same files via the `instructions` array in `opencode.json` and loads the packs u
 `CLAUDE.md` is installed to `~/.claude/CLAUDE.md` and, under OpenCode's own name for the same
 thing, to `~/.config/opencode/AGENTS.md`.
 
-It is authored for a laptop, and `HARNESS_SURFACE=sandbox ./install.sh --install` generates the one
-block that differs in an Open-Inspect sandbox: which jj workspace to work in. `§28` states the
-isolation principle for both, so only the default is generated, the same way an OpenCode agent's
-frontmatter is. `install.sh` carries the reasoning at the transform.
+## Surfaces
+
+A laptop and an Open-Inspect sandbox differ in one way the harness has to answer for: whether the
+agents working a repo share a filesystem. On a laptop they do, and a subagent reads the same working
+copy its parent edits. In a sandbox they don't, and a spawned agent boots a clean clone of the base
+branch that has never seen the parent's checkout.
+
+`HARNESS_SURFACE` names which of the two is being installed for. It takes `local`, the default, or
+`sandbox`, which a sandbox image build passes when it invokes the installer. It is the *environment*,
+not the runtime: Claude Code and OpenCode both run in both places.
+
+Prose that turns on it is authored inline, in the file it belongs to, between markers:
+
+```markdown
+<!-- surface:local -->
+…what to do when the agents share a disk…
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+…what to do when they don't…
+<!-- /surface:sandbox -->
+```
+
+The installer keeps the blocks matching the surface and drops the rest, in every file that carries
+them. Which files those are is read off the files, so a skill that grows a block needs no change to
+`install.sh`. A block that never closes, a name outside `local`/`sandbox`, or a file missing the
+surface being installed all stop the run: each one otherwise ships silently, and the first truncates
+the file at the marker.
+
+One file uses it today:
+
+- **`CLAUDE.md`** — which jj workspace to work in. `§28` states the isolation principle for both
+  surfaces; only the default action differs, since a sandbox is already a checkout of its own.
+Both variants sit next to each other in the file someone edits, so the two surfaces are reviewed as
+one diff and neither is a copy of the other. `install.sh` carries the reasoning at the transform.
 
 ## Machine-local repo notes
 

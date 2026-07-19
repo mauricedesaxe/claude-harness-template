@@ -104,10 +104,36 @@ all_wired_hooks() {
   jq -r '(.hooks // {}) | to_entries[] | .value[] | .hooks[] | .command' "$settings"
 }
 
-assert_same_file "CLAUDE.md installs to Claude Code" \
-  "$HARNESS_SOURCE/CLAUDE.md" "$claude/CLAUDE.md"
-assert_same_file "CLAUDE.md installs to OpenCode as AGENTS.md" \
-  "$HARNESS_SOURCE/CLAUDE.md" "$opencode/AGENTS.md"
+# Byte-identity is gone from the surface-rendered files on purpose: every surface's blocks live in
+# the source now, so no install is a copy of it. What has to hold is that the local install carries
+# the local block, drops the other surface's, and leaves no marker line behind reading as prose.
+assert_surface_rendered() {
+  local what=$1 file=$2 kept=$3 dropped=$4
+
+  assert_contains "$what keeps its local block" "$kept" "$file"
+
+  if grep -qF -- "$dropped" "$file"; then
+    fail "$what drops the sandbox block"
+  else
+    pass "$what drops the sandbox block"
+  fi
+
+  if grep -qE '^<!-- /?surface:' "$file"; then
+    fail "$what carries no leftover surface marker"
+  else
+    pass "$what carries no leftover surface marker"
+  fi
+}
+
+# Anchored on text only one block carries. `jj workspace add` appears in both, so asserting on that
+# would pass on a render that kept the wrong one.
+CLAUDE_MD_LOCAL='off fresh trunk'
+CLAUDE_MD_SANDBOX='The sandbox is the isolation'
+
+assert_surface_rendered "CLAUDE.md installed to Claude Code" \
+  "$claude/CLAUDE.md" "$CLAUDE_MD_LOCAL" "$CLAUDE_MD_SANDBOX"
+assert_surface_rendered "CLAUDE.md installed to OpenCode as AGENTS.md" \
+  "$opencode/AGENTS.md" "$CLAUDE_MD_LOCAL" "$CLAUDE_MD_SANDBOX"
 
 # The skeleton this file grew out of shipped its TODOs to every install, which is what made the
 # installer unrunnable against a real harness.
@@ -844,30 +870,32 @@ SANDBOX_HOME=$(mktemp -d)
 run_installer "$SANDBOX_HOME" HARNESS_SURFACE=sandbox >/dev/null ||
   fail "the installer runs for the sandbox surface"
 
+# The mirror of assert_surface_rendered: same three checks, with the surfaces the other way round.
+assert_sandbox_rendered() {
+  local what=$1 file=$2 kept=$3 dropped=$4
+
+  assert_contains "$what keeps its sandbox block" "$kept" "$file"
+
+  if grep -qF -- "$dropped" "$file"; then
+    fail "$what drops the local block"
+  else
+    pass "$what drops the local block"
+  fi
+
+  if grep -qE '^<!-- /?surface:' "$file"; then
+    fail "$what carries no leftover surface marker"
+  else
+    pass "$what carries no leftover surface marker"
+  fi
+}
+
 for instructions in "$SANDBOX_HOME/.claude/CLAUDE.md" "$SANDBOX_HOME/.config/opencode/AGENTS.md"; do
-  target=$(basename -- "$instructions")
-
-  # Anchored on text only the generated block carries. `jj edit` also appears in the jj command
-  # list above it, so asserting on that would pass on a transform that deleted the local block and
-  # inserted nothing, which is the failure actually worth catching.
-  assert_contains "the sandbox $target works the default workspace directly" \
-    'The sandbox is the isolation' "$instructions"
-
-  if grep -qF -- 'off fresh trunk' "$instructions"; then
-    fail "the sandbox $target drops the local workspace-per-agent default"
-  else
-    pass "the sandbox $target drops the local workspace-per-agent default"
-  fi
-
-  if grep -q 'surface:local' "$instructions"; then
-    fail "the sandbox $target carries no leftover surface marker"
-  else
-    pass "the sandbox $target carries no leftover surface marker"
-  fi
+  assert_sandbox_rendered "the sandbox $(basename -- "$instructions")" \
+    "$instructions" "$CLAUDE_MD_SANDBOX" "$CLAUDE_MD_LOCAL"
 done
 
 assert_contains "the local CLAUDE.md cuts a workspace off fresh trunk" \
-  'off fresh trunk' "$claude/CLAUDE.md"
+  "$CLAUDE_MD_LOCAL" "$claude/CLAUDE.md"
 
 if cmp -s -- "$claude/CLAUDE.md" "$SANDBOX_HOME/.claude/CLAUDE.md"; then
   fail "the two surfaces install different workspace defaults"
@@ -884,6 +912,35 @@ if run_installer "$BOGUS_HOME" HARNESS_SURFACE=bogus >/dev/null 2>&1; then
 else
   pass "an unknown HARNESS_SURFACE stops the install rather than picking a surface"
 fi
+
+# The one guard that cannot be reached through the environment, so it is reached through a copy of
+# the source with the fault written into it. An unclosed block is the failure worth buying a fixture
+# for: awk skips to EOF looking for the close, which truncates the file at the marker rather than
+# failing, and a CLAUDE.md silently ending halfway reads as a complete one.
+BROKEN_SOURCE=$(mktemp -d)
+BROKEN_HOME=$(mktemp -d)
+cp -R -- "$HARNESS_SOURCE/." "$BROKEN_SOURCE/"
+rm -rf -- "$BROKEN_SOURCE/.jj" "$BROKEN_SOURCE/.git"
+# The file's last block, so what is planted is a block that never closes rather than one that
+# closes late and trips the nesting guard on the block after it.
+awk '{ lines[NR] = $0 }
+  /^<!-- \/surface:[a-z]+ -->$/ { last = NR }
+  END { for (i = 1; i <= NR; i++) if (i != last) print lines[i] }
+' "$HARNESS_SOURCE/CLAUDE.md" >"$BROKEN_SOURCE/CLAUDE.md"
+
+if env -i PATH="$PATH" HOME="$BROKEN_HOME" "$BROKEN_SOURCE/install.sh" --install >/dev/null 2>&1; then
+  fail "a surface block that never closes stops the install rather than truncating the file"
+else
+  pass "a surface block that never closes stops the install rather than truncating the file"
+fi
+
+if [ -e "$BROKEN_HOME/.claude/CLAUDE.md" ]; then
+  fail "a surface block that never closes leaves no half-rendered CLAUDE.md behind"
+else
+  pass "a surface block that never closes leaves no half-rendered CLAUDE.md behind"
+fi
+
+rm -rf -- "$BROKEN_SOURCE" "$BROKEN_HOME"
 
 if [ -e "$BOGUS_HOME/.claude/CLAUDE.md" ]; then
   fail "an unknown HARNESS_SURFACE writes no instructions at all"
@@ -1358,8 +1415,10 @@ run_installer "$REDIRECT_HOME" \
   CLAUDE_CONFIG_DIR="$redirect_claude" XDG_CONFIG_HOME="$redirect_xdg" >/dev/null ||
   fail "the installer runs against redirected config homes"
 
+# Against the default run's copy rather than the source: this is about which directory the file
+# lands in, and both runs render the same surface, so they are byte-identical to each other.
 assert_same_file "CLAUDE.md installs where CLAUDE_CONFIG_DIR points" \
-  "$HARNESS_SOURCE/CLAUDE.md" "$redirect_claude/CLAUDE.md"
+  "$claude/CLAUDE.md" "$redirect_claude/CLAUDE.md"
 assert_same_file "the spine installs where CLAUDE_CONFIG_DIR points" \
   "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$redirect_claude/rules/PHILOSOPHY.md"
 assert_same_file "skills install where CLAUDE_CONFIG_DIR points" \
@@ -1409,7 +1468,7 @@ else
 fi
 
 assert_same_file "AGENTS.md installs where XDG_CONFIG_HOME points" \
-  "$HARNESS_SOURCE/CLAUDE.md" "$redirect_xdg/opencode/AGENTS.md"
+  "$opencode/AGENTS.md" "$redirect_xdg/opencode/AGENTS.md"
 assert_same_file "the spine installs where XDG_CONFIG_HOME points" \
   "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$redirect_xdg/opencode/rules/PHILOSOPHY.md"
 
