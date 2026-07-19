@@ -816,6 +816,35 @@ else
   fail "every § the installed harness cites resolves to a section of the philosophy:$unresolved"
 fi
 
+# The check above proves a cited §N exists; this one proves the agent can reach the file it lives
+# in. A subagent inherits neither CLAUDE.md nor the rules, so an agent told to read the doctrine
+# has to name a path that resolves at runtime. Both failures are silent the same way: the agent
+# opens nothing, cites the number regardless, and enforces whatever it assumed the section said.
+unreachable=""
+for citer in "$claude"/agents/*.md; do
+  grep -q '§[0-9]' "$citer" || continue
+  grep -qF 'rules/PHILOSOPHY.md' "$citer" ||
+    unreachable="$unreachable $(basename -- "$citer")"
+done
+if [ -z "${unreachable// /}" ]; then
+  pass "every installed agent citing a § names a spine path that resolves"
+else
+  fail "every installed agent citing a § names a spine path that resolves:$unreachable"
+fi
+
+# `docs/PHILOSOPHY.md` is the retired per-repo layout. It resolves nowhere from a repo the harness
+# installs into, and it reads as correct, which is how it survived in two agents unnoticed.
+stale_spine=""
+for citer in "$claude"/agents/*.md; do
+  grep -qF 'docs/PHILOSOPHY.md' "$citer" &&
+    stale_spine="$stale_spine $(basename -- "$citer")"
+done
+if [ -z "${stale_spine// /}" ]; then
+  pass "no installed agent points at the retired docs/PHILOSOPHY.md"
+else
+  fail "no installed agent points at the retired docs/PHILOSOPHY.md:$stale_spine"
+fi
+
 # The surface is the environment, not the runtime, so it has to reach both runtimes' instructions.
 # `§28` owns the principle either way; what is generated here is only which default follows from it.
 SANDBOX_HOME=$(mktemp -d)
