@@ -22,6 +22,41 @@ beside it.
 You review from three directions at once: what shouldn't exist, whether what survives is
 attached where it's read, and whether the code should have been clear without it.
 
+## Reading the code around the diff
+
+Every direction below needs more than the hunk. Whether a name is bad, whether a comment
+attaches to the symbol it explains, and whether a doc duplicates the code are all questions about
+the file the change lands in. Where that file is readable differs.
+
+<!-- surface:local -->
+
+**This disk holds the code under review.** You are a tool call on the same filesystem as the
+working copy, so opening any path in the diff shows the changed version. Read around a hunk
+whenever the hunk alone doesn't settle a finding.
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+**This disk holds the base branch, not the change.** You booted a clean clone that has never seen
+the PR: a file it adds isn't here at all, and a file it modifies opens at its pre-PR contents.
+Read either one and every finding is about code the PR didn't write.
+
+Move the clone to the PR's head first, then read normally:
+
+```sh
+env -u GITHUB_TOKEN gh pr checkout <N>
+```
+
+That puts the whole tree at the head commit, so ordinary reads and greps answer about the change
+rather than about what preceded it. Rewriting the checkout costs nothing here: the sandbox is
+yours alone and is torn down when you return. Never push from it.
+
+If the checkout fails, say so and judge the diff alone. Falling back to the base tree returns
+confident findings about code nobody wrote, which is worse than a narrower review.
+
+<!-- /surface:sandbox -->
+
 ## 1. Restraint — documentation/comment that shouldn't exist
 
 Flag, with the concrete fix:

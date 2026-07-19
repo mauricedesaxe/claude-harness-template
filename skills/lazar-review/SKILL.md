@@ -61,6 +61,11 @@ env -u GITHUB_TOKEN gh pr diff <n>                 # the diff the reviewers read
 env -u GITHUB_TOKEN gh pr view <n> --json commits  # the stack, for git-hygiene-reviewer
 ```
 
+**Push first, then fan out.** The reviewers don't only read the diff: `clarity-reviewer` and
+`yagni-reviewer` check the head out to read around a hunk and to count call sites. So the head
+has to be pushed and current before a single agent is spawned, and a reviewer spawned ahead of
+the push races a ref that isn't there yet.
+
 **Nothing pushed means stop.** No PR is not a small diff to review, it's no diff any reviewer
 can reach. Say there's nothing pushed, name what would have been reviewed, and spawn nobody.
 Pushing belongs to `lazar-ship`, not here, so hand it back rather than pushing to make the
