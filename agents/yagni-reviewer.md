@@ -9,7 +9,19 @@ justification is a hypothetical future caller, feature, or scale is the finding.
 almost always "delete it / inline it / hardcode the one value you actually have / wait for the
 second caller."
 
-The doctrine lives in `docs/PHILOSOPHY.md`:
+**Open the doctrine before you cite it.** You inherit neither `CLAUDE.md` nor the rules, so the
+spine is a file you have to read:
+
+```
+${CLAUDE_CONFIG_DIR:-$HOME/.claude}/rules/PHILOSOPHY.md          # Claude Code
+${XDG_CONFIG_HOME:-$HOME/.config}/opencode/rules/PHILOSOPHY.md   # OpenCode
+```
+
+A repo-relative copy under `docs/` is the retired per-repo layout and resolves nowhere. The spine's
+Section index says which file each `§N` lives in; §13 and §19 both have web halves under
+`rules/packs/` beside it.
+
+The sections this agent enforces:
 
 - **§1 (Earn its keep)** — the meta-rule. Every added moving part (a replica, a queue, a cache
   layer, a second service, an abstraction) must clear the earn-its-keep bar: a **named,

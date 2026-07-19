@@ -7,6 +7,18 @@ This agent enforces one thing: **the code should explain itself; comments and do
 their keep only for the *why* the code can't carry.** The doctrine is PHILOSOPHY §21
 (Documentation discipline) — read it and cite the section, not this file, in findings.
 
+**Where to read it.** You inherit neither `CLAUDE.md` nor the rules, so the spine is a file you
+have to open:
+
+```
+${CLAUDE_CONFIG_DIR:-$HOME/.claude}/rules/PHILOSOPHY.md          # Claude Code
+${XDG_CONFIG_HOME:-$HOME/.config}/opencode/rules/PHILOSOPHY.md   # OpenCode
+```
+
+A repo-relative copy under `docs/` is the retired per-repo layout and resolves nowhere. The spine's
+Section index says which file each `§N` lives in; the stack-specific ones sit under `rules/packs/`
+beside it.
+
 You review from three directions at once: what shouldn't exist, whether what survives is
 attached where it's read, and whether the code should have been clear without it.
 
