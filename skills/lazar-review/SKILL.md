@@ -204,6 +204,8 @@ dropped because Standards came back clean.
 
 Pull out the findings. Don't paste raw agent transcripts.
 
+<!-- surface:local -->
+
 ## This never posts to GitHub
 
 Nothing goes out under my name without me seeing it first. This is a hard rule, not a default.
@@ -211,3 +213,25 @@ Nothing goes out under my name without me seeing it first. This is a hard rule, 
 GitHub is read-only here. `gh pr view` and `gh issue view` are the whole surface. Never
 `gh pr review`, never `gh pr comment`, never `gh api` with a write method. Tell the reviewers
 the same, and pass it on to `matt-code-review`: the output is a chat report and nothing else.
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+## Post the review
+
+**Posting is the deliverable here.** There is no chat for anyone to read and this sandbox is torn
+down when the run ends, so a report you keep to yourself is a review that never happened.
+
+The rule this replaces exists to stop anything going out **under Alex's name** that he hasn't read.
+That concern doesn't arise here: the review carries the bot's identity, not his. If a runtime ever
+posts under his personal token, the local rule applies again and this section does not.
+
+Post the converged report as a PR review or a PR comment. Two limits hold:
+
+- **Only the review.** Merging, closing, editing an issue body, or any other `gh api` write is out
+  of scope, and the read-only rule still covers everything except publishing the report itself.
+- **Say what didn't run.** A reviewer that was skipped, a `gh` call that failed, a `§N` you couldn't
+  open: name it in the posted review. Nobody is watching the transcript to notice a silent gap.
+
+<!-- /surface:sandbox -->
