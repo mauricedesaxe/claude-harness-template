@@ -321,10 +321,16 @@ assert_same_file "lazar-commit installs to Claude Code" \
 assert_same_file "lazar-commit installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-commit/SKILL.md" "$opencode/skills/lazar-commit/SKILL.md"
 
-assert_same_file "lazar-ship installs to Claude Code" \
-  "$HARNESS_SOURCE/skills/lazar-ship/SKILL.md" "$claude/skills/lazar-ship/SKILL.md"
-assert_same_file "lazar-ship installs to OpenCode" \
-  "$HARNESS_SOURCE/skills/lazar-ship/SKILL.md" "$opencode/skills/lazar-ship/SKILL.md"
+# Surface-rendered for the reason lazar-review is: Step 3 waits for me to OK the planned commits,
+# and where nobody is reading a transcript that approval never arrives. It strands finished work
+# uncommitted in a checkout torn down at the end of the run, with push, PR and merge all downstream.
+SHIP_LOCAL='Proceed once I OK it'
+SHIP_SANDBOX="Commit without waiting to be OK'd"
+
+assert_surface_rendered "lazar-ship installed to Claude Code" \
+  "$claude/skills/lazar-ship/SKILL.md" "$SHIP_LOCAL" "$SHIP_SANDBOX"
+assert_surface_rendered "lazar-ship installed to OpenCode" \
+  "$opencode/skills/lazar-ship/SKILL.md" "$SHIP_LOCAL" "$SHIP_SANDBOX"
 
 # Skills and agents reach skills by name: lazar-ship composes lazar-commit, and every reviewer
 # tells a finding which skill to cite. A name the harness stopped shipping still reads fine and
@@ -496,7 +502,17 @@ assert_agent_installs() {
     return
   fi
 
-  assert_same_file "$name installs to Claude Code verbatim" "$source_agent" "$claude_agent"
+  # A surface-rendered agent is no longer a copy of its source, since its other surface's blocks
+  # are gone, so byte-identity is asserted only where there was nothing to render, and the rendered
+  # ones are pinned by the block assertions further down. The transform check survives either way
+  # by comparing the two *installed* copies rather than source against one of them: what it is
+  # about is the frontmatter dialect, and both copies were rendered for the same surface.
+  if grep -qE '^<!-- surface:[a-z]+ -->$' "$source_agent"; then
+    pass "$name is surface-rendered rather than installed verbatim"
+  else
+    assert_same_file "$name installs to Claude Code verbatim" "$source_agent" "$claude_agent"
+  fi
+
   assert_contains "$name declares mode: subagent for OpenCode" \
     "mode: subagent" "$opencode_agent"
   assert_contains "$name denies edit for OpenCode" "edit: deny" "$opencode_agent"
@@ -509,7 +525,7 @@ assert_agent_installs() {
     pass "$name drops Claude Code's name key for OpenCode"
   fi
 
-  if diff -q <(body_of "$source_agent") <(body_of "$opencode_agent") >/dev/null; then
+  if diff -q <(body_of "$claude_agent") <(body_of "$opencode_agent") >/dev/null; then
     pass "$name's transform rewrites frontmatter and leaves the prompt alone"
   else
     fail "$name's transform rewrites frontmatter and leaves the prompt alone"
@@ -925,10 +941,50 @@ else
 fi
 
 # A skill with no surface block is not rendered at all, so the scan cannot quietly rewrite the
-# vendored tree it walks past on its way to the one file that does carry blocks.
+# vendored tree it walks past on its way to the files that do carry blocks.
 assert_same_file "a skill with no surface block installs byte-identical on the sandbox surface" \
-  "$HARNESS_SOURCE/skills/lazar-ship/SKILL.md" \
-  "$SANDBOX_HOME/.claude/skills/lazar-ship/SKILL.md"
+  "$HARNESS_SOURCE/skills/lazar-commit/SKILL.md" \
+  "$SANDBOX_HOME/.claude/skills/lazar-commit/SKILL.md"
+
+for skill in "$SANDBOX_HOME/.claude/skills" "$SANDBOX_HOME/.config/opencode/skills"; do
+  assert_sandbox_rendered "the sandbox lazar-ship under $(dirname -- "${skill#"$SANDBOX_HOME/"}")" \
+    "$skill/lazar-ship/SKILL.md" "$SHIP_SANDBOX" "$SHIP_LOCAL"
+done
+
+# An agent is rendered like a skill, and for a sharper reason: git-hygiene-reviewer runs its own
+# `jj log` over the stack, and a reviewer that booted into a sandbox of its own is looking at a
+# clean clone of the base branch where `trunk()..@` is empty. Unrendered, it reports a clean stack
+# for work it never read, which is the quietest way for this agent to fail.
+HYGIENE_LOCAL='The stack is on this machine'
+HYGIENE_SANDBOX='The stack is not on this machine'
+
+for root in "$claude" "$opencode"; do
+  assert_surface_rendered "git-hygiene-reviewer installed to ${root##*/}" \
+    "$root/agents/git-hygiene-reviewer.md" "$HYGIENE_LOCAL" "$HYGIENE_SANDBOX"
+done
+
+for root in "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
+  assert_sandbox_rendered "the sandbox git-hygiene-reviewer under ${root#"$SANDBOX_HOME/"}" \
+    "$root/agents/git-hygiene-reviewer.md" "$HYGIENE_SANDBOX" "$HYGIENE_LOCAL"
+done
+
+# The whole-tree claim behind the two above. Rendering was wired for skills alone once, so an agent
+# that grew a block shipped its markers to both surfaces as prose, and a marker line reads to a
+# reviewer as instruction in a file no runtime would complain about. Asserted over every agent, so
+# the next one to grow a block is covered without this test learning its name.
+unrendered=""
+for root in "$claude" "$opencode" "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
+  for installed_agent in "$root"/agents/*.md; do
+    grep -qE '^<!-- /?surface:' "$installed_agent" &&
+      unrendered="$unrendered ${installed_agent#"$TEST_HOME/"}"
+  done
+done
+
+if [ -z "${unrendered// /}" ]; then
+  pass "no installed agent carries a surface marker the runtime would read as prose"
+else
+  fail "no installed agent carries a surface marker the runtime would read as prose:$unrendered"
+fi
 
 # write_instructions treats every value that is not `local` as the sandbox, so a typo would install
 # sandbox text on a laptop if this guard ever regressed.
