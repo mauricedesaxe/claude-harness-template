@@ -1,6 +1,6 @@
 ---
 name: lazar-review
-description: The one review command. Runs the global reviewer agents, whatever reviewer agents the repo ships, and matt-code-review, then converges everything into a single verdict in chat. Never posts to GitHub. Use when the user says "review my changes", "/lazar-review", or otherwise wants a quality check before commit, push, or merge.
+description: The one review command. Runs the global reviewer agents, whatever reviewer agents the repo ships, and matt-code-review, then converges everything into a single verdict delivered to whoever is there to read it: chat on a laptop, a posted PR comment in an unattended sandbox. Use when the user says "review my changes", "/lazar-review", or otherwise wants a quality check before commit, push, or merge.
 ---
 
 # lazar-review
