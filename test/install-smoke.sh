@@ -261,10 +261,12 @@ for uninvited in "$TEST_HOME/.agents" "$opencode/skill"; do
   fi
 done
 
-assert_same_file "lazar-tldraw installs to Claude Code" \
-  "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$claude/skills/lazar-tldraw/SKILL.md"
-assert_same_file "lazar-tldraw installs to OpenCode" \
-  "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$opencode/skills/lazar-tldraw/SKILL.md"
+# lazar-tldraw is surface-rendered now, so neither install is a copy of its source and byte-identity
+# against it would fail on a correct render. What this pair is about is that one skill reaches both
+# roots, which the two installs being identical to *each other* says exactly; the content is pinned
+# by the block assertions further down.
+assert_same_file "lazar-tldraw installs to both roots as one skill" \
+  "$claude/skills/lazar-tldraw/SKILL.md" "$opencode/skills/lazar-tldraw/SKILL.md"
 assert_same_file "a skill's supporting files travel with it" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$claude/skills/lazar-tldraw/LICENSE"
 
@@ -315,6 +317,34 @@ assert_same_file "lazar-pr-status installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-pr-status/SKILL.md" "$claude/skills/lazar-pr-status/SKILL.md"
 assert_same_file "lazar-pr-status installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-pr-status/SKILL.md" "$opencode/skills/lazar-pr-status/SKILL.md"
+
+# lazar-tldraw is the vendored skill, and the block it grew is the one a re-vendor is most likely to
+# drop: an edit to the generated SKILL.md alone survives only until vendor-skills.sh next runs. The
+# sandbox half carries the weight — a lost patch leaves a file that still reads correctly on a
+# laptop while telling a sandbox to run a CLI deliberately not installed there.
+TLDRAW_LOCAL='On disk, as a `.tldr` plus a PNG/SVG export'
+TLDRAW_SANDBOX="Use the runtime's \`whiteboard\` skill"
+
+assert_surface_rendered "lazar-tldraw installed to Claude Code" \
+  "$claude/skills/lazar-tldraw/SKILL.md" "$TLDRAW_LOCAL" "$TLDRAW_SANDBOX"
+assert_surface_rendered "lazar-tldraw installed to OpenCode" \
+  "$opencode/skills/lazar-tldraw/SKILL.md" "$TLDRAW_LOCAL" "$TLDRAW_SANDBOX"
+
+# The patch is what carries a change to a generated file across the next re-vendor, so the block
+# sitting in the vendored tree proves nothing by itself. Asserted against the patch rather than by
+# re-running vendor-skills.sh, which needs the network this suite runs without.
+assert_contains "the tldraw patch carries the sandbox block into the next re-vendor" \
+  '+<!-- surface:sandbox -->' "$HARNESS_SOURCE/patches/lazar-tldraw.patch"
+
+# lazar-pr-status is deliberately *not* split: its default is the same on both surfaces, and one
+# instruction correct everywhere beats two that agree until one drifts. What has to hold is that the
+# gate is there at all — the rule it replaced was an absolute ban on writing, so a revert reads as
+# consistent rather than as a regression.
+assert_contains "lazar-pr-status gates publishing behind being asked" \
+  'Publishing happens only when I ask for it, and only after you ask me.' \
+  "$claude/skills/lazar-pr-status/SKILL.md"
+assert_contains "lazar-pr-status treats an unanswered confirmation as a no" \
+  'treat silence as a no' "$claude/skills/lazar-pr-status/SKILL.md"
 
 assert_same_file "lazar-commit installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-commit/SKILL.md" "$claude/skills/lazar-commit/SKILL.md"
@@ -825,9 +855,11 @@ else
 fi
 
 # The purge is a whole-tree replace, so the same install that drops lazar-work must still land
-# every skill the harness does ship, supporting files and all.
+# every skill the harness does ship, supporting files and all. Anchored on an unrendered skill, so
+# it stays a comparison against the source: re-reading the rendered tldraw against the same install
+# it came from would compare a file to itself and pass whatever happened.
 assert_same_file "reinstalling keeps a skill the harness still ships" \
-  "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$claude/skills/lazar-tldraw/SKILL.md"
+  "$HARNESS_SOURCE/skills/lazar-commit/SKILL.md" "$claude/skills/lazar-commit/SKILL.md"
 assert_same_file "reinstalling keeps a still-shipped skill's supporting files" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$opencode/skills/lazar-tldraw/LICENSE"
 
@@ -940,6 +972,19 @@ else
   pass "the two surfaces install different lazar-review diff sources"
 fi
 
+# The half of the tldraw split that carries the weight. Dropping the split leaves the local prose
+# behind as unconditional text, so every local assertion above goes on passing and only this one
+# notices — which is the shape the last vacuous assertion in this suite had.
+for skill in "$SANDBOX_HOME/.claude/skills" "$SANDBOX_HOME/.config/opencode/skills"; do
+  assert_sandbox_rendered "the sandbox lazar-tldraw under $(dirname -- "${skill#"$SANDBOX_HOME/"}")" \
+    "$skill/lazar-tldraw/SKILL.md" "$TLDRAW_SANDBOX" "$TLDRAW_LOCAL"
+done
+
+# The export path is the concrete thing that cannot work here: no tldraw CLI, no viewer, no browser.
+# A sandbox told to run it burns a boot to fail at the last step, having drawn nothing anyone sees.
+assert_contains "the sandbox lazar-tldraw names the board command that replaces the CLI" \
+  'board create' "$SANDBOX_HOME/.claude/skills/lazar-tldraw/SKILL.md"
+
 # A skill with no surface block is not rendered at all, so the scan cannot quietly rewrite the
 # vendored tree it walks past on its way to the files that do carry blocks.
 assert_same_file "a skill with no surface block installs byte-identical on the sandbox surface" \
@@ -967,6 +1012,35 @@ for root in "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
   assert_sandbox_rendered "the sandbox git-hygiene-reviewer under ${root#"$SANDBOX_HOME/"}" \
     "$root/agents/git-hygiene-reviewer.md" "$HYGIENE_SANDBOX" "$HYGIENE_LOCAL"
 done
+
+# The same failure one step further out. git-hygiene-reviewer reads history, which the diff does not
+# carry; these two read *code around* the diff, which the base branch carries wrongly. A sandbox
+# clone has never seen the PR, so a file it adds is absent and a file it modifies opens pre-PR.
+# Unrendered, clarity-reviewer judges prose nobody wrote and yagni-reviewer counts call sites that
+# do not exist yet, which turns a justified abstraction into its commonest finding. Both fail while
+# reporting confidently, so the check is that each names its own checkout step.
+CLARITY_LOCAL='This disk holds the code under review'
+CLARITY_SANDBOX='This disk holds the base branch, not the change'
+
+for agent in clarity-reviewer yagni-reviewer; do
+  for root in "$claude" "$opencode"; do
+    assert_surface_rendered "$agent installed to ${root##*/}" \
+      "$root/agents/$agent.md" "$CLARITY_LOCAL" "$CLARITY_SANDBOX"
+  done
+
+  for root in "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
+    assert_sandbox_rendered "the sandbox $agent under ${root#"$SANDBOX_HOME/"}" \
+      "$root/agents/$agent.md" "$CLARITY_SANDBOX" "$CLARITY_LOCAL"
+    assert_contains "the sandbox $agent is told how to reach the PR's head" \
+      'gh pr checkout' "$root/agents/$agent.md"
+  done
+done
+
+# The reviewers only have a head to check out because the orchestrator pushed before spawning them.
+# Asserted on the sandbox lazar-review, where the ordering is load-bearing; locally there is no push
+# in the loop at all.
+assert_contains "the sandbox lazar-review pushes before it fans out" \
+  'Push first, then fan out' "$SANDBOX_HOME/.claude/skills/lazar-review/SKILL.md"
 
 # The whole-tree claim behind the two above. Rendering was wired for skills alone once, so an agent
 # that grew a block shipped its markers to both surfaces as prose, and a marker line reads to a
@@ -1086,7 +1160,7 @@ else
 fi
 
 assert_same_file "installing lands skills in the symlink's target" \
-  "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$linked_target/lazar-tldraw/SKILL.md"
+  "$HARNESS_SOURCE/skills/lazar-commit/SKILL.md" "$linked_target/lazar-commit/SKILL.md"
 
 if [ -e "$linked_target/lazar-work" ]; then
   fail "installing purges a stale skill through a symlinked skills dir"
@@ -1316,8 +1390,10 @@ if command -v opencode >/dev/null 2>&1; then
   # resolution of nothing at all fail here too rather than pass by comparing against an empty path.
   tldraw_location=$(location_of lazar-tldraw)
 
+  # Compared against the default run's install rather than the source, because lazar-tldraw is
+  # surface-rendered and both runs rendered the same surface. The shadow's body matches neither.
   if [ -n "$tldraw_location" ] &&
-    cmp -s -- "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$tldraw_location"; then
+    cmp -s -- "$claude/skills/lazar-tldraw/SKILL.md" "$tldraw_location"; then
     pass "the lazar-tldraw OpenCode actually resolves is the one the harness ships, not the shadow"
   else
     fail "the lazar-tldraw OpenCode actually resolves is the one the harness ships, not the shadow: got '$tldraw_location'"
@@ -1505,9 +1581,9 @@ assert_same_file "CLAUDE.md installs where CLAUDE_CONFIG_DIR points" \
 assert_same_file "the spine installs where CLAUDE_CONFIG_DIR points" \
   "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$redirect_claude/rules/PHILOSOPHY.md"
 assert_same_file "skills install where CLAUDE_CONFIG_DIR points" \
-  "$HARNESS_SOURCE/skills/lazar-tldraw/SKILL.md" "$redirect_claude/skills/lazar-tldraw/SKILL.md"
+  "$claude/skills/lazar-tldraw/SKILL.md" "$redirect_claude/skills/lazar-tldraw/SKILL.md"
 assert_same_file "agents install where CLAUDE_CONFIG_DIR points" \
-  "$HARNESS_SOURCE/agents/yagni-reviewer.md" "$redirect_claude/agents/yagni-reviewer.md"
+  "$claude/agents/yagni-reviewer.md" "$redirect_claude/agents/yagni-reviewer.md"
 
 # Anything that is loaded by virtue of sitting in a config home has to land in the config home
 # Claude Code was pointed at, or it is not read at all. The hooks dir is the one thing under
