@@ -106,6 +106,26 @@ apply_prefix_to_frontmatter() {
   mv -- "$skill_md.prefixed" "$skill_md"
 }
 
+# Upstream locks most of its skills to hand-typed invocation with `disable-model-invocation: true`.
+# That guards against an agent spontaneously firing an expensive workflow, but it also makes the
+# skills unreachable from a spoken brain-dump: the agent can name the slash command it would have
+# run and nothing more. `matt-ask-matt`, the router `CLAUDE.md` sends every other skill through, is
+# itself one of the locked ones, so the documented flow cannot be followed as written.
+#
+# Stripping the line here rather than in a patch keeps it stable across upstream edits near the
+# frontmatter, which the patch tool would refuse to fuzz through.
+strip_model_invocation_lock() {
+  local skill_md=$1
+  awk '
+    NR == 1 { print; next }
+    !closed && /^---$/ { closed = 1 }
+    !closed && /^disable-model-invocation:[[:space:]]*true[[:space:]]*$/ { next }
+    { print }
+  ' "$skill_md" >"$skill_md.unlocked" ||
+    die "$skill_md: stripping disable-model-invocation failed"
+  mv -- "$skill_md.unlocked" "$skill_md"
+}
+
 # The prefix has to reach the cross-references too: these skills dispatch to each other by slash
 # name, so an unrewritten `/code-review` in a body reaches Claude Code's built-in rather than
 # matt-code-review — the very collision the prefix exists to prevent. Only a reference is
@@ -221,6 +241,7 @@ main() {
     staged="$staging/.claude/skills/$skill"
     [ -d "$staged" ] || die "$skill: the skills CLI installed no such skill"
     apply_prefix_to_frontmatter "$staged/SKILL.md" "$skill"
+    strip_model_invocation_lock "$staged/SKILL.md"
     apply_prefix_to_references "$staged"
   done
 

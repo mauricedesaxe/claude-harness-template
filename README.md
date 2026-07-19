@@ -234,6 +234,28 @@ vendored names are rewritten, so Claude Code's own `/compact` still means `/comp
 where a reference and not a path is being written, so `docs/agents/triage-labels.md` and the
 route `/prototype/<name>` are left alone.
 
+### The invocation lock, stripped
+
+Upstream ships 13 of its 22 skills with `disable-model-invocation: true`, which makes them
+reachable only by a hand-typed slash command. The vendor removes that line.
+
+The flag guards against an agent spontaneously firing an expensive workflow, which is a real
+concern and not the one that bites here. The cost lands on voice-to-text: the agent can name the
+command you should have typed and nothing else, and typing it means abandoning the brain-dump that
+carried the context in the first place. `matt-ask-matt` is itself one of the locked ones, so
+`CLAUDE.md`'s instruction to reach for Matt's skills *through the router* cannot be followed as
+written.
+
+It is a frontmatter transform rather than a patch for the same reason the prefix is: the patch tool
+matches context exactly and refuses to fuzz, so a patch would break the next time upstream edited
+anything near that frontmatter. The strip stops at the closing `---`, so a skill that *documents*
+the flag in its prose keeps it — `matt-writing-great-skills` does exactly that, and
+`test/model-invocation.sh` pins it, along with leaving an explicit `false` alone.
+
+Each skill still gates itself in its own instructions, and `CLAUDE.md`'s "nudge, don't nag, don't
+auto-run" rule already covers this class of skill. If a specific skill turns out to need the guard
+back, the fix is to keep the lock on that one rather than to restore it wholesale.
+
 ### use-railway, the skill that cannot take a prefix
 
 Provenance is readable from the name everywhere else here: `matt-` is Matt's, `lazar-` is mine,
@@ -311,6 +333,7 @@ bash test/install-smoke.sh
 bash test/enforce-jj.sh
 bash test/prefix-rewrite.sh
 bash test/tldraw-patch.sh
+bash test/model-invocation.sh
 ```
 
 `install-smoke.sh` is one end-to-end pass: it runs the installer with `HOME` pointed at a temp
