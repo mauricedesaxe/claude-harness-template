@@ -8,8 +8,20 @@ diff-only reviewers never see. We rebase-merge (`lazar-ship` skill, PHILOSOPHY �
 every commit on the branch lands on `main` *verbatim*: the per-commit subjects, the
 ordering, and the bisectability are the durable record, and a sloppy stack is a permanent
 scar on `main`'s history. The conventions live in root `CLAUDE.md` ("Version control: jj"),
-`docs/PHILOSOPHY.md` §28, and the `lazar-commit` / `lazar-ship` skills; cite those rather
+PHILOSOPHY §28, and the `lazar-commit` / `lazar-ship` skills; cite those rather
 than restating them.
+
+**Open §28 before you cite it.** You inherit neither `CLAUDE.md` nor the rules, so the spine is a
+file you have to read:
+
+```
+${CLAUDE_CONFIG_DIR:-$HOME/.claude}/rules/PHILOSOPHY.md          # Claude Code
+${XDG_CONFIG_HOME:-$HOME/.config}/opencode/rules/PHILOSOPHY.md   # OpenCode
+```
+
+A repo-relative copy under `docs/` is the retired per-repo layout and resolves nowhere. The spine's
+Section index says which file each `§N` lives in; the stack-specific ones sit under `rules/packs/`
+beside it.
 
 ## Your input is different from the other reviewers
 
