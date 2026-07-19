@@ -215,10 +215,15 @@ them. Which files those are is read off the files, so a skill that grows a block
 surface being installed all stop the run: each one otherwise ships silently, and the first truncates
 the file at the marker.
 
-One file uses it today:
+Two files use it today:
 
 - **`CLAUDE.md`** — which jj workspace to work in. `§28` states the isolation principle for both
   surfaces; only the default action differs, since a sandbox is already a checkout of its own.
+- **`skills/lazar-review/SKILL.md`** — what diff the reviewers are handed. Sharing a disk means
+  `jj diff --from 'trunk()' --to @`, committed plus uncommitted. Not sharing one means the pushed
+  PR, which each reviewer fetches with `gh` for itself, and nothing pushed means say so and spawn
+  nobody rather than booting a sandbox per reviewer to fail identically.
+
 Both variants sit next to each other in the file someone edits, so the two surfaces are reviewed as
 one diff and neither is a copy of the other. `install.sh` carries the reasoning at the transform.
 

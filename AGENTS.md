@@ -18,10 +18,10 @@ What's specific to this repo, and easy to get wrong:
 - **`CLAUDE.md` has a line budget**, asserted by `test/install-smoke.sh`: under 200 lines, because
   adherence drops as it grows. Make budget by pointing at the philosophy or at `/matt-ask-matt`,
   not by dropping a rule.
-- **`surface:local` / `surface:sandbox` blocks are per-environment prose** in `CLAUDE.md`. The
-  installer keeps the pair matching `HARNESS_SURFACE` and drops the rest, so both variants live in
-  the markdown and are edited together. A file carrying one surface and not the other stops the
-  install.
+- **`surface:local` / `surface:sandbox` blocks are per-environment prose**, in `CLAUDE.md` and in
+  `skills/lazar-review/SKILL.md`. The installer keeps the pair matching `HARNESS_SURFACE` and drops
+  the rest, so both variants live in the markdown and are edited together. A file carrying one
+  surface and not the other stops the install.
 - **Nothing under `skills/matt-*` or `skills/lazar-tldraw` is hand-edited.** Both are vendored and
   regenerated. Edit upstream or `patches/lazar-tldraw.patch`, then re-run `./vendor-skills.sh`.
 - **Never pass `--install` to `install.sh` here.** It honours `$HOME`, `$CLAUDE_CONFIG_DIR` and

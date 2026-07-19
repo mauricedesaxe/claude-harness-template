@@ -14,27 +14,69 @@ one by hand.
 The base is freshly fetched trunk, not a stale local ref. In a jj workspace the local trunk
 bookmark may lag or belong to another workspace.
 
-jj snapshots the working copy into `@`, so committed work and uncommitted edits come out in
-one diff. There's no separate staged gather.
+Two inputs are the same wherever this runs. An inherited `GITHUB_TOKEN` outranks `gh auth`'s
+own credentials, so unset it or `gh` may answer as the wrong account:
 
 ```sh
 jj git fetch
-jj diff --from 'trunk()' --to @ --name-only   # changed paths
-jj diff --from 'trunk()' --to @               # the diff the reviewers read
-```
-
-If the path list is empty, say so and stop. There's nothing to review.
-
-Grab two more inputs while you're here. An inherited `GITHUB_TOKEN` outranks `gh auth`'s own
-credentials, so unset it or `gh` may answer as the wrong account:
-
-```sh
 env -u GITHUB_TOKEN gh pr view --json number,body 2>/dev/null   # "no PR yet" if this errors
 jj log -r 'trunk()..@' --no-graph -T 'description'              # the stack's messages
 ```
 
 The stack messages and the PR body are where the originating issue is named (`Closes #N`).
 Step 4 needs it.
+
+What the reviewers actually read is the part that differs, because it turns on whether they can
+see this working copy at all.
+
+<!-- surface:local -->
+
+**The reviewers share this filesystem.** A subagent here is a tool call on the same disk, so it
+can read work that exists nowhere else yet, and reviewing uncommitted edits is most of the value.
+
+jj snapshots the working copy into `@`, so committed work and uncommitted edits come out in
+one diff. There's no separate staged gather.
+
+```sh
+jj diff --from 'trunk()' --to @ --name-only   # changed paths
+jj diff --from 'trunk()' --to @               # the diff the reviewers read
+```
+
+If the path list is empty, say so and stop. There's nothing to review.
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+**Each reviewer is a sandbox of its own and cannot see this working copy.** A spawned agent
+boots a clean clone of the repo's base branch and never receives this checkout. So a prompt
+naming a path here resolves to nothing on the machine that reads it, and every reviewer fails
+identically after booting a full sandbox to do it.
+
+The review is therefore of the **pushed PR**, which a child fetches for itself:
+
+```sh
+env -u GITHUB_TOKEN gh pr diff <n> --name-only     # changed paths
+env -u GITHUB_TOKEN gh pr diff <n>                 # the diff the reviewers read
+env -u GITHUB_TOKEN gh pr view <n> --json commits  # the stack, for git-hygiene-reviewer
+```
+
+**Nothing pushed means stop.** No PR is not a small diff to review, it's no diff any reviewer
+can reach. Say there's nothing pushed, name what would have been reviewed, and spawn nobody.
+Pushing belongs to `lazar-ship`, not here, so hand it back rather than pushing to make the
+review possible.
+
+**Only what's pushed reaches a reviewer.** Uncommitted or unpushed work is invisible to every
+child, and a review of a stale head reads exactly like a review of the work:
+
+```sh
+jj diff --from 'trunk()' --to @ --name-only   # what's actually here
+```
+
+If that names paths the PR diff doesn't, push them before reviewing, or name them in the report
+as changes nobody reviewed. Silently reviewing the older thing is the failure to avoid.
+
+<!-- /surface:sandbox -->
 
 ## Step 2: build the roster
 
@@ -73,19 +115,35 @@ note in the report that the repo's version shadowed it.
 Send every agent call in one message so they run concurrently. Each agent knows its own scope
 already, so give it the inputs and nothing more:
 
-1. The diff source: "the branch diff `jj diff --from 'trunk()' --to @`, committed plus
-   uncommitted, since jj snapshots the working copy into `@`".
+1. The diff source, worded as below.
 2. The list of changed paths.
 3. That its findings get converged into one report with everyone else's, so it should be
    concrete (path, line, the fix) and skip restating its own scope.
+
+The diff source is the one input that changes with where this runs, and Step 1 already resolved
+which one applies. Hand it over verbatim:
+
+<!-- surface:local -->
+
+> the branch diff `jj diff --from 'trunk()' --to @`, committed plus uncommitted, since jj
+> snapshots the working copy into `@`
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+> the pushed PR, `env -u GITHUB_TOKEN gh pr diff <n>`, which you fetch yourself in your own
+> sandbox — there is no parent working copy for you to read, and no path from one to quote back
+
+<!-- /surface:sandbox -->
 
 Don't pre-filter a reviewer by which files changed, beyond the description-scoping in Step 2.
 A reviewer that sees nothing in its scope returns "no issues found" in seconds, which is the
 expected outcome, not a waste.
 
-`git-hygiene-reviewer` reads the commit graph and the PR, not just the file diff, so its
-prompt gets what the others don't: the resolved base (`trunk()`), the stack range
-(`trunk()..@`), and the PR number or "no PR yet" from Step 1. Tell it not to re-run
+`git-hygiene-reviewer` reads the commit graph and the PR, not just the file diff, so its prompt
+gets what the others don't: the resolved base (`trunk()`), the stack as Step 1 resolved it, and
+the PR number from Step 1, or "no PR yet" where Step 1 allowed one. Tell it not to re-run
 `jj git fetch`, so it judges the same snapshot everyone else did.
 
 ## Step 4: run matt-code-review with its inputs pinned
