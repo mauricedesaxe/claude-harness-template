@@ -27,8 +27,13 @@ beside it.
 
 Every other reviewer is *handed* a code diff and looks only at changed lines. You need the
 **history**, which the diff doesn't carry. The `lazar-review` skill passes you, in your prompt,
-the stack range (`trunk()..@`) and the PR number (or "no PR yet"); on top of that you run
-your own **read-only** commands to read the commit graph and PR state:
+the stack range and the PR number (or "no PR yet"); on top of that you run your own
+**read-only** commands to read the commit graph and PR state.
+
+<!-- surface:local -->
+
+**The stack is on this machine.** You are a tool call on the same disk as the working copy
+under review, so jj answers every question about it directly:
 
 ```sh
 jj log -r 'trunk()..@' --no-graph -T 'change_id.short() ++ " " ++ commit_id.short() ++ "\n" ++ description ++ "\n---\n"'
@@ -37,19 +42,41 @@ jj diff --from 'trunk()' --to @ --name-only   # which paths the stack touches (f
 env -u GITHUB_TOKEN gh pr view <N> --json number,title,body,headRefName,baseRefName,state,closingIssuesReferences   # only if a PR exists
 ```
 
-Two hard constraints on those commands:
-
-- **Do NOT run `jj git fetch`.** The `lazar-review` skill already fetched and resolved `trunk()`
-  for this run; re-fetching can move `trunk()` to a newer `main` than the other reviewers
-  saw, and then you'd be judging a different snapshot than `code-reviewer`. Reuse the
-  skill's already-fetched `trunk()`.
-- **Read-only only.** Never `jj commit`, `jj squash`, `jj rebase`, `jj bookmark set`, `gh
-  pr edit`, or any mutation. You report; the human (or the spawning skill's triage) fixes.
+**Do NOT run `jj git fetch`.** The `lazar-review` skill already fetched and resolved `trunk()`
+for this run; re-fetching can move `trunk()` to a newer `main` than the other reviewers saw, and
+then you'd be judging a different snapshot than `code-reviewer`. Reuse the skill's already-fetched
+`trunk()`.
 
 **The empty working-copy `@`.** `trunk()..@` includes the working-copy commit, which is
 often an empty, description-less `@` sitting on top of the real stack. Skip it when judging
 atomicity and messages — it has no message to lint yet and isn't a shipped commit. Lint the
 commits that have descriptions.
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+**The stack is not on this machine.** You booted a clean clone of the base branch, which has
+never seen the checkout under review, so `trunk()..@` here is empty and a `jj log` of it would
+report a clean stack for work you never read. Read the history off the **pushed PR** instead:
+
+```sh
+env -u GITHUB_TOKEN gh pr view <N> --json number,title,body,headRefName,baseRefName,state,commits,closingIssuesReferences
+env -u GITHUB_TOKEN gh pr diff <N> --name-only   # which paths the stack touches (for contents hygiene)
+```
+
+`commits` carries each commit's `messageHeadline`, `messageBody` and `oid`, which is what
+Sections A, B and D lint. There is no working-copy commit in that list, so nothing to skip.
+
+**Two checks in Section C are jj's and have no answer here.** A pushed PR *is* a bookmarked,
+non-anonymous stack, so the anonymous-stack check passes by construction; and divergent change
+ids aren't visible over the API, so judge duplicates by description alone. Don't report either
+as unverified, and don't reach for a `jj` command to settle them.
+
+<!-- /surface:sandbox -->
+
+**Read-only only.** Never `jj commit`, `jj squash`, `jj rebase`, `jj bookmark set`, `gh pr edit`,
+a `gh api` write, or any other mutation. You report; whoever converges your findings fixes.
 
 **No PR vs can't-read-the-PR are different states** (the "two zeros" distinction, applied
 to PR meta). If the prompt says no PR exists, the PR-meta checks (Section C) are simply

@@ -215,14 +215,23 @@ them. Which files those are is read off the files, so a skill that grows a block
 surface being installed all stop the run: each one otherwise ships silently, and the first truncates
 the file at the marker.
 
-Two files use it today:
+Four files use it today:
 
 - **`CLAUDE.md`** — which jj workspace to work in. `§28` states the isolation principle for both
   surfaces; only the default action differs, since a sandbox is already a checkout of its own.
-- **`skills/lazar-review/SKILL.md`** — what diff the reviewers are handed. Sharing a disk means
-  `jj diff --from 'trunk()' --to @`, committed plus uncommitted. Not sharing one means the pushed
-  PR, which each reviewer fetches with `gh` for itself, and nothing pushed means say so and spawn
-  nobody rather than booting a sandbox per reviewer to fail identically.
+- **`skills/lazar-review/SKILL.md`** — what diff the reviewers are handed, and whether the verdict
+  is posted. Sharing a disk means `jj diff --from 'trunk()' --to @`, committed plus uncommitted.
+  Not sharing one means the pushed PR, which each reviewer fetches with `gh` for itself, and
+  nothing pushed means say so and spawn nobody rather than booting a sandbox per reviewer to fail
+  identically. Posting is refused on a laptop, where nothing goes out under Alex's name unread,
+  and required in a sandbox, where the review carries a bot's identity and the transcript reaches
+  nobody.
+- **`skills/lazar-ship/SKILL.md`** — whether Step 3 waits to be OK'd before committing. An
+  approval gate with nobody to answer it strands finished work in a checkout that is about to be
+  destroyed, and push, PR and merge all sit downstream of it.
+- **`agents/git-hygiene-reviewer.md`** — where the commit history is read from. It is the one
+  reviewer that gathers its own input, so a `jj log` of `trunk()..@` on a machine that only ever
+  cloned the base branch reports a clean stack for work it never saw.
 
 Both variants sit next to each other in the file someone edits, so the two surfaces are reviewed as
 one diff and neither is a copy of the other. `install.sh` carries the reasoning at the transform.

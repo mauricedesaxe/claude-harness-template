@@ -465,6 +465,12 @@ install_agents() {
     write_opencode_agent "$agent" "$built/opencode/$name"
   done
 
+  # After the dialect transform, not before, so each runtime's copy is rendered and neither can
+  # ship a marker line to a reviewer as instruction. An agent needs this for the same reason the
+  # skill that spawns it does: git-hygiene-reviewer reads the commit graph itself, and where it
+  # boots into a sandbox of its own there is no parent working copy for a `jj log` to read.
+  render_surface_tree "$built"
+
   replace_dir "$CLAUDE_HOME/agents" "$built/claude"
   replace_dir "$OPENCODE_HOME/agents" "$built/opencode"
   rm -rf -- "$built"
