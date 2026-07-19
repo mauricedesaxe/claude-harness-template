@@ -233,47 +233,65 @@ write_opencode_agent() {
     die "$source: frontmatter never closes, so no OpenCode mode was generated"
 }
 
-# `§28` states the isolation principle for every surface; only the default action differs, and a
-# sandbox is a checkout of its own, so the workspace-per-agent rule that keeps concurrent local
-# agents off a shared `@` buys nothing there.
-# Reaches awk through the environment because `awk -v` runs escape processing over its value and
-# the one-true-awk rejects a literal newline in it outright.
-SANDBOX_WORKSPACE_DEFAULT=$(
-  cat <<'MD'
-**Work the default workspace directly with `jj edit`.** The sandbox is the isolation: this checkout
-is mine alone, and a workspace inside it would buy nothing. Reach for `jj workspace add` only when
-fanning out concurrent subagents that edit at once, which is the one case where a shared `@` still
-collides (`§28`).
-MD
-)
+# The surfaces the block convention below knows. A markdown file naming anything else has a typo in
+# it, and the cost of rendering that as prose is a marker line shipped to a reader as instruction.
+HARNESS_SURFACES='local sandbox'
 
-# CLAUDE.md is authored for the local surface the way agents/ is authored for Claude Code: whichever
-# target needs the other dialect has it generated, so no second copy is hand-kept.
-write_instructions() {
-  local dest=$1 source="$HARNESS_SOURCE/CLAUDE.md" staged
+# Prose that differs by environment is authored in the markdown it belongs to, between a
+# `<!-- surface:NAME -->` and a `<!-- /surface:NAME -->`, and this keeps the blocks whose name is
+# the surface being installed while dropping the rest. Both variants therefore sit next to each
+# other in the file someone edits and reviews, rather than one of them living as a heredoc in this
+# script, and a second file needing the treatment costs no change here at all.
+#
+# What differs is only ever the default action. `§28` states the isolation principle for every
+# surface, and `lazar-review` reviews the same work either way; a block that contradicted the other
+# variant rather than adapting it would be two harnesses, not one.
+#
+# Staged like every other write here, so a file that fails to render leaves the previous install in
+# place rather than a half-written one. Every failure below is a mis-authored source: an unclosed
+# block silently truncates at the marker, and a missing block silently ships one surface the other
+# one's instructions, so both stop the run rather than being reconciled.
+render_surface() {
+  local source=$1 dest=$2 staged
 
-  if [ "$HARNESS_SURFACE" = local ]; then
-    cp -- "$source" "$dest"
-    return
-  fi
-
-  # An unclosed block leaves awk skipping to EOF, which truncates the file rather than failing.
-  grep -qxF -- '<!-- /surface:local -->' "$source" ||
-    die "CLAUDE.md's surface:local block never closes, so $dest would be truncated at the marker"
-
-  # Staged like every other write here, so a failed transform leaves the previous install in place
-  # rather than a half-generated file. Substituting anything but exactly once means the markers
-  # moved, and the alternative to failing on that is silently shipping a sandbox the local default.
   staged=$(mktemp -- "$dest.XXXXXX")
-  SANDBOX_WORKSPACE_DEFAULT="$SANDBOX_WORKSPACE_DEFAULT" awk '
-    BEGIN { block = ENVIRON["SANDBOX_WORKSPACE_DEFAULT"] }
-    /^<!-- surface:local\./ { print block; substituted++; skipping = 1; next }
-    $0 == "<!-- /surface:local -->" { skipping = 0; next }
-    !skipping
-    END { exit substituted == 1 ? 0 : 1 }
+  awk -v want="$HARNESS_SURFACE" -v surfaces="$HARNESS_SURFACES" '
+    function bail(message) {
+      printf "%s\n", message > "/dev/stderr"
+      aborted = 1
+      exit 1
+    }
+    function surface_of(line, name) {
+      name = line
+      sub(/^<!-- \/?surface:/, "", name)
+      sub(/ -->$/, "", name)
+      return name
+    }
+    BEGIN { split(surfaces, list, " "); for (i in list) known[list[i]] = 1 }
+    /^<!-- surface:[a-z]+ -->$/ {
+      name = surface_of($0)
+      if (!(name in known)) bail("surface:" name " is not a surface this installer knows")
+      if (open != "") bail("surface:" name " opens inside surface:" open)
+      open = name
+      seen[name] = 1
+      keep = (name == want)
+      next
+    }
+    /^<!-- \/surface:[a-z]+ -->$/ {
+      name = surface_of($0)
+      if (open != name) bail("surface:" name " closes with " (open == "" ? "nothing" : "surface:" open) " open")
+      open = ""
+      next
+    }
+    open == "" || keep
+    END {
+      if (aborted) exit 1
+      if (open != "") bail("surface:" open " never closes")
+      if (!(want in seen)) bail("there is no surface:" want " block to install")
+    }
   ' "$source" >"$staged" || {
     rm -f -- "$staged"
-    die "CLAUDE.md has no single surface:local block, so no $HARNESS_SURFACE default was generated"
+    die "$source did not render for the $HARNESS_SURFACE surface, so $dest was left alone"
   }
 
   mv -- "$staged" "$dest"
@@ -281,8 +299,8 @@ write_instructions() {
 
 install_instructions() {
   mkdir -p -- "$CLAUDE_HOME" "$OPENCODE_HOME"
-  write_instructions "$CLAUDE_HOME/CLAUDE.md"
-  write_instructions "$OPENCODE_HOME/AGENTS.md"
+  render_surface "$HARNESS_SOURCE/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md"
+  render_surface "$HARNESS_SOURCE/CLAUDE.md" "$OPENCODE_HOME/AGENTS.md"
 }
 
 # A config the harness merges into rather than owns has to survive being absent and being empty. jq
