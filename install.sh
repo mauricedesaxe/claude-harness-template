@@ -247,6 +247,14 @@ HARNESS_SURFACES='local sandbox'
 # surface, and `lazar-review` reviews the same work either way; a block that contradicted the other
 # variant rather than adapting it would be two harnesses, not one.
 #
+# `sandbox` says the working copy is not shared, there is no GUI, and the run is ephemeral. It does
+# not say nobody is watching: an Open Inspect session someone is driving and an unattended
+# automation run are both this surface. So a block that turns on whether a human can answer settles
+# that from what the skill is *for*, never from the flag. `lazar-review` is always something else's
+# output being reviewed, so it posts; `lazar-pr-status` is always Alex driving, so it asks first and
+# treats no answer as a no. Neither reads the flag to decide it, and a second flag for attendedness
+# would be a knob no caller can set correctly.
+#
 # Staged like every other write here, so a file that fails to render leaves the previous install in
 # place rather than a half-written one. Every failure below is a mis-authored source: an unclosed
 # block silently truncates at the marker, and a missing block silently ships one surface the other
