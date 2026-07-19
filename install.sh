@@ -297,6 +297,17 @@ render_surface() {
   mv -- "$staged" "$dest"
 }
 
+# Which files carry surface blocks is read off the files rather than listed here, so a skill that
+# grows one is rendered without this script learning its name (`§26`). A file with no marker is
+# never passed to render_surface, whose "no block for this surface" assertion would reject it.
+render_surface_tree() {
+  local root=$1 file
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    render_surface "$file" "$file"
+  done <<<"$(grep -rlE '^<!-- surface:[a-z]+ -->$' "$root" 2>/dev/null || true)"
+}
+
 install_instructions() {
   mkdir -p -- "$CLAUDE_HOME" "$OPENCODE_HOME"
   render_surface "$HARNESS_SOURCE/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md"
@@ -371,9 +382,19 @@ install_philosophy() {
 # wrote is exactly where it put it, and the runtimes still disagree. So the roots the harness does
 # not ship into are emptied, and what proves it is `opencode debug skill` resolving the same set of
 # names Claude Code has, not a directory listing.
+#
+# Rendered into a build directory before either replace, the way an agent's OpenCode dialect is, so
+# a skill that fails to render stops the run with both trees still on their previous install rather
+# than with one of them already replaced by the copy that failed.
 install_skills() {
-  replace_dir "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
-  replace_dir "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
+  local built
+  built=$(mktemp -d)
+  cp -R -- "$HARNESS_SOURCE/skills" "$built/skills"
+  render_surface_tree "$built/skills"
+
+  replace_dir "$CLAUDE_HOME/skills" "$built/skills"
+  replace_dir "$OPENCODE_HOME/skills" "$built/skills"
+  rm -rf -- "$built"
   purge_dir "$AGENTS_SKILLS"
   purge_dir "$OPENCODE_SKILL_SINGULAR"
 }

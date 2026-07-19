@@ -300,10 +300,16 @@ assert_same_file "lazar-research installs to Claude Code" \
 assert_same_file "lazar-research installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-research/SKILL.md" "$opencode/skills/lazar-research/SKILL.md"
 
-assert_same_file "lazar-review installs to Claude Code" \
-  "$HARNESS_SOURCE/skills/lazar-review/SKILL.md" "$claude/skills/lazar-review/SKILL.md"
-assert_same_file "lazar-review installs to OpenCode" \
-  "$HARNESS_SOURCE/skills/lazar-review/SKILL.md" "$opencode/skills/lazar-review/SKILL.md"
+# lazar-review is surface-rendered like CLAUDE.md, and for the same reason: a reviewer spawned into
+# a sandbox of its own cannot read the parent's working copy, so the diff source it is handed is the
+# pushed PR rather than a `jj diff` of a path that does not exist on its machine.
+REVIEW_LOCAL='committed plus uncommitted'
+REVIEW_SANDBOX='gh pr diff'
+
+assert_surface_rendered "lazar-review installed to Claude Code" \
+  "$claude/skills/lazar-review/SKILL.md" "$REVIEW_LOCAL" "$REVIEW_SANDBOX"
+assert_surface_rendered "lazar-review installed to OpenCode" \
+  "$opencode/skills/lazar-review/SKILL.md" "$REVIEW_LOCAL" "$REVIEW_SANDBOX"
 
 assert_same_file "lazar-pr-status installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-pr-status/SKILL.md" "$claude/skills/lazar-pr-status/SKILL.md"
@@ -894,6 +900,14 @@ for instructions in "$SANDBOX_HOME/.claude/CLAUDE.md" "$SANDBOX_HOME/.config/ope
     "$instructions" "$CLAUDE_MD_SANDBOX" "$CLAUDE_MD_LOCAL"
 done
 
+# The surface has to reach a skill and not only the instructions files. It is what decides whether a
+# spawned reviewer can read the parent's working copy, and the skill that spawns reviewers is where
+# that decision is spent: 15 sandboxes once booted to report that a jj workspace path did not exist.
+for skill in "$SANDBOX_HOME/.claude/skills" "$SANDBOX_HOME/.config/opencode/skills"; do
+  assert_sandbox_rendered "the sandbox lazar-review under $(dirname -- "${skill#"$SANDBOX_HOME/"}")" \
+    "$skill/lazar-review/SKILL.md" "$REVIEW_SANDBOX" "$REVIEW_LOCAL"
+done
+
 assert_contains "the local CLAUDE.md cuts a workspace off fresh trunk" \
   "$CLAUDE_MD_LOCAL" "$claude/CLAUDE.md"
 
@@ -902,6 +916,19 @@ if cmp -s -- "$claude/CLAUDE.md" "$SANDBOX_HOME/.claude/CLAUDE.md"; then
 else
   pass "the two surfaces install different workspace defaults"
 fi
+
+if cmp -s -- "$claude/skills/lazar-review/SKILL.md" \
+  "$SANDBOX_HOME/.claude/skills/lazar-review/SKILL.md"; then
+  fail "the two surfaces install different lazar-review diff sources"
+else
+  pass "the two surfaces install different lazar-review diff sources"
+fi
+
+# A skill with no surface block is not rendered at all, so the scan cannot quietly rewrite the
+# vendored tree it walks past on its way to the one file that does carry blocks.
+assert_same_file "a skill with no surface block installs byte-identical on the sandbox surface" \
+  "$HARNESS_SOURCE/skills/lazar-ship/SKILL.md" \
+  "$SANDBOX_HOME/.claude/skills/lazar-ship/SKILL.md"
 
 # write_instructions treats every value that is not `local` as the sandbox, so a typo would install
 # sandbox text on a laptop if this guard ever regressed.
