@@ -7,8 +7,9 @@ description: Point at a PR number and get its full context back, so I can re-ent
 
 I point at a PR number. You hand back what I'd have got by re-reading the whole thing.
 
-This is read-only. It's an API-first skill: no checkout, no fetch, no branch switching, nothing
-written to GitHub. See **This never writes** at the bottom.
+It's an API-first skill: no checkout, no fetch, no branch switching. It publishes nothing unless I
+ask it to, and then only after it asks me. See **This doesn't write unless I ask it to** at the
+bottom.
 
 ## Step 1: resolve the PR
 
@@ -183,12 +184,27 @@ Net: <n> addressed, <n> answered, <n> open<, plus drift in <n> files>.
 - Quote a reviewer's ask in their words when the wording is the point. Otherwise compress it.
 - Follow the writing rules in PHILOSOPHY §30, same as everything else.
 
-## This never writes
+## This doesn't write unless I ask it to
 
-Nothing goes out under my name without me seeing it first. `gh pr view`, `gh issue view`,
-`gh api` with GET, and the tracker's read tools are the whole surface. Never `gh pr review`,
-never `gh pr comment`, never `gh api` with a write method, never resolve a thread, never touch
-the tracker's state. The output is a chat report and nothing else.
+Nothing goes out under my name without me seeing it first. The default is the report in front of
+me and nothing published: `gh pr view`, `gh issue view`, `gh api` with GET, and the tracker's read
+tools are the whole surface. Never resolve a thread, never touch the tracker's state, never
+`gh api` with a write method.
+
+The default holds wherever this runs. This report's audience is me, not the PR: it's the briefing
+I read before reviewing someone else's work, so posting it unasked would drop my private notes on
+their PR. That's what makes it different from `lazar-review`, whose output *is* a review and whose
+destination *is* the PR.
+
+**Publishing happens only when I ask for it, and only after you ask me.** If I say to post it,
+say what you're about to post and where, then wait for me to confirm. A confirmed post is a PR
+comment (`gh pr comment`) and nothing else: never `gh pr review`, which carries an approval state
+this skill never formed an opinion on, and never a merge, a close, or an edit to an issue body.
+
+**If nothing answers, don't post.** A sandbox isn't the same thing as an unattended run: a session
+I'm driving has me reading it, an automation run has nobody, and you can't tell which one you're
+in. So treat silence as a no. Say in the report that a post was asked for, that the confirmation
+went unanswered, and that nothing went out.
 
 The working copy is off limits too. Don't check the PR out, don't fetch, don't switch branches.
 Whatever I'm in the middle of stays as I left it, and the API answers every question this skill
