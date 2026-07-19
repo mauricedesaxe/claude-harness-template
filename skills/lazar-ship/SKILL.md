@@ -141,10 +141,25 @@ before pushing so the PR isn't born stale: `jj rebase -d 'trunk()'` (see Step 6)
 Invoke the `lazar-commit` skill. Don't reimplement its rules here. Two things are specific to
 running it inside ship:
 
+<!-- surface:local -->
+
 - **Preview before committing.** Show the planned commit(s), one line per commit with the
   subject and the files. Proceed once I OK it. The standalone `lazar-commit` skill commits
   proactively; inside ship the preview gate is worth the extra beat, because I'm about to
   ship the result.
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+- **Commit without waiting to be OK'd.** Nobody is watching a transcript here, so an approval
+  gate on the first step is an approval that never arrives, and push, PR, gate and merge all sit
+  downstream of it. Waiting strands finished work uncommitted in a
+  checkout that's torn down at the end of the run. Commit to `lazar-commit`'s rules and list the
+  commits in the Step 9 report, which is the thing here that outlives the sandbox.
+
+<!-- /surface:sandbox -->
+
 - **Foreign changes in `@`.** jj has no staging area, so `@` already holds everything in the
   working copy. If Step 1's `jj st` showed changes that predate this work and aren't ours,
   don't sweep them in: commit only our paths (`jj commit <paths>`), or stop and ask.
