@@ -20,6 +20,46 @@ metadata: {"openclaw":{"requires":{"bins":["tldraw"]},"emoji":"📝","os":["darw
 
 # tldraw Whiteboard Diagrams
 
+<!-- surface:local -->
+
+## Where the drawing ends up
+
+On disk, as a `.tldr` plus a PNG/SVG export you show the user and iterate on. That's the workflow
+the rest of this file describes, and every command in it runs here.
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+## Where the drawing ends up: the session's live board, not this file's workflow
+
+**Use the runtime's `whiteboard` skill and stop reading this one for the how.** Open Inspect
+renders a live tldraw canvas in the session side panel, and that board is the only diagram anyone
+sees here. The user can pan it, edit it, and draw on it while you're drawing on it. Nothing on
+this surface renders a `.tldr`: `@kitschpatrol/tldraw-cli` is deliberately not installed, and
+there's no viewer and no browser to open an export in, so the export commands below all fail.
+
+`whiteboard` ships with the sandbox and drives the board through a `board` command on PATH
+(`board create`, `board mutate`, `board snapshot`). It owns the record format; read it there.
+
+**Its records are not this file's records**, so don't translate one into the other. The live board
+validates against a later tldraw schema and rejects these shapes outright rather than degrading
+them: labels are `props.richText` rather than `props.text`, arrows bind through standalone
+`binding:` records rather than `props.start.boundShapeId`, and the page is `page:page`. Carrying a
+shape across is how you get a batch rejected whole.
+
+What this file is still good for here is the judgement, not the JSON: whether a diagram is worth
+drawing at all, which diagram type fits, and the layout and label-sizing rules.
+
+**The loop doesn't wait to be approved.** Locally it runs until the user says approved, done, or
+LGTM. Here the board is live and in front of them the moment it's created, so creating it *is* the
+handoff, not a draft awaiting sign-off. Draw it, name its title and board id in your final report,
+and stop. Whoever's watching the panel edits it directly or asks for a change in a later turn;
+whoever isn't still gets a finished board waiting for them. Blocking on an approval that may have
+nobody to give it strands the diagram in a sandbox that's about to be torn down.
+
+<!-- /surface:sandbox -->
+
 ## Overview
 
 Generate modern whiteboard-style diagrams as `.tldr` JSON files and export to PNG/SVG using `@kitschpatrol/tldraw-cli`. tldraw produces clean hand-drawn aesthetic diagrams with rich shape libraries and smooth arrow routing — well-suited for casual or whiteboard-style visualizations.

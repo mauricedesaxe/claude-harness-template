@@ -9,7 +9,7 @@
  license: MIT
  homepage: https://github.com/Agents365-ai/tldraw-skill
  compatibility: Requires Node.js + @kitschpatrol/tldraw-cli on PATH (macOS/Linux/Windows). Self-check step requires a vision-enabled model (e.g., Claude Sonnet/Opus); gracefully skipped if unavailable.
-@@ -8,6 +8,16 @@
+@@ -8,8 +8,58 @@
  metadata: {"openclaw":{"requires":{"bins":["tldraw"]},"emoji":"📝","os":["darwin","linux","win32"],"install":[{"id":"npm-tldraw","kind":"npm","package":"@kitschpatrol/tldraw-cli","global":true,"bins":["tldraw"],"label":"Install tldraw-cli via npm"}]},"hermes":{"tags":["tldraw","diagram","flowchart","architecture","whiteboard","visualization"],"category":"design","requires_tools":["tldraw"],"related_skills":["drawio","mermaid","excalidraw","plantuml"]},"author":"Agents365-ai","version":"1.2.1"}
  ---
  
@@ -24,9 +24,51 @@
 +> Requires `@kitschpatrol/tldraw-cli` on PATH (`npm install -g @kitschpatrol/tldraw-cli`).
 +
  # tldraw Whiteboard Diagrams
++
++<!-- surface:local -->
++
++## Where the drawing ends up
++
++On disk, as a `.tldr` plus a PNG/SVG export you show the user and iterate on. That's the workflow
++the rest of this file describes, and every command in it runs here.
++
++<!-- /surface:local -->
++
++<!-- surface:sandbox -->
++
++## Where the drawing ends up: the session's live board, not this file's workflow
++
++**Use the runtime's `whiteboard` skill and stop reading this one for the how.** Open Inspect
++renders a live tldraw canvas in the session side panel, and that board is the only diagram anyone
++sees here. The user can pan it, edit it, and draw on it while you're drawing on it. Nothing on
++this surface renders a `.tldr`: `@kitschpatrol/tldraw-cli` is deliberately not installed, and
++there's no viewer and no browser to open an export in, so the export commands below all fail.
++
++`whiteboard` ships with the sandbox and drives the board through a `board` command on PATH
++(`board create`, `board mutate`, `board snapshot`). It owns the record format; read it there.
++
++**Its records are not this file's records**, so don't translate one into the other. The live board
++validates against a later tldraw schema and rejects these shapes outright rather than degrading
++them: labels are `props.richText` rather than `props.text`, arrows bind through standalone
++`binding:` records rather than `props.start.boundShapeId`, and the page is `page:page`. Carrying a
++shape across is how you get a batch rejected whole.
++
++What this file is still good for here is the judgement, not the JSON: whether a diagram is worth
++drawing at all, which diagram type fits, and the layout and label-sizing rules.
++
++**The loop doesn't wait to be approved.** Locally it runs until the user says approved, done, or
++LGTM. Here the board is live and in front of them the moment it's created, so creating it *is* the
++handoff, not a draft awaiting sign-off. Draw it, name its title and board id in your final report,
++and stop. Whoever's watching the panel edits it directly or asks for a change in a later turn;
++whoever isn't still gets a finished board waiting for them. Blocking on an approval that may have
++nobody to give it strands the diagram in a sandbox that's about to be torn down.
  
++<!-- /surface:sandbox -->
++
  ## Overview
-@@ -20,13 +30,15 @@
+ 
+ Generate modern whiteboard-style diagrams as `.tldr` JSON files and export to PNG/SVG using `@kitschpatrol/tldraw-cli`. tldraw produces clean hand-drawn aesthetic diagrams with rich shape libraries and smooth arrow routing — well-suited for casual or whiteboard-style visualizations.
+@@ -20,13 +70,15 @@
  
  ## When to Use
  
@@ -43,7 +85,7 @@
  
  **Skip when:** a simple list or table suffices, the user wants a polished business-presentation diagram (prefer drawio-skill), or the user is in a quick Q&A flow.
  
-@@ -79,11 +91,12 @@
+@@ -79,11 +131,12 @@
  
  After exporting the draft PNG, use the agent's vision capability (e.g., Claude's image input) to read the image and check for these issues before showing the user. If the agent does not support vision, skip self-check and show the PNG directly.
  
@@ -57,7 +99,7 @@
  | Overlapping text | Two text-bearing shapes' labels touch or overlap, hurting legibility | Shift shapes apart by ≥200px |
  | Friendless arrow | An arrow with one end not connected to a shape (floats loose) | Bind both ends: every arrow's `start` and `end` need a `boundShapeId` matching an existing shape |
  | Off-canvas shapes | Shapes at negative coordinates or far from the main group | Move to positive coordinates near the cluster |
-@@ -176,7 +189,7 @@
+@@ -176,7 +229,7 @@
    "opacity": 1,
    "meta": {},
    "props": {
@@ -66,20 +108,20 @@
      "h": 60,
      "geo": "rectangle",
      "color": "blue",
-@@ -194,6 +207,12 @@
+@@ -193,6 +246,12 @@
+   }
  }
  ```
- 
++
 +**`w` and `h` above are worked examples, not defaults.** They are what the sizing rules below
 +yield for a size-`m` `rectangle` labeled `"API Gateway"` — nothing more. Copying `200`/`60` onto a
 +shape with a longer label or a non-rectangular `geo` is the single biggest source of unreadable
 +diagrams. Compute both from the label and the `geo` before you write the record: see
 +"Sizing shapes to fit labels".
-+
+ 
  ### Geo Types
  
- | `geo` value | Use for |
-@@ -418,8 +437,24 @@
+@@ -418,8 +477,24 @@
  | Medium | 6–10 | 280px | 200px |
  | Complex | >10 | 350px | 250px |
  
@@ -105,7 +147,7 @@
  | `size` | char width (px) | line height (px) |
  |--------|-----------------|------------------|
  | `s` | 11 | 18 |
-@@ -435,6 +470,39 @@
+@@ -435,6 +510,39 @@
  
  **Why this matters:** if a box is too short for its text, tldraw silently **grows it taller** on render (it sets the shape's `growY`) — so the box ends up bigger than the `h` you wrote and collides with whatever you placed below it. Sizing correctly up front keeps `growY` at 0 and your layout intact. This is the single most common cause of "the diagram looks cramped / boxes overlap" after export.
  
@@ -145,7 +187,7 @@
  **Routing corridors:** between shape rows/columns, leave an extra ~80px empty corridor where arrows can route without crossing other shapes. Never place a shape in a gap that arrows need to traverse.
  
  **Grid alignment:** snap all `x`, `y`, `w`, `h` values to **multiples of 10** — this matches tldraw's default `gridSize: 10` and makes manual editing easier.
-@@ -498,7 +566,7 @@
+@@ -498,7 +606,7 @@
  | Async message | arrow with `dash: dashed` | `black` | Dashed horizontal arrow |
  | Return message | arrow with `dash: dashed`, `color: grey` | `grey` | Grey dashed |
  
@@ -154,7 +196,7 @@
  
  ### ML / Deep Learning Model Diagram
  
-@@ -520,7 +588,7 @@
+@@ -520,7 +628,7 @@
  "text": "Conv2D\n(B, 64, 32, 32)"
  ```
  
@@ -163,7 +205,7 @@
  
  ### ER Diagram (ERD)
  
-@@ -535,7 +603,7 @@
+@@ -535,7 +643,7 @@
  
  Label the arrow with cardinality (e.g., `1..*`, `0..1`) via `props.text`.
  
@@ -172,7 +214,7 @@
  
  ### UML Class Diagram
  
-@@ -549,8 +617,59 @@
+@@ -549,8 +657,59 @@
  
  **Note:** tldraw's `triangle`/`diamond` arrowheads are **filled**, whereas strict UML uses *hollow* triangles (inheritance) and either filled/hollow diamonds (composition/aggregation). The shapes read correctly for sketches and explainers; for publication-grade UML with hollow heads, drawio-skill (separate skill) is a better fit.
  
@@ -233,7 +275,7 @@
  ---
  
  ## Export Commands
-@@ -601,7 +720,7 @@
+@@ -601,7 +760,7 @@
  | Blank/empty export | Verify `document:document` and `page:page1` records are present |
  | Output file not found | `-o` is a directory; file name matches input: `tldraw export foo.tldr -o ./` → `./foo.png` |
  | Arrow doesn't appear | Use `"type": "binding"` with `boundShapeId`; set arrow `x`/`y` to `0,0` |
