@@ -59,6 +59,7 @@ clause (when deviation is allowed, and what bar a deviation has to clear).
 | §26 | Avoid double state | Spine |
 | §27 | AI / LLM integration | packs/ai.md |
 | §28 | Version control — jj (colocated) | Spine |
+| §29 | Narrative order | Spine |
 | §30 | Felt outcome and writing | Spine |
 
 ---
@@ -435,7 +436,9 @@ compile time or commit time, when fixing them is cheap.
   function returns a `Result` (neverthrow in TypeScript, `Either`/equivalent
   elsewhere) carrying a typed error union. The caller handles failure as a
   value. `_unsafeUnwrap` / `_unsafeUnwrapErr` are test-only. Total functions that
-  genuinely cannot fail are the exception.
+  genuinely cannot fail are the exception. §29 reaches the same rule from
+  reading order: a `throw`'s handler sits in another file, a `Result`'s sits at
+  the call site.
 - **Parse at boundaries.** Every external input (env, network response, file
   content) goes through a schema (Zod / Valibot / Pydantic / serde) at the
   boundary. Never `JSON.parse` and cast.
@@ -449,6 +452,9 @@ compile time or commit time, when fixing them is cheap.
   then refuses "you passed a `BookingId` where `UserId` was expected" or "you
   compared seconds to milliseconds." They are nearly free and *infinitely*
   useful — reach for them by default.
+- **Narrative order.** A file introduces each concept where it's first needed:
+  entry point at the top, callees below in call order, guards discharged early
+  so the happy path reads straight down. §29 carries the rule and its tiebreaks.
 - **Atomic conventional commits.** One logical change per commit. The atomic
   discipline is on you; the type prefix is enforced in CI (and by a
   `commit-msg` hook on git-native repos — see §28 for why jj doesn't fire it).
@@ -684,7 +690,8 @@ Three things that look like violations aren't, and the rule doesn't reach them:
 explains the **why** and the **how-if-non-obvious**. Skip the body when the
 subject is enough; never pad. Bad: "Updated `score.ts` to handle the new
 mapping." (What the diff already shows.) Good: "Treat fast_food as additive
-coverage, not parity." (Why the rule changed.)
+coverage, not parity." (Why the rule changed.) The subject-then-body shape is
+§29 applied to a commit: the conclusion first, the detail underneath it.
 
 **ADRs (Architecture Decision Records).** ADRs earn their keep as **temporary
 discussion artefacts** for an in-flight decision:
@@ -870,6 +877,90 @@ mixing the two is how divergent duplicate commits appear.
 
 ---
 
+## §29. Narrative order
+
+**Rule.** Code and prose introduce a concept at the moment it's needed, never
+before. A file opens with its entry point and descends from there: the master
+function first, then the functions it calls, in the order it calls them. Depth
+in the file is the level of detail, and the reader picks where to stop.
+
+Ordering makes that choice available. A **substantive top layer** is what makes
+it real. A `main()` that reads `run(parseArgs(argv))` introduces nothing early
+and teaches nothing either, so the reader has no choice but to descend. Both
+halves are load-bearing: nothing arrives before its use site, and the first
+screen says what the file does.
+
+This is Clean Code's stepdown rule and Ousterhout's "reading order tracks
+abstraction level" ([*A Philosophy of Software
+Design*](https://web.stanford.edu/~ouster/cgi-bin/book.php), ch. 4). Both are
+the same claim.
+
+**Inside a function.** The happy path reads as one unbroken sequence down the
+middle, and guards hang off it as short asides. This is why early returns win. A
+guard introduces a case and discharges it immediately, so the reader drops it
+from working memory and never meets it again. An `else` forty lines below forces
+the reader to carry the condition through the whole body. The cost of nesting is
+memory load, not indentation.
+
+**Between functions.** Caller before callee, callees in call order. Three
+tiebreaks settle the cases that ordering alone doesn't:
+
+- A function called from two places goes at its **first** use.
+- A helper with **three or more callers** sinks to the bottom as shared
+  machinery. It stopped being part of one story.
+- **Two peer entry points are two stories.** That's the file asking to be split,
+  not an ordering problem to solve.
+
+One consequence is concrete enough to change how you write TypeScript: `function`
+declarations hoist and `const fn = () => {}` doesn't, so caller-before-callee at
+module scope picks the declaration form for you. A codebase that reaches for
+arrow consts at the top level has already given up this rule and usually hasn't
+noticed.
+
+**Types** come before the types they reference. Same file, same rule.
+
+**Prose.** Verdict first, then the evidence, then the caveats. Journalism calls
+it the inverted pyramid. Several rules elsewhere in this document are already
+instances of it and only now have a name: §21's commit subject carrying the
+*what* with the body carrying the *why*, `lazar-research`'s verdict-first
+write-up, a standup that leads with what landed.
+
+**The one inversion: a commit stack.** A stack can't be conclusion-first,
+because you can't deliver before you scaffold. So the stack runs chronologically
+and the **PR body is the conclusion-first layer over it**. The PR body is the
+master function and the commits are the callees. A PR whose body is a list of
+its own commit subjects has skipped the top layer entirely.
+
+**Why.** Bottom-up ordering, helpers first and the entry point last, is also
+perfectly consistent, and plenty of code is written that way. What rejects it is
+need-to-know: it introduces every concept before anything needs it, so the
+reader accumulates unattached machinery and only learns what it was for at the
+end. Consistency isn't the property that matters. Direction is.
+
+The other reason is that this is the reading-time form of a deep module
+(`matt-codebase-design`). When the first screen is enough, the interface is
+carrying the weight and the implementation is hidden below it. When it isn't,
+the file is shallow no matter how it's ordered, and the fix is a design change
+rather than a reshuffle.
+
+It also gives §14's **`Result` over `throw`** a second, independent argument. A
+`throw` introduces a failure whose handler lives in another file, so the reader
+meets a concept whose resolution is nowhere near it. A `Result` puts the failure
+at the call site, where the reader already is. The type-safety argument and the
+reading-order argument point the same way.
+
+**Earn-its-keep.** Some files are flat collections with no story: a constants
+file, a config file, a barrel of re-exports. Nobody stops reading them early
+because there's no early to stop at, and forcing an order on them is theatre.
+This section doesn't reach them.
+
+Sort-order tooling wins where it's already in place, whether that's alphabetized
+exports, a formatter, or a lint rule. Name the override rather than fighting it
+file by file. Languages that require declaration before use invert the rule by
+force, and that's the language's constraint, not a deviation to justify.
+
+---
+
 ## §30. Felt outcome and writing
 
 **Rule.** Work earns its place only when you can name the product outcome it
@@ -915,6 +1006,7 @@ bodies, docs, commit messages, chat.
 - **Active voice and contractions.**
 - **One idea per sentence.** More than one comma is the tell; split it.
 - **Be specific.** Say what happened, not what it "represents".
+- **Conclusion first**, then the evidence, then the caveats (§29).
 - **Cite primary sources and link them**: the official doc, the actual file, the
   PR, the issue, the ADR. A claim with no source is an opinion.
 - **The project's own style guide wins** over every rule above.
