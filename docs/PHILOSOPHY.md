@@ -61,6 +61,7 @@ clause (when deviation is allowed, and what bar a deviation has to clear).
 | §28 | Version control — jj (colocated) | Spine |
 | §29 | Narrative order | Spine |
 | §30 | Felt outcome and writing | Spine |
+| §31 | Code style | Spine |
 
 ---
 
@@ -1035,6 +1036,53 @@ gate above rejects. Prose written into it from now on follows §30.
 
 The gate has no such exemption. If you can't name what's better in the product,
 the work isn't an issue. "We'll want it later" is the answer §1 already rejects.
+
+---
+
+## §31. Code style
+
+**Rule.** The house style is Jane Street's, adapted idiomatically to the language
+and framework in use. Most of it is already doctrine, so this section owns the
+three ideas nothing else carries and points at the rest.
+
+- **Code is organized around its domain types.** A type's construction,
+  validation, transformation, and formatting live together. §4 makes this cut at
+  module scale, by business domain rather than by technical layer, and this is
+  the same cut one level down. A `Money` does not scatter its parser into
+  `parsers/`, its arithmetic into `utils/`, and its renderer into `formatters/`.
+- **Small public interface, private representation.** Expose the operations a
+  caller needs and keep the representation private wherever the language offers
+  it. This is `matt-codebase-design`'s deep module restated as a style rule, and
+  it's what lets the representation change without a caller noticing.
+- **Named or labelled arguments once positional order stops being obvious.** Two
+  parameters of the same type in a row is the trigger. Branded types (§14) fix
+  the other half of that problem, at the type level rather than the call site.
+
+The rest of the style is doctrine already, and this section doesn't restate it.
+Model the domain with explicit types, and prefer variants and tagged unions that
+make invalid states hard to represent (§14). Handle cases exhaustively rather
+than through boolean state bags (§14). Prefer immutable values, pure functions,
+and explicit data flow (§14). Represent expected failure as typed data rather
+than exceptions wherever the language supports it (§14, `Result` over `throw`).
+Parse and validate external input at the boundary (§10). Prefer readable
+output-oriented tests for structured transformations, while still asserting
+directly on values where rendering would lose information (§18).
+
+**Why.** Organizing around types puts "what can this thing be, and what can I do
+to it" in one file, so a reader learns the type once instead of assembling it
+from four folders. That's the same argument §4 makes about domains and §29 makes
+about reading order, applied to the unit a codebase actually gets navigated by.
+Naming the style after a house that has run it at scale for decades also gives
+the rules a shared reference, which is worth more than a list of preferences
+with no source.
+
+**Earn-its-keep, and the limit.** The style is a set of ideas, not a syntax.
+Don't mechanically reproduce OCaml shapes in another language, don't introduce a
+wrapper around a single operation, and don't add an abstraction that has no
+current caller (§1 and §30 both reject that already). Native language and
+framework conventions win whenever they express the same idea more clearly, and
+a framework that demands a class or a throw is interface compliance rather than
+a deviation (§14).
 
 ---
 
