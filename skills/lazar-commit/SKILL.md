@@ -108,6 +108,26 @@ exact commands (`pnpm check && pnpm test`, `just check && just test`, `make test
 on). Because jj has already snapshotted everything into `@`, the checks run against exactly
 what you're about to commit.
 
+**Comment gate (harness).** Run the harness comment-lint over the change before committing.
+It enforces the *placement* half of PHILOSOPHY §21 (floating what-comments and walls of prose
+get bounced; doc-comments, directives, shebangs, and trailing on-the-line comments pass), and
+it's the runtime-neutral backstop for the Claude Code write-time hook, so it's what catches a
+comment written under OpenCode or a sandbox where that hook never fired.
+
+```sh
+LINT="$HOME/.lazar-harness/bin/comment-lint"
+if [ -x "$LINT" ]; then jj diff --git | "$LINT" diff; fi
+```
+
+The `if` guard is load-bearing: on a machine without the harness bin the whole gate is skipped
+and exits 0 (fail-open), so an absent linter never blocks a commit. When it's present, the
+pipe's exit status is comment-lint's. Exit 0, proceed. Nonzero, the output lists the offending
+comments and the §21 fix order (make the code say it; else attach a doc-comment to the symbol;
+else a trailing comment on the line; else move prose to docs). Fix in the working copy, which jj
+re-snapshots into `@`, and re-run. Don't commit over it. This gate is the commit-time
+counterpart to the `clarity-reviewer` agent, which judges comment *content* (the why-vs-what
+call a linter can't make) at review time.
+
 Commit by **naming the paths** for this logical unit. Never a path-less `jj commit` when `@`
 holds more than one unit, which would sweep it all into one commit. `jj commit <paths>`
 finalizes just those paths into a commit and moves the rest to a fresh `@` on top:

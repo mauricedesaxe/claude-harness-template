@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Runtime-neutral entry point for the comment-lint core, called by the Claude Code
+# PostToolUse hook and by the lazar-commit gate alike. It only resolves a node and
+# execs the sibling .mjs; all policy lives there.
+#
+# Fail-open on a missing node, unlike enforce-jj.sh's fail-closed on a missing jq.
+# The stakes differ: enforce-jj guards against a destructive git write, so no guard
+# means refuse. comment-lint guards style, so no node means a comment slips through,
+# which is a worse outcome to turn into a hook that errors on every edit. So a node
+# that cannot be found exits 0 and lints nothing.
+set -uo pipefail
+
+dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+core="$dir/comment-lint.mjs"
+
+node_bin=""
+if command -v node >/dev/null 2>&1; then
+  node_bin=$(command -v node)
+else
+  for candidate in "$HOME"/.nvm/versions/node/*/bin/node /usr/local/bin/node /opt/homebrew/bin/node; do
+    if [ -x "$candidate" ]; then
+      node_bin=$candidate
+      break
+    fi
+  done
+fi
+
+[ -n "$node_bin" ] || exit 0
+
+exec "$node_bin" "$core" "$@"
