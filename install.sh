@@ -40,6 +40,15 @@ OPENCODE_RULES="$OPENCODE_HOME/rules"
 AGENTS_SKILLS="$HOME/.agents/skills"
 OPENCODE_SKILL_SINGULAR="$OPENCODE_HOME/skill"
 
+# The comment-lint core lives here, not under CLAUDE_HOOKS, on purpose. The Claude Code hook is only
+# one of its two callers: the lazar-commit gate calls it too, from whatever runtime is committing,
+# and OpenCode has no CLAUDE_HOOKS installed while a sandbox's CLAUDE_HOME is not a path OpenCode
+# knows. $HOME is the one root Claude Code, OpenCode and a sandbox all agree on (same reason the
+# machine-local notes sit under it), so a $HOME-anchored bin is the single copy every caller can
+# name. It sits beside those notes under ~/.lazar-harness but in its own subdir: bin is the
+# installer's, repos/ is hand-edited, and replace_dir on bin leaves repos/ untouched.
+LAZAR_BIN="$HOME/.lazar-harness/bin"
+
 # The instructions merge drops its own previous entries by matching this prefix, so changing the
 # spelling orphans an existing install's rather than replacing them. `~` is what OpenCode expands
 # and what is already on disk; only rules landing outside $HOME need the absolute form.
@@ -116,6 +125,9 @@ report_plan() {
   # Named on its own line because it is the one target that is not under either home above, and a
   # purge list is only knowable in advance if the reader knows which directory it is about to read.
   printf '  hooks     %s\n' "$CLAUDE_HOOKS"
+  # Same footing as hooks: a shared $HOME-anchored path outside either config home, named here for
+  # the same reason, so the replace line below has a directory the reader already knows.
+  printf '  bin       %s\n' "$LAZAR_BIN"
   # Same reason, and one more: this directory is the Railway CLI's, not the harness's. It is emptied
   # and never written to, and `railway skills install` puts its skill straight back, so a reader who
   # only saw the delete line below would not know who to expect it back from.
@@ -141,6 +153,7 @@ report_plan() {
   report_replace "$CLAUDE_HOME/agents" "$HARNESS_SOURCE/agents"
   report_replace "$OPENCODE_HOME/agents" "$HARNESS_SOURCE/agents"
   report_replace "$CLAUDE_HOOKS" "$HARNESS_SOURCE/hooks"
+  report_replace "$LAZAR_BIN" "$HARNESS_SOURCE/bin"
 }
 
 # Stage the copy before deleting anything: a destination that resolves back into the source
@@ -428,6 +441,12 @@ install_hooks() {
   replace_dir "$CLAUDE_HOOKS" "$HARNESS_SOURCE/hooks"
 }
 
+# The comment-lint core and its launcher. replace_dir touches only the bin subdir, so a hand-edited
+# ~/.lazar-harness/repos/ note next to it survives. cp -R carries the executable bits the repo set.
+install_comment_lint() {
+  replace_dir "$LAZAR_BIN" "$HARNESS_SOURCE/bin"
+}
+
 # settings.json is the profile's own file — model choice, enabledPlugins, extraKnownMarketplaces,
 # auth-adjacent config — and it is the file that genuinely differs between the profiles here, so it
 # is merged and never replaced. Same shape as write_opencode_instructions: drop what a previous run
@@ -442,15 +461,23 @@ write_claude_settings() {
   staged=$(mktemp -- "$config.XXXXXX")
   printf '%s' "$existing" | jq \
     --arg prefix "$CLAUDE_HOOKS/" \
+    --arg binprefix "$LAZAR_BIN/" \
     --arg matcher "$JJ_HOOK_MATCHER" \
-    --arg command "$CLAUDE_HOOKS/enforce-jj.sh" '
+    --arg command "$CLAUDE_HOOKS/enforce-jj.sh" \
+    --arg lintmatcher "Edit|Write|MultiEdit" \
+    --arg lintcommand "$LAZAR_BIN/comment-lint claude-hook" '
       def without_harness_hooks:
-        [ .[] | .hooks = [ (.hooks // [])[] | select((.command // "") | startswith($prefix) | not) ]
+        [ .[] | .hooks = [ (.hooks // [])[]
+              | select((.command // "") | (startswith($prefix) or startswith($binprefix)) | not) ]
               | select((.hooks | length) > 0) ];
       .hooks = ((.hooks // {}) | with_entries(.value |= without_harness_hooks))
       | .hooks.PreToolUse = ((.hooks.PreToolUse // []) + [{
           matcher: $matcher,
           hooks: [{ type: "command", command: $command }]
+        }])
+      | .hooks.PostToolUse = ((.hooks.PostToolUse // []) + [{
+          matcher: $lintmatcher,
+          hooks: [{ type: "command", command: $lintcommand }]
         }])
       | .hooks |= with_entries(select((.value | length) > 0))
     ' >"$staged" || {
@@ -552,6 +579,10 @@ install_agents
 # which side of the purge it dies on: this way settings.json still names a hook that is still there,
 # and the run can be re-read and re-run. The other way round leaves the state this pair exists to
 # prevent — a hook purged off the disk and every profile still firing it on every prompt.
+#
+# The comment-lint bin lands before the settings merge names it, so a merge that dies never leaves
+# settings.json pointing at a PostToolUse command that was not written yet.
+install_comment_lint
 write_claude_settings
 install_hooks
 

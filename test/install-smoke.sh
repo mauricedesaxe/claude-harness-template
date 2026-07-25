@@ -79,6 +79,11 @@ claude="$TEST_HOME/.claude"
 opencode="$TEST_HOME/.config/opencode"
 hooks="$TEST_HOME/.claude/hooks"
 settings="$claude/settings.json"
+# The comment-lint core installs outside every config home, under $HOME, so one copy serves the
+# Claude Code hook and the lazar-commit gate across runtimes. lintcmd is what settings.json wires:
+# the launcher path plus the mode arg, verbatim.
+lazarbin="$TEST_HOME/.lazar-harness/bin"
+lintcmd="$lazarbin/comment-lint claude-hook"
 
 # Read the wiring back out of settings.json rather than restating the path here: what has to hold
 # is that the file Claude Code runs is the file the installer put there, and an assertion that
@@ -199,23 +204,61 @@ else
   fail "the installed hook is executable"
 fi
 
+# The comment-lint launcher and core install to the shared bin, not the hooks dir, because the
+# lazar-commit gate calls the same copy from a runtime that has no hooks dir.
+assert_same_file "comment-lint launcher installs to the shared bin" \
+  "$HARNESS_SOURCE/bin/comment-lint" "$lazarbin/comment-lint"
+assert_same_file "comment-lint core installs to the shared bin" \
+  "$HARNESS_SOURCE/bin/comment-lint.mjs" "$lazarbin/comment-lint.mjs"
+
+# The hook execs the launcher directly, so a copy without its exec bit is wired and dead.
+if [ -x "$lazarbin/comment-lint" ]; then
+  pass "the installed comment-lint launcher is executable"
+else
+  fail "the installed comment-lint launcher is executable"
+fi
+
 installed_wiring=$(wired_hooks PreToolUse)
 
 if [ "$installed_wiring" = "$hooks/enforce-jj.sh" ]; then
-  pass "settings.json wires the hook, and only the hook, on PreToolUse at the installed path"
+  pass "settings.json wires enforce-jj, and only it, on PreToolUse at the installed path"
 else
-  fail "settings.json wires the hook, and only the hook, on PreToolUse at the installed path: got '$installed_wiring'"
+  fail "settings.json wires enforce-jj, and only it, on PreToolUse at the installed path: got '$installed_wiring'"
 fi
 
-# A fresh install wires it once and nowhere else, so no other event fires it and no second entry
-# runs it twice per call.
+# comment-lint is the one hook on the after-the-write event, so a PreToolUse read never sees it and
+# a PostToolUse read never sees enforce-jj: each event carries exactly its own hook.
+lint_wiring=$(wired_hooks PostToolUse)
+
+if [ "$lint_wiring" = "$lintcmd" ]; then
+  pass "settings.json wires comment-lint, and only it, on PostToolUse at the shared-bin path"
+else
+  fail "settings.json wires comment-lint, and only it, on PostToolUse at the shared-bin path: got '$lint_wiring'"
+fi
+
+# A fresh install wires exactly two hooks, one per event, each once: enforce-jj before a tool runs,
+# comment-lint after. Nothing fires twice and no third entry rides along.
 all_wiring=$(all_wired_hooks)
+expected_wiring=$(printf '%s\n%s' "$hooks/enforce-jj.sh" "$lintcmd")
 
-if [ "$all_wiring" = "$hooks/enforce-jj.sh" ]; then
-  pass "a fresh install wires nothing but the hook, on no event but PreToolUse"
+if [ "$all_wiring" = "$expected_wiring" ]; then
+  pass "a fresh install wires only enforce-jj on PreToolUse and comment-lint on PostToolUse"
 else
-  fail "a fresh install wires nothing but the hook, on no event but PreToolUse: got '$all_wiring'"
+  fail "a fresh install wires only enforce-jj on PreToolUse and comment-lint on PostToolUse: got '$all_wiring'"
 fi
+
+# The matcher is comment-lint's reach: a write tool missing here is a write the linter never sees.
+lint_matcher=$(matcher_of PostToolUse "$lintcmd")
+for tool in Edit Write MultiEdit; do
+  case "|$lint_matcher|" in
+  *"|$tool|"*)
+    pass "the comment-lint matcher reaches $tool"
+    ;;
+  *)
+    fail "the comment-lint matcher reaches $tool: got '$lint_matcher'"
+    ;;
+  esac
+done
 
 if [ -x "$installed_wiring" ]; then
   pass "the command settings.json names is a file that exists and runs"
