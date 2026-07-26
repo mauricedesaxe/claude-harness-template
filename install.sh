@@ -152,6 +152,7 @@ report_plan() {
   report_purge "$OPENCODE_SKILL_SINGULAR"
   report_replace "$CLAUDE_HOME/agents" "$HARNESS_SOURCE/agents"
   report_replace "$OPENCODE_HOME/agents" "$HARNESS_SOURCE/agents"
+  report_replace "$OPENCODE_HOME/plugin" "$HARNESS_SOURCE/opencode/plugin"
   report_replace "$CLAUDE_HOOKS" "$HARNESS_SOURCE/hooks"
   report_replace "$LAZAR_BIN" "$HARNESS_SOURCE/bin"
 }
@@ -431,8 +432,11 @@ JJ_HOOK_MATCHER='Bash|EnterWorktree|Agent'
 # delegation boundary, while a PreToolUse hook fires for every agent at every depth. That is not
 # theoretical — an agent told not to run this file complied, and the subagent it spawned ran it.
 #
-# OpenCode gets none of this. It has no hook equivalent, so it keeps guidance alone. Enforcement
-# where it is available beats enforcement nowhere, and that asymmetry is chosen, not overlooked.
+# This is Claude Code's alone. OpenCode does have a write-time enforcement surface —
+# tool.execute.before, which install_opencode_plugin wires for comment-lint — but the jj guard is
+# not ported to it: this hook denies a git *mutation*, which OpenCode's own tool loop does not run
+# in the shape enforce-jj matches on, and the harness gates jj there through guidance instead.
+# Enforcement where it earns its keep beats enforcement everywhere, and that asymmetry is chosen.
 #
 # A hook the harness stops shipping has to stop firing, so the tree is replaced whole the way
 # skills and agents are. Taking the script off the disk is only half of it: write_claude_settings
@@ -445,6 +449,16 @@ install_hooks() {
 # ~/.lazar-harness/repos/ note next to it survives. cp -R carries the executable bits the repo set.
 install_comment_lint() {
   replace_dir "$LAZAR_BIN" "$HARNESS_SOURCE/bin"
+}
+
+# The OpenCode write-time guard: a tool.execute.before plugin that shells out to the same
+# comment-lint core the Claude Code hook and the lazar-commit gate call, so §21 is enforced before a
+# write lands in OpenCode too, not only at commit. It reshapes OpenCode's tool args into the
+# claude-hook payload the core already reads, so no second core mode exists to drift. OpenCode loads
+# every ~/.config/opencode/plugin/*.ts globally with no build step; the tree is replaced whole so a
+# plugin the harness stops shipping stops loading.
+install_opencode_plugin() {
+  replace_dir "$OPENCODE_HOME/plugin" "$HARNESS_SOURCE/opencode/plugin"
 }
 
 # settings.json is the profile's own file — model choice, enabledPlugins, extraKnownMarketplaces,
@@ -574,6 +588,7 @@ install_instructions
 install_philosophy
 install_skills
 install_agents
+install_opencode_plugin
 
 # The wiring before the disk. A merge that dies takes the whole run with it, and the order decides
 # which side of the purge it dies on: this way settings.json still names a hook that is still there,

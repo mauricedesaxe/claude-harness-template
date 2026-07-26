@@ -84,6 +84,9 @@ settings="$claude/settings.json"
 # the launcher path plus the mode arg, verbatim.
 lazarbin="$TEST_HOME/.lazar-harness/bin"
 lintcmd="$lazarbin/comment-lint claude-hook"
+# OpenCode's write-time guard is a plugin, not a hook: it loads out of the plugin dir under the
+# OpenCode home and shells out to the same shared-bin core the Claude Code hook wires above.
+ocplugin="$opencode/plugin/comment-lint.ts"
 
 # Read the wiring back out of settings.json rather than restating the path here: what has to hold
 # is that the file Claude Code runs is the file the installer put there, and an assertion that
@@ -218,6 +221,24 @@ else
   fail "the installed comment-lint launcher is executable"
 fi
 
+# The OpenCode plugin lands under the OpenCode home's plugin dir, byte-identical to source. OpenCode
+# loads it globally with no build step, so what installs is what runs. It needs no exec bit: OpenCode
+# imports it, it does not spawn it, and the core it shells out to is the launcher asserted above.
+assert_same_file "the comment-lint OpenCode plugin installs under the OpenCode plugin dir" \
+  "$HARNESS_SOURCE/opencode/plugin/comment-lint.ts" "$ocplugin"
+
+# The plugin only enforces anything if it reaches the shared-bin core, so the path it shells out to
+# has to be the same one settings.json wires the Claude Code hook at. A drift here is a plugin that
+# loads, runs, and silently guards nothing.
+assert_contains "the OpenCode plugin shells out to the shared-bin core" \
+  '/.lazar-harness/bin/comment-lint' "$ocplugin"
+
+# OpenCode writes files through three tools, not two: write, edit, and apply_patch. A guard that
+# named only the first two would silently miss every comment written via a patch, so the plugin has
+# to cover apply_patch too (it routes that tool's multi-file body through the core's diff mode).
+assert_contains "the OpenCode plugin covers the apply_patch write tool" \
+  'apply_patch' "$ocplugin"
+
 installed_wiring=$(wired_hooks PreToolUse)
 
 if [ "$installed_wiring" = "$hooks/enforce-jj.sh" ]; then
@@ -281,9 +302,9 @@ for tool in Bash EnterWorktree Agent; do
   esac
 done
 
-# OpenCode has no hook equivalent, so enforcement is Claude Code's alone and OpenCode keeps
-# guidance. That asymmetry is chosen; a hooks dir sitting there unread would be it happening by
-# accident, and would read to the next person as something that runs.
+# The jj guard is Claude Code's alone, so OpenCode gets no hooks dir. OpenCode's write-time
+# enforcement is the comment-lint plugin instead (asserted below), which lands under plugin/, not
+# here. A hooks dir sitting unread would read to the next person as something that runs.
 if [ -e "$opencode/hooks" ]; then
   fail "hooks install only where there is something to run them"
 else
@@ -673,6 +694,9 @@ done
 
 touch "$claude/skills/lazar-tldraw/STALE.md"
 touch "$claude/rules/packs/stale-pack.md"
+# A plugin the harness no longer ships has to stop loading, the same as a stale skill or agent:
+# OpenCode loads every .ts in the plugin dir, so one left behind goes on firing on every write.
+printf 'export const Stale = async () => ({})\n' >"$opencode/plugin/stale-plugin.ts"
 
 # The hook this harness decided not to adopt, seeded exactly as it sits on the machine: a
 # hand-written script in the hooks dir, wired to two events. The purge takes the script, and if the
@@ -743,6 +767,15 @@ if [ -e "$claude/rules/packs/stale-pack.md" ]; then
 else
   pass "reinstalling purges a pack the source no longer carries"
 fi
+
+if [ -e "$opencode/plugin/stale-plugin.ts" ]; then
+  fail "reinstalling purges an OpenCode plugin the source no longer carries"
+else
+  pass "reinstalling purges an OpenCode plugin the source no longer carries"
+fi
+
+assert_same_file "reinstalling keeps the comment-lint plugin the harness still ships" \
+  "$HARNESS_SOURCE/opencode/plugin/comment-lint.ts" "$ocplugin"
 
 harness_entries=$(jq '[.instructions[] | select(startswith("~/.config/opencode/rules/"))] | length' \
   "$opencode/opencode.json")
