@@ -12,7 +12,7 @@ live in [`packs/web.md`](packs/web.md); the AI/LLM prescriptions live in
 whatever packs match its paradigm — a smart-contract or mobile repo takes the spine
 and simply omits the web pack.
 
-Section numbers (§1–§30) are **stable IDs**: a section keeps its number wherever it
+Section numbers are **stable IDs**: a section keeps its number wherever it
 lands, and inline `§N` cross-references resolve through the index below, which records
 the file each section lives in. Six sections **split** — a universal kernel stays here
 and the web-specific prescription lives under the same `§N` heading in the web pack.
@@ -62,6 +62,7 @@ clause (when deviation is allowed, and what bar a deviation has to clear).
 | §29 | Narrative order | Spine |
 | §30 | Felt outcome and writing | Spine |
 | §31 | Code style | Spine |
+| §32 | Complexity and deep modules | Spine |
 
 ---
 
@@ -938,8 +939,8 @@ need-to-know: it introduces every concept before anything needs it, so the
 reader accumulates unattached machinery and only learns what it was for at the
 end. Consistency isn't the property that matters. Direction is.
 
-The other reason is that this is the reading-time form of a deep module
-(`matt-codebase-design`). When the first screen is enough, the interface is
+The other reason is that this is the reading-time form of a deep module (§32).
+When the first screen is enough, the interface is
 carrying the weight and the implementation is hidden below it. When it isn't,
 the file is shallow no matter how it's ordered, and the fix is a design change
 rather than a reshuffle.
@@ -1043,17 +1044,15 @@ the work isn't an issue. "We'll want it later" is the answer §1 already rejects
 
 **Rule.** The house style is Jane Street's, adapted idiomatically to the language
 and framework in use. Most of it is already doctrine, so this section owns the
-three ideas nothing else carries and points at the rest.
+two ideas nothing else carries and points at the rest.
 
 - **Code is organized around its domain types.** A type's construction,
   validation, transformation, and formatting live together. §4 makes this cut at
   module scale, by business domain rather than by technical layer, and this is
   the same cut one level down. A `Money` does not scatter its parser into
   `parsers/`, its arithmetic into `utils/`, and its renderer into `formatters/`.
-- **Small public interface, private representation.** Expose the operations a
-  caller needs and keep the representation private wherever the language offers
-  it. This is `matt-codebase-design`'s deep module restated as a style rule, and
-  it's what lets the representation change without a caller noticing.
+- **Module shape follows §32.** Expose the operations a caller needs and keep
+  representation and design decisions private wherever the language allows it.
 - **Named or labelled arguments once positional order stops being obvious.** Two
   parameters of the same type in a row is the trigger. Branded types (§14) fix
   the other half of that problem, at the type level rather than the call site.
@@ -1083,6 +1082,79 @@ current caller (§1 and §30 both reject that already). Native language and
 framework conventions win whenever they express the same idea more clearly, and
 a framework that demands a class or a throw is interface compliance rather than
 a deviation (§14).
+
+---
+
+## §32. Complexity and deep modules
+
+**Rule.** Complexity that cannot be removed belongs behind the smallest honest
+interface that can contain it. Optimize the complexity of the whole system, not
+the apparent simplicity of one implementation. A module earns depth when its
+callers get substantial behaviour without learning the decisions, sequencing,
+representation, or failure handling inside it.
+
+Complexity shows itself through three symptoms:
+
+- **Change amplification.** One logical change requires edits in several places.
+- **Cognitive load.** A caller must hold unrelated details in mind to use the
+  module correctly.
+- **Unknown unknowns.** The caller cannot tell which details matter or where a
+  change will have effects.
+
+These symptoms are interface costs. Implementation complexity is local to one
+module; interface complexity is paid again by every caller and every test. Shape
+modules so the cost stays local:
+
+- **Pull complexity downward.** The module with the knowledge needed to handle a
+  decision owns that decision. Callers should state what they need, not coordinate
+  the module's internal steps.
+- **Hide design decisions, not only data.** Representation, algorithms, ordering,
+  policy, and translation rules stay behind the interface. When the same decision
+  appears in two modules, information has leaked.
+- **Prefer depth over pass-through layers.** A wrapper that exposes nearly every
+  operation or parameter of what it wraps adds another interface without hiding
+  complexity. Delete it or give it enough responsibility to simplify its callers.
+- **Generalize across current cases.** When several present use cases share one
+  mechanism, prefer that mechanism over a separate special-purpose path for each.
+  This is not permission to add extension points for future callers; §1 and §30
+  still require a current need.
+- **Define errors out where semantics allow it.** If an operation can make a case
+  valid, idempotent, or a no-op without losing information, prefer that interface
+  to making every caller handle an avoidable error. Real operational failures and
+  invalid input remain explicit typed results (§14).
+- **Design consequential interfaces twice.** Compare at least two meaningfully
+  different shapes before committing to an interface that many callers will learn
+  or that will be expensive to change. The first plausible design is evidence, not
+  a default winner.
+
+`matt-codebase-design` owns the operational vocabulary and process for applying
+this section: **module**, **interface**, **depth**, **seam**, **adapter**,
+**leverage**, **locality**, the deletion test, and design-it-twice. This section
+owns why that process exists. The distinction follows John Ousterhout's
+[*A Philosophy of Software Design*](https://web.stanford.edu/~ouster/cgi-bin/book.php):
+the primary job of design is managing complexity.
+
+**Why.** A locally simple module can make the system harder by forcing callers to
+sequence operations, translate representations, repeat policy, or recover from
+cases it could have absorbed. Moving that work behind one interface may make the
+implementation more involved, but it reduces the total knowledge and number of
+places required for the next change. That is a net simplification. §1 rejects
+complexity that has not earned its keep; this section concentrates and hides the
+essential complexity that remains.
+
+**Earn-its-keep, and the limit.** Depth is not an excuse to build a framework.
+
+- A broader interface serves named current callers, never hypothetical ones.
+- Unrelated domains do not merge merely to reduce method count. The interface must
+  hide one coherent body of knowledge.
+- Framework adapters and true external boundaries may be shallow when translation
+  is their whole honest responsibility.
+- Hidden behaviour must not become surprising behaviour. Security decisions,
+  destructive effects, cost, and material performance characteristics stay
+  visible when callers need them to use the module correctly.
+- A design-only refactor still clears §30's felt-outcome gate. Improve depth inline
+  with current product work, or against a named architecture problem that is
+  already slowing changes or allowing bugs.
 
 ---
 

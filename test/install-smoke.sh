@@ -460,20 +460,10 @@ else
   fail "every skill and agent the harness authors names only skills it ships:$dangling_refs"
 fi
 
-# lazar-review names the global agents rather than globbing an agents dir, so that it always
-# spawns them even where a repo ships none. That only holds while the names it spawns are the
-# names the harness ships.
-unnamed=""
-for agent in "$HARNESS_SOURCE"/agents/*.md; do
-  grep -qF -- "$(basename -- "$agent" .md)" "$claude/skills/lazar-review/SKILL.md" ||
-    unnamed="$unnamed $(basename -- "$agent" .md)"
-done
-
-if [ -z "$unnamed" ]; then
-  pass "lazar-review's roster names every agent the harness ships"
-else
-  fail "lazar-review's roster names every agent the harness ships:$unnamed"
-fi
+assert_contains "lazar-review discovers Claude Code's global agents" \
+  '${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agents' "$claude/skills/lazar-review/SKILL.md"
+assert_contains "lazar-review discovers OpenCode's global agents" \
+  '${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents' "$claude/skills/lazar-review/SKILL.md"
 
 # Both runtimes read the same instructions byte for byte (asserted above), so pinning the note
 # path once pins it for both. Read the root back out of what was installed rather than restating
@@ -939,8 +929,8 @@ assert_same_file "reinstalling keeps a skill the harness still ships" \
 assert_same_file "reinstalling keeps a still-shipped skill's supporting files" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$opencode/skills/lazar-tldraw/LICENSE"
 
-for agent in git-hygiene-reviewer clarity-reviewer yagni-reviewer; do
-  assert_agent_installs "$agent"
+for source_agent in "$HARNESS_SOURCE"/agents/*.md; do
+  assert_agent_installs "$(basename -- "$source_agent" .md)"
 done
 
 # A `§N` is the contract between a citation and the doctrine: an agent's finding cites the
@@ -1090,23 +1080,26 @@ for root in "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
 done
 
 # The same failure one step further out. git-hygiene-reviewer reads history, which the diff does not
-# carry; these two read *code around* the diff, which the base branch carries wrongly. A sandbox
+# carry; these three read *code around* the diff, which the base branch carries wrongly. A sandbox
 # clone has never seen the PR, so a file it adds is absent and a file it modifies opens pre-PR.
-# Unrendered, clarity-reviewer judges prose nobody wrote and yagni-reviewer counts call sites that
-# do not exist yet, which turns a justified abstraction into its commonest finding. Both fail while
-# reporting confidently, so the check is that each names its own checkout step.
-CLARITY_LOCAL='This disk holds the code under review'
-CLARITY_SANDBOX='This disk holds the base branch, not the change'
+# Unrendered, clarity-reviewer judges prose nobody wrote, complexity-reviewer judges old interfaces,
+# and yagni-reviewer counts call sites that do not exist yet. All fail while reporting confidently,
+# so the check is that each names its own checkout step.
+REVIEW_CONTEXT_LOCAL='This disk holds the code under review'
+REVIEW_CONTEXT_SANDBOX='This disk holds the base branch, not the change'
 
-for agent in clarity-reviewer yagni-reviewer; do
+for source_agent in "$HARNESS_SOURCE"/agents/*.md; do
+  grep -qF "$REVIEW_CONTEXT_LOCAL" "$source_agent" || continue
+  agent=$(basename -- "$source_agent" .md)
+
   for root in "$claude" "$opencode"; do
     assert_surface_rendered "$agent installed to ${root##*/}" \
-      "$root/agents/$agent.md" "$CLARITY_LOCAL" "$CLARITY_SANDBOX"
+      "$root/agents/$agent.md" "$REVIEW_CONTEXT_LOCAL" "$REVIEW_CONTEXT_SANDBOX"
   done
 
   for root in "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
     assert_sandbox_rendered "the sandbox $agent under ${root#"$SANDBOX_HOME/"}" \
-      "$root/agents/$agent.md" "$CLARITY_SANDBOX" "$CLARITY_LOCAL"
+      "$root/agents/$agent.md" "$REVIEW_CONTEXT_SANDBOX" "$REVIEW_CONTEXT_LOCAL"
     assert_contains "the sandbox $agent is told how to reach the PR's head" \
       'gh pr checkout' "$root/agents/$agent.md"
   done

@@ -103,6 +103,7 @@ hooks/
   enforce-jj.sh             PreToolUse: allows read-only git, steers the rest to jj
 agents/
   clarity-reviewer.md       docs/comment + self-explanatory-code discipline (§21)
+  complexity-reviewer.md    complexity placement + deep-module discipline (§32)
   git-hygiene-reviewer.md   atomic conventional commits, linear history, PR meta
   yagni-reviewer.md         speculative generality, in a diff or in a plan
 skills/
@@ -513,7 +514,7 @@ and delegates back to `CLAUDE.md` plus the `.claude/skills/` workflows.
   `CLAUDE.md`. The `review` skill picks them up automatically.
 - `code-reviewer`, `test-reviewer`, `plan-reviewer`, `data-reviewer`, `security-reviewer`
   — they judge a repo against *its* standards (its module boundaries, its schema rules, its
-  commercial posture), so they belong to the repo that holds those standards. The three in
+  commercial posture), so they belong to the repo that holds those standards. The set in
   `agents/` survive globally because they encode habits that hold in every repo.
 - Hook configs (`lefthook.yml`, `.husky/`, etc.) — these are project-flavoured and live
   in the project repo.

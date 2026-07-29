@@ -5,7 +5,7 @@ description: The one review command. Runs the global reviewer agents, whatever r
 
 # lazar-review
 
-One review, one verdict. It always runs my three global agents, it runs whatever reviewer
+One review, one verdict. It always runs my global agents, it runs whatever reviewer
 agents the repo ships, and it folds in `matt-code-review`, which is why I never invoke that
 one by hand.
 
@@ -61,10 +61,9 @@ env -u GITHUB_TOKEN gh pr diff <n>                 # the diff the reviewers read
 env -u GITHUB_TOKEN gh pr view <n> --json commits  # the stack, for git-hygiene-reviewer
 ```
 
-**Push first, then fan out.** The reviewers don't only read the diff: `clarity-reviewer` and
-`yagni-reviewer` check the head out to read around a hunk and to count call sites. So the head
-has to be pushed and current before a single agent is spawned, and a reviewer spawned ahead of
-the push races a ref that isn't there yet.
+**Push first, then fan out.** Reviewers may check the head out to read around a hunk and inspect
+call sites, rather than reading the diff alone. So the head has to be pushed and current before a
+single agent is spawned, and a reviewer spawned ahead of the push races a ref that isn't there yet.
 
 **Nothing pushed means stop.** No PR is not a small diff to review, it's no diff any reviewer
 can reach. Say there's nothing pushed, name what would have been reviewed, and spawn nobody.
@@ -85,12 +84,25 @@ as changes nobody reviewed. Silently reviewing the older thing is the failure to
 
 ## Step 2: build the roster
 
-The roster is the union of two sets of **names**. Never a hardcoded list of the repo's
-reviewers, which would rot the first time a repo renamed one.
+The roster is the union of two sets of **names**. Never hardcode either set, which would rot
+the first time an agent was added or renamed.
 
-**The global three, always.** `git-hygiene-reviewer`, `clarity-reviewer`, `yagni-reviewer`.
-They run on every review, in every repo, whether or not the repo ships anything of its own.
-They're what make the code read as if I'd written it.
+**The harness's global agents, discovered.** The installer keeps both runtime directories in
+parity. Read both so the skill works under either runtime, take each filename without `.md`,
+and deduplicate the union:
+
+```sh
+for agents_dir in \
+  "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agents" \
+  "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents"; do
+  for agent in "$agents_dir"/*.md; do
+    [ -f "$agent" ] && basename -- "$agent" .md
+  done
+done
+```
+
+Every name discovered there runs on every review. They're what make the code read as if I'd
+written it.
 
 **The repo's own, discovered.** A repo's reviewers live in its `.claude/agents/`. Read the
 directory and take each agent's `name:` frontmatter:
