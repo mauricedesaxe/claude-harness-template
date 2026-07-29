@@ -19,8 +19,8 @@ it.
 The spine is paradigm-agnostic and loads in every session. The packs are stack-specific
 (`packs/web.md`, `packs/ai.md`), and Claude Code applies each one when the agent touches a file it
 matches. `§N` numbers are stable IDs that survive a section moving between spine and pack, which is
-what lets `git-hygiene-reviewer`, `clarity-reviewer`, and `yagni-reviewer` cite doctrine instead of
-restating it. The spine's Section index says which file each one lives in.
+what lets the global reviewers cite doctrine instead of restating it. The spine's Section index says
+which file each one lives in.
 
 **Subagents inherit neither this file nor the rules**, so a subagent handed a `§N` opens the section
 at the path above and reads it before acting on it.
@@ -204,7 +204,7 @@ Reach for Matt's through `/matt-ask-matt`, not from memory. Mine are seven:
 | `lazar-standup` | Writing the daily 3 Ps (Progress / Problems / Priorities), reconciling merged PRs, tracker issues, and unpushed local work into a post in my voice. |
 | `lazar-tldraw` | Showing a diagram or a low-fi wireframe. Reach for it proactively; see the deviations above. Needs `@kitschpatrol/tldraw-cli`. |
 
-The reviewer **agents** are run by `lazar-review`, never invoked directly. Three install globally
-because they judge habits that hold in every repo: `git-hygiene-reviewer`, `clarity-reviewer`, and
-`yagni-reviewer`. Every other reviewer judges a repo against *its own* standards, so it lives in that
-repo's `.claude/agents/`, where `lazar-review` picks it up automatically.
+The reviewer **agents** are run by `lazar-review`, never invoked directly. The harness's `agents/`
+set installs globally because it judges habits that hold in every repo. Every other reviewer judges
+a repo against *its own* standards, so it lives in that repo's `.claude/agents/`, where
+`lazar-review` picks it up automatically.
