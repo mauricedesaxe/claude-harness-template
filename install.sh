@@ -39,6 +39,7 @@ OPENCODE_RULES="$OPENCODE_HOME/rules"
 # for everyone, which is what all three profiles wanted anyway.
 AGENTS_SKILLS="$HOME/.agents/skills"
 OPENCODE_SKILL_SINGULAR="$OPENCODE_HOME/skill"
+OPENCODE_COMMANDS="$OPENCODE_HOME/commands"
 
 # The comment-lint core lives here, not under CLAUDE_HOOKS, on purpose. The Claude Code hook is only
 # one of its two callers: the lazar-commit gate calls it too, from whatever runtime is committing,
@@ -148,6 +149,7 @@ report_plan() {
   report_replace "$OPENCODE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   report_replace "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
   report_replace "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
+  report_write "$OPENCODE_COMMANDS/bro.md"
   report_purge "$AGENTS_SKILLS"
   report_purge "$OPENCODE_SKILL_SINGULAR"
   report_replace "$CLAUDE_HOME/agents" "$HARNESS_SOURCE/agents"
@@ -375,6 +377,18 @@ write_opencode_instructions() {
       | .instructions = (
           [(.instructions // [])[] | select(startswith($prefix) | not)] + [$spine, $packs]
         )
+      | .permission = (
+          if (.permission | type) == "string" then { "*": .permission }
+          else (.permission // {})
+          end
+        )
+      | .permission.skill = (
+          if (.permission.skill | type) == "string" then
+            { "*": .permission.skill, "bro": "deny" }
+          else
+            ((.permission.skill // {}) | del(.bro) | . + { "bro": "deny" })
+          end
+        )
     ' >"$staged" || {
     rm -f -- "$staged"
     die "could not merge $config"
@@ -419,6 +433,15 @@ install_skills() {
   rm -rf -- "$built"
   purge_dir "$AGENTS_SKILLS"
   purge_dir "$OPENCODE_SKILL_SINGULAR"
+}
+
+# Claude Code's invocation lock has no OpenCode equivalent: OpenCode advertises every discovered
+# skill to the model. Its user-invoked surface is a command, so /bro gets an adapter there while
+# the skill permission above hides the model-facing route. This owns one file, not the commands
+# directory, because other tools install commands alongside it.
+install_opencode_commands() {
+  mkdir -p -- "$OPENCODE_COMMANDS"
+  cp -- "$HARNESS_SOURCE/opencode/commands/bro.md" "$OPENCODE_COMMANDS/bro.md"
 }
 
 # The tools enforce-jj.sh decides on. Claude Code only hands a hook the calls its matcher names, so
@@ -587,6 +610,7 @@ report_plan "installing"
 install_instructions
 install_philosophy
 install_skills
+install_opencode_commands
 install_agents
 install_opencode_plugin
 

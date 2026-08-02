@@ -99,6 +99,8 @@ skills-lock.json            the source and content hash every vendored skill is 
 patches/
   lazar-tldraw.patch        the local divergence from tldraw-skill, re-applied at vendor time
 CLAUDE.md                   the instructions both runtimes load
+opencode/
+  commands/bro.md           OpenCode's user-invoked /bro adapter
 hooks/
   enforce-jj.sh             PreToolUse: allows read-only git, steers the rest to jj
 agents/
@@ -107,6 +109,7 @@ agents/
   git-hygiene-reviewer.md   atomic conventional commits, linear history, PR meta
   yagni-reviewer.md         speculative generality, in a diff or in a plan
 skills/
+  bro/                      user-invoked plain-language reset
   lazar-commit/             atomic conventional commits, jj-native, no AI attribution
   lazar-pr-status/          a PR number → its issue, what's addressed, what's only replied to, drift
   lazar-research/           an issue's open questions → /deep-research + matt-prototype → a verdict
@@ -302,11 +305,20 @@ Each skill still gates itself in its own instructions, and `CLAUDE.md`'s "nudge,
 auto-run" rule already covers this class of skill. If a specific skill turns out to need the guard
 back, the fix is to keep the lock on that one rather than to restore it wholesale.
 
+### User-only `/bro` across runtimes
+
+Claude Code reads `disable-model-invocation: true` and exposes the skill only when the user invokes
+it. OpenCode ignores that field: it advertises every discovered skill to the model and uses
+`commands/` for slash commands. The installer therefore writes `opencode/commands/bro.md` as the
+OpenCode `/bro` adapter and sets `permission.skill.bro` to `deny`. The command stays available to
+the user while the model-facing skill route stays hidden.
+
 ### use-railway, the skill that cannot take a prefix
 
-Provenance is readable from the name everywhere else here: `matt-` is Matt's, `lazar-` is mine,
-unprefixed is the runtime's. **`use-railway` is the one deliberate exception**, and it is the
-first thing a tidy-up will try to fix, so here is why it must not be.
+Provenance is readable from the name everywhere else here: `matt-` is Matt's and `lazar-` is mine.
+The hand-authored `bro` keeps its conversational command name and can only be invoked by the user.
+**`use-railway` is the one vendored exception**, and it is the first thing a tidy-up will try to
+fix, so here is why it must not be.
 
 The name is not this harness's to choose. `railway skills install` reports, in its own help:
 
@@ -386,8 +398,9 @@ bash test/model-invocation.sh
 directory and asserts what landed on disk — that both runtimes got the skills, the agent, and the
 instructions, that every skill the lockfile pins is installed under its `matt-` or `lazar-` name
 (bar `use-railway`, which is asserted to keep its interop name and to ship in that one spelling
-only) with no body still dispatching to an unprefixed one, and that the OpenCode agent carries the
-generated frontmatter while its prompt still matches the source byte for byte.
+only), that the user-invoked `bro` skill remains unprefixed, that no Matt skill dispatches to an
+unprefixed name, and that the OpenCode agent carries generated frontmatter without changing its
+prompt.
 
 It also drives `opencode debug skill` against that temp `HOME` and asserts what OpenCode
 **resolved**, which is the one thing a disk check cannot stand in for: a skill planted in
