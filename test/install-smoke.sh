@@ -195,6 +195,11 @@ assert_contains "opencode.json instructions point at the spine" \
   '~/.config/opencode/rules/PHILOSOPHY.md' "$opencode/opencode.json"
 assert_contains "opencode.json instructions point at the packs" \
   '~/.config/opencode/rules/packs/*.md' "$opencode/opencode.json"
+if [ "$(jq -r '.permission.skill.bro' "$opencode/opencode.json")" = deny ]; then
+  pass "OpenCode hides bro from model skill invocation"
+else
+  fail "OpenCode hides bro from model skill invocation"
+fi
 
 assert_same_file "enforce-jj.sh installs to the hooks dir" \
   "$HARNESS_SOURCE/hooks/enforce-jj.sh" "$hooks/enforce-jj.sh"
@@ -333,6 +338,21 @@ assert_same_file "lazar-tldraw installs to both roots as one skill" \
   "$claude/skills/lazar-tldraw/SKILL.md" "$opencode/skills/lazar-tldraw/SKILL.md"
 assert_same_file "a skill's supporting files travel with it" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$claude/skills/lazar-tldraw/LICENSE"
+
+assert_same_file "bro installs to Claude Code" \
+  "$HARNESS_SOURCE/skills/bro/SKILL.md" "$claude/skills/bro/SKILL.md"
+assert_same_file "bro installs to OpenCode" \
+  "$HARNESS_SOURCE/skills/bro/SKILL.md" "$opencode/skills/bro/SKILL.md"
+assert_contains "bro remains user-invoked" \
+  "disable-model-invocation: true" "$claude/skills/bro/SKILL.md"
+assert_same_file "bro installs as an OpenCode slash command" \
+  "$HARNESS_SOURCE/opencode/commands/bro.md" "$opencode/commands/bro.md"
+if diff -q <(body_of "$claude/skills/bro/SKILL.md") \
+  <(body_of "$opencode/commands/bro.md") >/dev/null; then
+  pass "Claude Code's bro skill and OpenCode's bro command carry one prompt"
+else
+  fail "Claude Code's bro skill and OpenCode's bro command carry one prompt"
+fi
 
 # The skill this ticket ships, in both roots the harness fills. On its own this is the vacuous
 # half — it says a file landed where the installer put it, which the installer would satisfy while
@@ -631,35 +651,42 @@ else
   fail "the per-repo reviewers install nowhere globally:$leaked"
 fi
 
-# Every skill deleted with the per-repo bootstrap was unprefixed, and every skill the harness
-# still ships is `lazar-` (mine) or `matt-` (vendored). So the prefix rule is what keeps a
-# deleted name from returning, and asserting the rule outlives asserting a list of dead names,
-# which would need hand-editing at every future deletion and says nothing about the next one.
+# Every skill deleted with the per-repo bootstrap was unprefixed, so the prefix rule keeps a
+# deleted name from returning. Two names are deliberate exceptions: `bro` because its conversational
+# command is the user-facing interface, and `use-railway` because its name is an interop surface.
+# Naming both keeps the exception closed to the next unprefixed skill.
 #
-# use-railway is the one exception, and it is named here rather than pattern-matched so that the
-# rule stays exactly one name wide: a second unprefixed skill fails this until someone argues for
-# it in the same place. The reason it cannot take a prefix is that the name is not this harness's
-# to choose — `railway skills install` writes `use-railway` into ~/.claude/skills and every other
-# tool dir it detects, so a `railway-use-railway` here would leave the CLI refilling the
-# unprefixed name for the next install to purge: the ping-pong survives, and there are two skills
-# where there was one. README's "use-railway, the skill that cannot take a prefix" carries the
-# reasoning; this is the assertion that stops the tidy-up.
+# Railway's reason needs the stronger guarantee below: `railway skills install` writes
+# `use-railway` into ~/.claude/skills and every other tool dir it detects. README's "use-railway,
+# the skill that cannot take a prefix" carries the reasoning; this assertion stops the tidy-up.
 UNPREFIXED_BY_DESIGN="use-railway"
 
 unprefixed_skill=""
 for root in "$claude" "$opencode"; do
   for installed in "$root"/skills/*/; do
     case "$(basename -- "${installed%/}")" in
-    lazar-* | matt-* | "$UNPREFIXED_BY_DESIGN") ;;
+    lazar-* | matt-* | bro | "$UNPREFIXED_BY_DESIGN") ;;
     *) unprefixed_skill="$unprefixed_skill ${installed%/}" ;;
     esac
   done
 done
 
 if [ -z "${unprefixed_skill// /}" ]; then
-  pass "every installed skill is prefixed but the one that cannot be, so no deleted skill returns"
+  pass "every installed skill is prefixed except bro and use-railway"
 else
-  fail "every installed skill is prefixed but the one that cannot be:$unprefixed_skill"
+  fail "every installed skill is prefixed except bro and use-railway:$unprefixed_skill"
+fi
+
+for root in "$claude" "$opencode"; do
+  for duplicate in "$root/skills/lazar-bro" "$root/skills/matt-bro"; do
+    [ -e "$duplicate" ] && fail "bro installs in one spelling only: $duplicate"
+  done
+done
+
+if grep -qx 'name: bro' "$claude/skills/bro/SKILL.md"; then
+  pass "the installed bro skill declares its unprefixed name"
+else
+  fail "the installed bro skill declares its unprefixed name"
 fi
 
 # The exemption is worth exactly one name, so the name has to be there to be exempt. Without this,
@@ -713,9 +740,11 @@ jq --arg stale "$hooks/set-tab-title.sh" '
 ' "$settings" >"$settings.seeded"
 mv "$settings.seeded" "$settings"
 jq '.model = "anthropic/claude-opus-4-5"
-  | .instructions += ["~/notes/house-style.md", "~/.config/opencode/rules/OLD-SPINE.md"]' \
+  | .instructions += ["~/notes/house-style.md", "~/.config/opencode/rules/OLD-SPINE.md"]
+  | .permission.skill = { "bro": "allow", "*": "allow" }' \
   "$opencode/opencode.json" >"$opencode/opencode.json.seeded"
 mv "$opencode/opencode.json.seeded" "$opencode/opencode.json"
+printf -- '---\ndescription: Mine\n---\nMine\n' >"$opencode/commands/my-command.md"
 
 # An agent the harness used to ship is only really dropped once an upgrade takes it off the
 # disk of someone who installed it back when it was global.
@@ -731,6 +760,19 @@ for root in "$claude" "$opencode"; do
 done
 
 reinstall_report=$(run_installer "$TEST_HOME") || fail "installing twice is safe"
+
+if [ "$(jq -r '.permission.skill | to_entries[-1] | "\(.key)=\(.value)"' \
+  "$opencode/opencode.json")" = "bro=deny" ]; then
+  pass "reinstalling puts bro's deny after broader OpenCode skill permissions"
+else
+  fail "reinstalling puts bro's deny after broader OpenCode skill permissions"
+fi
+
+if [ -f "$opencode/commands/my-command.md" ]; then
+  pass "installing bro preserves unrelated OpenCode commands"
+else
+  fail "installing bro preserves unrelated OpenCode commands"
+fi
 
 # The run that applies it prints the same list as the run that only reports, which is the half a
 # --install caller ever sees: the suite reaches this path without going through the bare form once,
