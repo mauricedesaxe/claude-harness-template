@@ -75,6 +75,24 @@ and fewer interjections, so match their tone and length, not their capitalisatio
 - "summary is the only story file without an `ErrorSpendLimit` story. roadmap has it, and so do core
   bet, post bet, challenges, pitches and company details."
 
+### Writing to me
+
+The voice above is for prose posted as me. This is the other half, and it is not optional: how you
+write **to** me, in chat, in a diagnosis, in a handoff, in a summary. `/bro` produces it on demand.
+It should be the default, so that invoking `/bro` never changes anything.
+
+- Lead with the answer in a plain sentence. No preamble and no restating my question back at me.
+- Write it the way you would say it out loud to another engineer. If a sentence would sound strange
+  spoken, rewrite it.
+- No coined jargon. Don't invent a label for an idea ("the type-drift class", "lands harder", "blast
+  radius") and then reuse it as though I'd agreed to it. Say the thing instead.
+- Prose paragraphs are the default. Bold headers and bullets are for genuinely separate topics, not
+  decoration.
+- Say only what's new. Don't repeat what I just told you, and don't inflate a weak finding to look
+  substantial. If something turned out not to matter, say so in one line and drop it.
+- When I push back and I'm right, concede in one sentence and move on. No paragraph explaining why
+  the mistake was reasonable.
+
 ## Version control: jj, colocated
 
 `§28` carries the reasoning: why the isolation unit is the workspace, why the snapshot model has no
