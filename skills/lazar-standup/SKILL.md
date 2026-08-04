@@ -21,6 +21,11 @@ the issue-key format and the destination, then gather.
 
 - **Repo** — from the remote: `git remote get-url origin`, normalised to `<host>/<owner>/<repo>`.
 - **Tracker and issue-key format** — resolve per **Tracker resolution** in `CLAUDE.md`.
+- **Key spaces, plural.** One repo can carry more than one, and only some of them have an API
+  behind them. On `iconicshift/platform` a Linear `ICON-<n>` and a Slack-thread `WEB-<n><letter>`
+  both name real work, and the second resolves to a permalink I have to hand you. The note records
+  the ones I've already named. A key you meet that isn't in the note is a question for me, never a
+  guess and never a bullet left unlinked.
 - **Author** — from the API, never hardcoded. GitHub: `gh api user --jq .login`. Linear: the
   viewer, via `mcp__linear__list_my_issues` or the equivalent.
 - **Destination** — where the post goes (a Slack channel, the tracker, a doc). The note records
@@ -28,15 +33,43 @@ the issue-key format and the destination, then gather.
 
 ## How to gather
 
+Gather wide, then narrow. Every command below answers the question you put to it and also carries
+evidence you didn't ask for, and the post comes out wrong in exactly the places you took one
+result at face value. Two habits carry most of it. Read each output for everything it says, not
+only for the field you went in for. And treat a thin or empty result as a fact about the query
+before you treat it as a fact about the day: a week with nothing in it, next to a local side that
+shows work every day, means the filter is wrong, not that nothing happened.
+
 1. Resolve repo, tracker, author, destination as above. Connect the tracker's MCP if it isn't
    already (authenticate if needed).
 
 2. **Progress = what actually changed since the last standup, stated honestly about its state.**
    Gather from both sides and reconcile them:
 
-   - **Remote.** `gh pr list --author <login> --state merged --limit 10 --json number,title,mergedAt`
-     for what landed, plus the tracker's equivalent (issues I moved or closed). Plus any
-     substantial non-PR work I mention (reviews, planning, investigation).
+   - **Remote.** Everything that landed in the window, then split by my part in it. Never scope
+     the merged query to my own authorship. Landing someone else's PR is my work too, and on a
+     repo where I'm the one who lands them, an `--author me` filter hides that whole half of the
+     day:
+
+     ```bash
+     gh pr list --state merged --search "merged:>=<date of my last standup>" \
+       --json number,title,author,mergedAt,mergedBy
+     ```
+
+     `author == me` is what I wrote. `mergedBy == me` over someone else's `author` is what I
+     landed, and it earns its own bullet ("landed copy changes leftover from John").
+
+     **A landed PR does not always say MERGED.** Where trunk takes fast-forward pushes, the PR
+     closes without GitHub ever marking it merged, and its head sha isn't an ancestor of trunk
+     either, so neither `--state merged` nor an ancestry check finds it. Read trunk's own log for
+     the window and match by subject:
+
+     ```bash
+     git log origin/<trunk> --since=<date> --pretty='%h %an %ad %s' --date=short
+     ```
+
+     Plus the tracker's equivalent (issues I moved or closed), and any substantial non-PR work I
+     mention (reviews, planning, investigation).
    - **Local.** Work that only exists on this machine is still progress, and it's often the
      honest answer to what I'm doing today. Read the working copy and the commits that aren't
      on any remote, whichever VCS the repo uses:
@@ -53,9 +86,25 @@ the issue-key format and the destination, then gather.
      git worktree list
      ```
 
+   - **The names are evidence, not just the commits under them.** A workspace, worktree or
+     bookmark is named by whoever cut it, so the list is a record of what I've had open and why.
+     Read it twice. A name carrying a key that doesn't match this repo's issue-key pattern is work
+     tracked somewhere else, and it needs its ref before it can be a bullet, so ask me. A name
+     saying what the work *is* (`*-diagnose`, `done-*`, `review-*`) tells you how to phrase it:
+     diagnosing a live failure is not the same bullet as shipping a feature. `jj workspace list`
+     shows registered workspaces only, so read `.jj/ws/` as well and don't skip the forgotten ones.
+
    - **Reconcile.** A local branch or stack whose PR is already open is the PR's story, not a
      second bullet — phrase it by the PR's state. A stack with no PR yet is work in progress.
      Don't double-count the same work once as local and once as remote.
+
+   - **Date every status field before you quote it.** A PR's `reviewDecision`, and a review's
+     state, are sticky: `CHANGES_REQUESTED` sits there until that same reviewer submits again, so
+     it can be describing last week while the work has moved on twice since. Compare the newest
+     review's `submittedAt` against the head commit and against local activity before you let it
+     name the day's work. When the newest activity is my own review rounds (review-record commits,
+     `review-*` workspaces, a round number in a commit subject), the honest line is that I'm
+     working through my own automated reviews, not that I'm addressing a teammate's.
 
 3. **Problems:** only things someone other than me could act on — a dependency not ready, a
    decision I'm waiting on from the team, an environment issue affecting others. My own gating
@@ -66,6 +115,11 @@ the issue-key format and the destination, then gather.
    and phrase the action to match it (open vs finish+open vs land — see the phrasing rule in
    Rules). Plus the next issues I'm picking up. Note stacking when one builds on another.
 
+   Where the local trail shows a cadence I'm partway through, name the step that's actually next
+   instead of the generic verb. "work through one more round of automated reviews then dogfood and
+   open PR#424" is what I'll do today; "finish + open PR#424" is only the shape of it. The verb
+   from the Rules is the floor, not the target.
+
 5. If I've just planned my day in another skill, pull the priorities straight from the plan I
    picked.
 
@@ -74,7 +128,9 @@ Confirm the draft with me before I post it — this goes out under my name to a 
 ## Format
 
 - Open with my greeting — `Morning everyone :sun_with_face:` or `Hello hello :sun_with_face:`. I vary it; pick by time of day, and drop the "morning" wording if I'm posting later.
-- Three headers: **Progress**, **Problems**, **Priorities**.
+- Three headers: `*Progress*`, `*Problems*`, `*Priorities*`. **Single asterisks**, which is Slack's
+  own bold and what I actually post. Markdown's `**double**` is wrong here even though the rest of
+  the post is markdown, and even though my Slack renders markdown links.
 - Lowercase, terse fragment bullets. Not full sentences. Real lines of mine:
   - `landed PR#299 (strategic summary, ICON-49)`
   - `start the Clarity preprocessing pipeline (WCO) for ICON-147 stacked on PR#316 (office extraction)`
@@ -105,7 +161,9 @@ Confirm the draft with me before I post it — this goes out under my name to a 
 ## Calibration sample (Iconic, 2026-06-29)
 
 Not a template — don't copy its shape onto a repo it doesn't fit. It's here because I posted it
-with zero edits, the first I changed nothing on. It pins the bar. Match it.
+with zero edits, the first I changed nothing on. It pins the bar for **judgement**: what earns a
+bullet, how light a wip line stays, how short the whole thing is. It does not pin **format**, which
+it predates on two counts (see the note under it). Where the two disagree, the Format section wins.
 
 ```
 Morning everyone :sun_with_face:
@@ -129,4 +187,42 @@ Why it landed:
 - **Problems was `none rn`, correctly.** The open 148 questions (route wiring, e2e) were my own calls, not cross-team blockers — so they stayed out.
 - **Links exactly to format.** Bare `PR#<n>` with short parenthetical, no URL. Linear ref `ICON-148 (...)` followed by the bare full URL with the title slug.
 
-> Note (2026-07-16): this example predates the switch to markdown links. Its bare `PR#<n>` and trailing-bare-URL style is the **old** format — follow the current Links section (inline `[text](url)` wrapping the ref) instead. Everything else about why it landed still holds.
+> Note (2026-07-16, extended 2026-08-04): this example predates two format changes. Its bare `PR#<n>` and trailing-bare-URL style is the **old** link format, so follow the current Links section (inline `[text](url)` wrapping the ref) instead. Its `**double-asterisk**` headers are the **old** emphasis, so post single `*Progress*`. Everything else about why it landed still holds, and the sample below is the one to copy.
+
+## Calibration sample (Iconic, 2026-08-04)
+
+The second one I posted unedited, and it's here because the draft I was handed first missed four
+things that were all recoverable from the machine. Read it against **How to gather**.
+
+```
+*Progress*
+- kept working through automated reviews [ICON-287](https://linear.app/iconicshift/issue/ICON-287/road-map-milestones-generate-without-founder-acceptance-of-annual) (targets gate)
+- did diagnosis work on the pipeline failure [WEB-1T](https://findyourlightbulb.slack.com/archives/C0B09TNNT8V/p1785744184491339)
+- landed copy changes leftover from John
+
+*Problems*
+none rn
+
+*Priorities*
+- work through one more round of automated reviews than dogfood and open [PR#424](https://github.com/iconicshift/platform/pull/424) (targets gate, ICON-287)
+- finish + open [PR#433](https://github.com/iconicshift/platform/pull/433) (target shaping, [ICON-341](https://linear.app/iconicshift/issue/ICON-341/founders-can-shape-their-road-map-targets-with-game-gate-revision)), stacked on PR#424
+```
+
+What the first draft got wrong, and where the answer was sitting:
+
+- **"landed copy changes leftover from John" was missing entirely.** The draft ran
+  `--author me --state merged`, got nothing newer than a week back, and reported that nothing
+  landed. Two PRs had merged in the window with `author: graphcs` and `mergedBy: mauricedesaxe`.
+  A week of silence next to a busy local tree was the tell, and one unscoped query with `mergedBy`
+  recovers the whole line.
+- **The 287 work is my own automated review rounds, not a teammate's review.** The draft read
+  GitHub's `CHANGES_REQUESTED` and wrote "addressing James's review". That review was six days
+  old. Local commits said "Record the round-12 review of PR 424", and four `review-*` workspaces
+  were open. A twelfth round is nobody's single pass.
+- **WEB-1T went in unlinked, and framed as delivery.** A workspace named `web1s-diagnose` was
+  already in the output the draft had printed, in a key format this repo's Linear doesn't use.
+  That's the moment to ask for the ref, and `*-diagnose` is the moment to say "did diagnosis work"
+  rather than "got the diagnostics together".
+- **Priorities named the shape, not the step.** "finish + open PR#424" is true and useless next to
+  "one more round of automated reviews then dogfood and open PR#424", which is the actual next
+  thing given where the review cadence had got to.
