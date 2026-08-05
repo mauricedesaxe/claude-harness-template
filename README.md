@@ -497,9 +497,9 @@ re-bootstrapping each repo.
   OpenAI via OpenRouter is the default. Every metered API call is logged in
   Postgres (per user / request / model / cost). Fallback: provider down ⇒
   feature down, unless the product must stay available.
-- **Test behaviour, climb the fidelity ladder.** Bugs live at the seams.
-  Recorded fixtures over invented stubs. Unit tests are a tool, not the load-
-  bearing layer.
+- **Test behaviour with fewer, coherent workflow tests.** Keep related actions
+  and assertions together, climb the fidelity ladder, and prefer recorded
+  fixtures over invented stubs. Unit tests are a tool, not the load-bearing layer.
 - **Commercial readiness** is declared per project. Commercial-ready ⇒ RBAC + RLS
   + audit logging + authorization-matrix tests required.
 - **Frontend (when app-shaped):** TanStack Query + Zustand + Tailwind +

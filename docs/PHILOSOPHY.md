@@ -561,6 +561,13 @@ mock-heavy unit world hides exactly the seam bugs that production exercises.
 
 **Concrete rules:**
 
+- **Prefer fewer, longer workflow tests.** Following Kent C. Dodds's
+  [testing principle](https://github.com/kentcdodds/kody/blob/main/docs/contributing/testing-principles.md#principles),
+  treat each test like a manual tester's script: one explicit setup, then as
+  many actions and assertions as the coherent journey needs. Multiple related
+  assertions are a feature, not a smell. Don't split one flow merely to satisfy
+  "one assertion per test"; split when the cases no longer share a workflow or
+  one name can't describe the behaviour.
 - **Test names are third-person verbs of observable behaviour.** `test("scores
   a 5-minute grocery at full credit")`, not `test("computeScore works")` or
   `test("calls decay")`.
