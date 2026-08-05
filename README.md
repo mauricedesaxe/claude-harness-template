@@ -249,15 +249,19 @@ a skill writes one the first and only time it has to ask, and reads it forever a
 
 ## Vendored skills
 
-Three upstreams are vendored through the [`skills` CLI](https://skills.sh):
+Five upstreams are vendored through the [`skills` CLI](https://skills.sh):
 [Matt Pocock's skills](https://github.com/mattpocock/skills) as `matt-*`,
 [Agents365-ai/tldraw-skill](https://github.com/Agents365-ai/tldraw-skill) as `lazar-tldraw`, and
-[railwayapp/railway-skills](https://github.com/railwayapp/railway-skills) as `use-railway`.
+[railwayapp/railway-skills](https://github.com/railwayapp/railway-skills) as `use-railway`,
+[Plannotator](https://github.com/backnotprop/plannotator)'s six published skills, and
+[nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer) as the visual
+dependency Plannotator delegates to.
 Nothing here is hand-edited, so there is nothing to hand-merge and no local edits an update could
 lose:
 
 ```sh
 ./vendor-skills.sh --update    # pull upstream's current content and repin the lockfile
+./vendor-skills.sh --update-plannotator  # update Plannotator without moving unrelated pins
 ./vendor-skills.sh             # re-vendor exactly what the lockfile pins, or fail
 ./vendor-skills.sh --regen-patch   # rebuild patches/lazar-tldraw.patch from an edited lazar-tldraw
 ```
@@ -268,6 +272,10 @@ write anything if a pinned `SKILL.md` no longer hashes to what it pinned, so a r
 reproduces those prompts or tells you upstream moved. A skill's supporting files are not covered
 by that hash — they are pinned only by being committed here, where a re-vendor shows any upstream
 change to them as a diff.
+
+The harness owns Plannotator's skill definitions, not its executable or runtime plugins. Install
+the `plannotator` binary separately on machines that invoke these skills. Sandbox images need the
+same binary before the skills can run there.
 
 Every skill of Matt's is renamed `matt-<name>` on the way in — its directory, its `name:`
 frontmatter, and the `/name` cross-references its prose dispatches through. The prefix is
@@ -313,12 +321,14 @@ it. OpenCode ignores that field: it advertises every discovered skill to the mod
 OpenCode `/bro` adapter and sets `permission.skill.bro` to `deny`. The command stays available to
 the user while the model-facing skill route stays hidden.
 
-### use-railway, the skill that cannot take a prefix
+### Upstream names that are interop surfaces
 
-Provenance is readable from the name everywhere else here: `matt-` is Matt's and `lazar-` is mine.
-The hand-authored `bro` keeps its conversational command name and can only be invoked by the user.
-**`use-railway` is the one vendored exception**, and it is the first thing a tidy-up will try to
-fix, so here is why it must not be.
+Plannotator's six skills keep the names its installer writes. `visual-explainer` keeps the exact
+name `plannotator-visual-explainer` delegates to. Renaming either set would leave the external
+installer refilling one spelling while the harness shipped another.
+
+`use-railway` has the same constraint, and it is the first name a tidy-up will try to prefix, so
+here is why it must not be.
 
 The name is not this harness's to choose. `railway skills install` reports, in its own help:
 
@@ -395,12 +405,11 @@ bash test/model-invocation.sh
 ```
 
 `install-smoke.sh` is one end-to-end pass: it runs the installer with `HOME` pointed at a temp
-directory and asserts what landed on disk — that both runtimes got the skills, the agent, and the
-instructions, that every skill the lockfile pins is installed under its `matt-` or `lazar-` name
-(bar `use-railway`, which is asserted to keep its interop name and to ship in that one spelling
-only), that the user-invoked `bro` skill remains unprefixed, that no Matt skill dispatches to an
-unprefixed name, and that the OpenCode agent carries generated frontmatter without changing its
-prompt.
+directory and asserts what landed on disk. Both runtimes get the same pinned skills, supporting
+files, agents, and instructions. Matt's skills carry their rewritten names; Plannotator,
+`visual-explainer`, and `use-railway` keep their upstream-owned names; `bro` remains user-invoked.
+The suite also checks that no Matt skill dispatches to an unprefixed name and that OpenCode agents
+carry generated frontmatter without changing their prompts.
 
 It also drives `opencode debug skill` against that temp `HOME` and asserts what OpenCode
 **resolved**, which is the one thing a disk check cannot stand in for: a skill planted in

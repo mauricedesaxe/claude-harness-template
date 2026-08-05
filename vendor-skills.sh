@@ -32,6 +32,26 @@ RAILWAY_UPSTREAM="railwayapp/railway-skills"
 RAILWAY_SKILL="use-railway"
 RAILWAY_LICENSE_URL="https://raw.githubusercontent.com/$RAILWAY_UPSTREAM/HEAD/LICENSE"
 
+# Plannotator's installer writes these names into roots the harness purges. Vendor the complete
+# published set so a harness install remains authoritative instead of deleting the integration.
+PLANNOTATOR_UPSTREAM="backnotprop/plannotator"
+PLANNOTATOR_CORE_SOURCE="https://github.com/$PLANNOTATOR_UPSTREAM/tree/main/apps/skills/core"
+PLANNOTATOR_EXTRA_SOURCE="https://github.com/$PLANNOTATOR_UPSTREAM/tree/main/apps/skills/extra"
+PLANNOTATOR_LICENSE_URL="https://raw.githubusercontent.com/$PLANNOTATOR_UPSTREAM/HEAD/LICENSE-MIT"
+PLANNOTATOR_SKILLS=(
+  plannotator-annotate
+  plannotator-last
+  plannotator-review
+  plannotator-compound
+  plannotator-setup-goal
+  plannotator-visual-explainer
+)
+
+# plannotator-visual-explainer delegates general-purpose output to this upstream skill.
+VISUAL_EXPLAINER_UPSTREAM="nicobailon/visual-explainer"
+VISUAL_EXPLAINER_SKILL="visual-explainer"
+VISUAL_EXPLAINER_LICENSE_URL="https://raw.githubusercontent.com/$VISUAL_EXPLAINER_UPSTREAM/HEAD/LICENSE"
+
 # Upstream's engineering/ and productivity/ sets. Its in-progress/, personal/ and deprecated/
 # skills are deliberately not vendored.
 UPSTREAM_SKILLS=(
@@ -61,14 +81,15 @@ UPSTREAM_SKILLS=(
 
 usage() {
   cat >&2 <<'EOF'
-usage: vendor-skills.sh [--update | --regen-patch]
+usage: vendor-skills.sh [--update | --update-plannotator | --regen-patch]
 
-  (no flags)      Re-vendor the set pinned in skills-lock.json. Fails if upstream has moved
-                  away from the pinned content hashes.
-  --update        Pull upstream's current content and repin skills-lock.json to it.
-  --regen-patch   Rebuild patches/lazar-tldraw.patch from the difference between pristine
-                  upstream and the vendored skills/lazar-tldraw/SKILL.md. Run this after
-                  editing that file to keep a local change across the next re-vendor.
+  (no flags)            Re-vendor the set pinned in skills-lock.json. Fails if upstream has moved
+                        away from the pinned content hashes.
+  --update              Pull every upstream's current content and repin skills-lock.json to it.
+  --update-plannotator  Pull Plannotator and visual-explainer without changing the other pins.
+  --regen-patch         Rebuild patches/lazar-tldraw.patch from the difference between pristine
+                        upstream and the vendored skills/lazar-tldraw/SKILL.md. Run this after
+                        editing that file to keep a local change across the next re-vendor.
 EOF
   exit 2
 }
@@ -78,9 +99,34 @@ die() {
   exit 1
 }
 
-# Both upstreams are fetched into one staging dir so the CLI merges them into a single lockfile.
+fetch_plannotator_upstreams() {
+  local into=$1 skill visual_into
+  local plannotator_core_args=() plannotator_extra_args=()
+
+  for skill in "${PLANNOTATOR_SKILLS[@]:0:3}"; do plannotator_core_args+=(-s "$skill"); done
+  (cd -- "$into" && npx -y "$SKILLS_CLI" add "$PLANNOTATOR_CORE_SOURCE" -a claude-code --copy -y "${plannotator_core_args[@]}") >/dev/null ||
+    die "the skills CLI failed to fetch Plannotator's core skills"
+  for skill in "${PLANNOTATOR_SKILLS[@]:3}"; do plannotator_extra_args+=(-s "$skill"); done
+  (cd -- "$into" && npx -y "$SKILLS_CLI" add "$PLANNOTATOR_EXTRA_SOURCE" -a claude-code --copy -y "${plannotator_extra_args[@]}") >/dev/null ||
+    die "the skills CLI failed to fetch Plannotator's extra skills"
+
+  visual_into="$into/visual-explainer-upstream"
+  mkdir -p -- "$visual_into"
+  (cd -- "$visual_into" && npx -y "$SKILLS_CLI" add "$VISUAL_EXPLAINER_UPSTREAM" -a claude-code --copy -y -s "$VISUAL_EXPLAINER_SKILL") >/dev/null ||
+    die "the skills CLI failed to fetch $VISUAL_EXPLAINER_UPSTREAM"
+  jq -s '.[0].skills += .[1].skills | .[0]' \
+    "$into/skills-lock.json" "$visual_into/skills-lock.json" >"$into/skills-lock.merged.json" ||
+    die "merging $VISUAL_EXPLAINER_SKILL into skills-lock.json failed"
+  mv -- "$into/skills-lock.merged.json" "$into/skills-lock.json"
+  mv -- "$visual_into/.claude/skills/$VISUAL_EXPLAINER_SKILL" "$into/.claude/skills/"
+  rm -rf -- "$visual_into"
+}
+
+# Every upstream contributes to one final lockfile. The larger optional sets are fetched in an
+# independent directory because skills@1.5.15 silently drops existing lock entries when too many
+# independent upstreams are merged in one working directory.
 fetch_upstream() {
-  local into=$1 skill
+  local into=$1 skill plannotator_into
   local args=()
   for skill in "${UPSTREAM_SKILLS[@]}"; do args+=(-s "$skill"); done
   (cd -- "$into" && npx -y "$SKILLS_CLI" add "$UPSTREAM" -a claude-code --copy -y "${args[@]}") >/dev/null ||
@@ -89,6 +135,19 @@ fetch_upstream() {
     die "the skills CLI failed to fetch $TLDRAW_UPSTREAM"
   (cd -- "$into" && npx -y "$SKILLS_CLI" add "$RAILWAY_UPSTREAM" -a claude-code --copy -y -s "$RAILWAY_SKILL") >/dev/null ||
     die "the skills CLI failed to fetch $RAILWAY_UPSTREAM"
+
+  plannotator_into="$into/plannotator-upstream"
+  mkdir -p -- "$plannotator_into"
+  fetch_plannotator_upstreams "$plannotator_into"
+  jq -s '.[0].skills += .[1].skills | .[0]' \
+    "$into/skills-lock.json" "$plannotator_into/skills-lock.json" \
+    >"$into/skills-lock.merged.json" ||
+    die "merging Plannotator into skills-lock.json failed"
+  mv -- "$into/skills-lock.merged.json" "$into/skills-lock.json"
+  for skill in "${PLANNOTATOR_SKILLS[@]}" "$VISUAL_EXPLAINER_SKILL"; do
+    mv -- "$plannotator_into/.claude/skills/$skill" "$into/.claude/skills/"
+  done
+  rm -rf -- "$plannotator_into"
 }
 
 # The prefix has to reach the frontmatter too: Claude Code invokes a skill by its declared
@@ -171,11 +230,44 @@ lockfile_skills() {
 
 assert_pinned_set() {
   local fetched=$1 expected actual
-  expected=$(printf '%s\n%s\n%s\n' "${UPSTREAM_SKILLS[*]}" "$TLDRAW_SKILL" "$RAILWAY_SKILL" |
+  expected=$(printf '%s\n%s\n%s\n%s\n%s\n' "${UPSTREAM_SKILLS[*]}" "$TLDRAW_SKILL" \
+    "$RAILWAY_SKILL" "${PLANNOTATOR_SKILLS[*]}" "$VISUAL_EXPLAINER_SKILL" |
     tr ' ' '\n' | LC_ALL=C sort)
   actual=$(lockfile_skills "$fetched" | LC_ALL=C sort)
   [ "$expected" = "$actual" ] ||
-    die "the skills CLI resolved a different set than this script asked for"
+    die "the skills CLI resolved a different set than this script asked for
+expected:
+$expected
+actual:
+$actual"
+}
+
+assert_plannotator_pinned_set() {
+  local fetched=$1 expected actual
+  expected=$(printf '%s\n%s\n' "${PLANNOTATOR_SKILLS[*]}" "$VISUAL_EXPLAINER_SKILL" |
+    tr ' ' '\n' | LC_ALL=C sort)
+  actual=$(lockfile_skills "$fetched" | LC_ALL=C sort)
+  [ "$expected" = "$actual" ] ||
+    die "the skills CLI resolved a different Plannotator set than this script asked for"
+}
+
+stage_plannotator_licenses() {
+  local into=$1 skill first_staged
+  first_staged="$into/.claude/skills/${PLANNOTATOR_SKILLS[0]}"
+  fetch_license "$first_staged" "$PLANNOTATOR_LICENSE_URL" "$PLANNOTATOR_UPSTREAM"
+  for skill in "${PLANNOTATOR_SKILLS[@]:1}"; do
+    cp -- "$first_staged/LICENSE" "$into/.claude/skills/$skill/LICENSE"
+  done
+  fetch_license "$into/.claude/skills/$VISUAL_EXPLAINER_SKILL" \
+    "$VISUAL_EXPLAINER_LICENSE_URL" "$VISUAL_EXPLAINER_UPSTREAM"
+}
+
+install_plannotator_skills() {
+  local from=$1 skill
+  for skill in "${PLANNOTATOR_SKILLS[@]}" "$VISUAL_EXPLAINER_SKILL"; do
+    rm -rf -- "$HARNESS_SOURCE/skills/$skill"
+    mv -- "$from/.claude/skills/$skill" "$HARNESS_SOURCE/skills/$skill"
+  done
 }
 
 # Not local: the EXIT trap that cleans it up outlives main.
@@ -205,17 +297,39 @@ regen_patch() {
 }
 
 main() {
-  local update=false regen=false skill staged vendored tldraw_staged railway_staged
+  local update=false update_plannotator=false regen=false skill staged vendored
+  local tldraw_staged railway_staged visual_explainer_staged
 
   case "${1-}" in
   "") ;;
   --update) update=true ;;
+  --update-plannotator) update_plannotator=true ;;
   --regen-patch) regen=true ;;
   *) usage ;;
   esac
   [ "$#" -le 1 ] || usage
 
   staging=$(mktemp -d)
+
+  if [ "$update_plannotator" = true ]; then
+    fetch_plannotator_upstreams "$staging"
+    assert_plannotator_pinned_set "$staging/skills-lock.json"
+    stage_plannotator_licenses "$staging"
+    jq --slurpfile updated "$staging/skills-lock.json" '
+      .skills |= with_entries(select(
+        .value.source != "backnotprop/plannotator" and
+        .value.source != "nicobailon/visual-explainer"
+      )) |
+      .skills += $updated[0].skills
+    ' "$LOCKFILE" >"$staging/skills-lock.combined.json" ||
+      die "merging Plannotator pins into $LOCKFILE failed"
+    install_plannotator_skills "$staging"
+    mv -- "$staging/skills-lock.combined.json" "$LOCKFILE"
+    printf 'vendored %d skills from %s and %s from %s\n' \
+      "${#PLANNOTATOR_SKILLS[@]}" "$PLANNOTATOR_UPSTREAM" \
+      "$VISUAL_EXPLAINER_SKILL" "$VISUAL_EXPLAINER_UPSTREAM"
+    return 0
+  fi
 
   fetch_upstream "$staging"
   assert_pinned_set "$staging/skills-lock.json"
@@ -225,6 +339,15 @@ main() {
 
   railway_staged="$staging/.claude/skills/$RAILWAY_SKILL"
   [ -d "$railway_staged" ] || die "$RAILWAY_SKILL: the skills CLI installed no such skill"
+
+  for skill in "${PLANNOTATOR_SKILLS[@]}"; do
+    [ -d "$staging/.claude/skills/$skill" ] ||
+      die "$skill: the skills CLI installed no such skill"
+  done
+
+  visual_explainer_staged="$staging/.claude/skills/$VISUAL_EXPLAINER_SKILL"
+  [ -d "$visual_explainer_staged" ] ||
+    die "$VISUAL_EXPLAINER_SKILL: the skills CLI installed no such skill"
 
   if [ "$regen" = true ]; then
     regen_patch "$tldraw_staged/SKILL.md"
@@ -249,23 +372,27 @@ main() {
   apply_local_patch "$tldraw_staged"
   fetch_license "$tldraw_staged" "$TLDRAW_LICENSE_URL" "$TLDRAW_UPSTREAM"
   fetch_license "$railway_staged" "$RAILWAY_LICENSE_URL" "$RAILWAY_UPSTREAM"
+  stage_plannotator_licenses "$staging"
 
   for vendored in "$HARNESS_SOURCE/skills/$PREFIX"*/; do
     if [ -d "$vendored" ]; then rm -rf -- "$vendored"; fi
   done
-  rm -rf -- "$HARNESS_SOURCE/skills/$TLDRAW_VENDORED" "$HARNESS_SOURCE/skills/$RAILWAY_SKILL"
+  rm -rf -- "$HARNESS_SOURCE/skills/$TLDRAW_VENDORED" "$HARNESS_SOURCE/skills/$RAILWAY_SKILL" \
+    "$HARNESS_SOURCE/skills/$VISUAL_EXPLAINER_SKILL"
 
   for skill in "${UPSTREAM_SKILLS[@]}"; do
     mv -- "$staging/.claude/skills/$skill" "$HARNESS_SOURCE/skills/$PREFIX$skill"
   done
   mv -- "$tldraw_staged" "$HARNESS_SOURCE/skills/$TLDRAW_VENDORED"
   mv -- "$railway_staged" "$HARNESS_SOURCE/skills/$RAILWAY_SKILL"
+  install_plannotator_skills "$staging"
 
   cp -- "$staging/skills-lock.json" "$LOCKFILE"
 
-  printf 'vendored %d skills from %s as %s*, %s from %s, and %s from %s\n' \
+  printf 'vendored %d skills from %s as %s*, %s from %s, %s from %s, %d from %s, and %s from %s\n' \
     "${#UPSTREAM_SKILLS[@]}" "$UPSTREAM" "$PREFIX" "$TLDRAW_VENDORED" "$TLDRAW_UPSTREAM" \
-    "$RAILWAY_SKILL" "$RAILWAY_UPSTREAM"
+    "$RAILWAY_SKILL" "$RAILWAY_UPSTREAM" "${#PLANNOTATOR_SKILLS[@]}" \
+    "$PLANNOTATOR_UPSTREAM" "$VISUAL_EXPLAINER_SKILL" "$VISUAL_EXPLAINER_UPSTREAM"
 }
 
 # Sourceable so the tests can drive the transforms without going to the network.
