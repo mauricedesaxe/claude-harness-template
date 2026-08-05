@@ -22,8 +22,10 @@ What's specific to this repo, and easy to get wrong:
   `skills/lazar-review/SKILL.md`. The installer keeps the pair matching `HARNESS_SURFACE` and drops
   the rest, so both variants live in the markdown and are edited together. A file carrying one
   surface and not the other stops the install.
-- **Nothing under `skills/matt-*` or `skills/lazar-tldraw` is hand-edited.** Both are vendored and
-  regenerated. Edit upstream or `patches/lazar-tldraw.patch`, then re-run `./vendor-skills.sh`.
+- **Vendored skill directories are never hand-edited.** This covers `skills/matt-*`,
+  `skills/lazar-tldraw`, `skills/use-railway`, `skills/plannotator-*`, and
+  `skills/visual-explainer`. Edit upstream or `patches/lazar-tldraw.patch`, then re-run
+  `./vendor-skills.sh`.
 - **Never pass `--install` to `install.sh` here.** It honours `$HOME`, `$CLAUDE_CONFIG_DIR` and
   `$XDG_CONFIG_HOME`, so with the flag it overwrites whatever live harness the shell you are
   standing in is configured with. Exercise it with `bash test/install-smoke.sh`, which scrubs the

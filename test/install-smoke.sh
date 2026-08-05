@@ -368,6 +368,39 @@ assert_same_file "use-railway's references travel with it" \
 assert_same_file "use-railway's MIT licence travels with the text it licenses" \
   "$HARNESS_SOURCE/skills/use-railway/LICENSE" "$claude/skills/use-railway/LICENSE"
 
+plannotator_pinned=$(jq -r \
+  '.skills | to_entries[] | select(.value.source == "backnotprop/plannotator") | .key' \
+  "$HARNESS_SOURCE/skills-lock.json")
+plannotator_missing=""
+while IFS= read -r name; do
+  for root in "$claude" "$opencode"; do
+    [ -f "$root/skills/$name/SKILL.md" ] ||
+      plannotator_missing="$plannotator_missing $root/skills/$name/SKILL.md"
+  done
+done <<<"$plannotator_pinned"
+
+if [ -z "${plannotator_missing// /}" ] && [ "$(printf '%s\n' "$plannotator_pinned" | grep -c .)" -eq 6 ]; then
+  pass "all six pinned Plannotator skills install to both runtimes"
+else
+  fail "all six pinned Plannotator skills install to both runtimes:$plannotator_missing"
+fi
+
+assert_same_file "Plannotator supporting files travel with the skills" \
+  "$HARNESS_SOURCE/skills/plannotator-visual-explainer/references/design-system.md" \
+  "$claude/skills/plannotator-visual-explainer/references/design-system.md"
+assert_same_file "Plannotator's MIT licence travels with its skills" \
+  "$HARNESS_SOURCE/skills/plannotator-annotate/LICENSE" \
+  "$opencode/skills/plannotator-annotate/LICENSE"
+assert_same_file "visual-explainer installs to Claude Code" \
+  "$HARNESS_SOURCE/skills/visual-explainer/SKILL.md" \
+  "$claude/skills/visual-explainer/SKILL.md"
+assert_same_file "visual-explainer installs to OpenCode" \
+  "$HARNESS_SOURCE/skills/visual-explainer/SKILL.md" \
+  "$opencode/skills/visual-explainer/SKILL.md"
+assert_same_file "visual-explainer's templates travel with it" \
+  "$HARNESS_SOURCE/skills/visual-explainer/templates/architecture.html" \
+  "$claude/skills/visual-explainer/templates/architecture.html"
+
 # The skill shells out to its own scripts, so one that arrived without its exec bit is installed,
 # resolved, and dead at the first call — the same fail-open the hook's exec-bit assertion catches.
 if [ -x "$claude/skills/use-railway/scripts/railway-api.sh" ]; then
@@ -453,8 +486,8 @@ assert_surface_rendered "lazar-ship installed to OpenCode" \
 #
 # A reference is recognised by its shape, never matched against a list of dead names a future
 # rename would have to remember to extend. Either the name carries a harness prefix — asserted
-# below, every installed skill is `lazar-` or `matt-`, so a prefixed token can only be meant as
-# a skill — or the prose labels it one (`x` skill). Ordinary English carries neither marker,
+# below, a `lazar-` token can only be meant as a skill — or the prose labels it one (`x` skill).
+# Ordinary English carries neither marker,
 # which is what keeps this off the words git-hygiene-reviewer is largely made of: it says
 # "commit" constantly and correctly, and yagni-reviewer weighs unfelt "work".
 #
@@ -508,10 +541,10 @@ case "${note_path#\~/}" in
 esac
 
 pinned=$(lockfile_skills)
-if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 24 ]; then
-  pass "skills-lock.json pins Matt's 22 skills, tldraw-skill and use-railway"
+if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 31 ]; then
+  pass "skills-lock.json pins all 31 vendored skills"
 else
-  fail "skills-lock.json pins Matt's 22 skills, tldraw-skill and use-railway"
+  fail "skills-lock.json pins all 31 vendored skills"
 fi
 
 # The reason lazar-tldraw is vendored rather than hand-kept: an upstream nobody pins is an
@@ -532,9 +565,23 @@ else
   fail "use-railway's upstream is pinned rather than hand-copied out of the CLI"
 fi
 
-# Everything of Matt's, judged as Matt's. tldraw-skill and use-railway are pinned in the same
-# lockfile but install under names of their own, so they are asserted separately.
-matt_pinned=$(printf '%s\n' "$pinned" | grep -vx 'tldraw-skill' | grep -vx 'use-railway')
+if grep -qF '"source": "backnotprop/plannotator"' "$HARNESS_SOURCE/skills-lock.json"; then
+  pass "Plannotator's upstream is pinned rather than copied from the live install"
+else
+  fail "Plannotator's upstream is pinned rather than copied from the live install"
+fi
+
+if grep -qF '"source": "nicobailon/visual-explainer"' "$HARNESS_SOURCE/skills-lock.json"; then
+  pass "visual-explainer's upstream is pinned rather than copied from the live install"
+else
+  fail "visual-explainer's upstream is pinned rather than copied from the live install"
+fi
+
+# Everything of Matt's, judged as Matt's. The other upstreams are pinned in the same lockfile but
+# install under names of their own, so source identity is the honest boundary.
+matt_pinned=$(jq -r \
+  '.skills | to_entries[] | select(.value.source == "mattpocock/skills") | .key' \
+  "$HARNESS_SOURCE/skills-lock.json")
 
 missing=""
 misnamed=""
@@ -583,7 +630,7 @@ fi
 
 # A body that still says `/code-review` dispatches to Claude Code's built-in, so the prefix has
 # to hold across the cross-references too, not just the directory and the frontmatter.
-reference='[ `]/('"$(printf '%s' "$pinned" | paste -sd '|' -)"')([^A-Za-z0-9/-]|$)'
+reference='[ `]/('"$(printf '%s' "$matt_pinned" | paste -sd '|' -)"')([^A-Za-z0-9/-]|$)'
 dangling=""
 for root in "$claude" "$opencode"; do
   dangling="$dangling $(grep -rlE "$reference" "$root/skills"/matt-*/)"
@@ -651,10 +698,9 @@ else
   fail "the per-repo reviewers install nowhere globally:$leaked"
 fi
 
-# Every skill deleted with the per-repo bootstrap was unprefixed, so the prefix rule keeps a
-# deleted name from returning. Two names are deliberate exceptions: `bro` because its conversational
-# command is the user-facing interface, and `use-railway` because its name is an interop surface.
-# Naming both keeps the exception closed to the next unprefixed skill.
+# Every unprefixed name here is a user-facing or upstream interop surface. `bro` is conversational,
+# `use-railway` is written by Railway's installer, and Plannotator's names are written by its own
+# installer. Keeping the explicit patterns here closes the exception to unrelated names.
 #
 # Railway's reason needs the stronger guarantee below: `railway skills install` writes
 # `use-railway` into ~/.claude/skills and every other tool dir it detects. README's "use-railway,
@@ -665,16 +711,16 @@ unprefixed_skill=""
 for root in "$claude" "$opencode"; do
   for installed in "$root"/skills/*/; do
     case "$(basename -- "${installed%/}")" in
-    lazar-* | matt-* | bro | "$UNPREFIXED_BY_DESIGN") ;;
+    lazar-* | matt-* | plannotator-* | visual-explainer | bro | "$UNPREFIXED_BY_DESIGN") ;;
     *) unprefixed_skill="$unprefixed_skill ${installed%/}" ;;
     esac
   done
 done
 
 if [ -z "${unprefixed_skill// /}" ]; then
-  pass "every installed skill is prefixed except bro and use-railway"
+  pass "every installed skill uses a harness or upstream-owned name"
 else
-  fail "every installed skill is prefixed except bro and use-railway:$unprefixed_skill"
+  fail "every installed skill uses a harness or upstream-owned name:$unprefixed_skill"
 fi
 
 for root in "$claude" "$opencode"; do
@@ -1333,6 +1379,11 @@ seed_skill "$PARITY_HOME/.config/opencode/skill/smuggled-skill" "via the singula
 seed_skill "$PARITY_HOME/.agents/skills/use-railway" \
   "RAILWAY CLI copy, newer than the pin" "railway cli body, a revision ahead of the lockfile"
 
+# Plannotator's installer creates the same shadow: an independently updated copy in ~/.agents that
+# OpenCode reads ahead of the harness's pin. This is the exact local state that prompted vendoring.
+seed_skill "$PARITY_HOME/.agents/skills/plannotator-review" \
+  "Plannotator installer copy, newer than the pin" "plannotator installer body"
+
 # The shadow, and the reason a file-landed assertion is vacuous here. This is a name the harness
 # *does* ship, planted in the root that outranks the one the harness installs it to. Leave
 # ~/.agents/skills alone and every assertion above still passes — lazar-tldraw's SKILL.md is on
@@ -1383,6 +1434,13 @@ if command -v opencode >/dev/null 2>&1; then
     fail "before the install, OpenCode reads the Railway CLI's use-railway out of ~/.agents/skills: got '$(before_location use-railway)'"
   fi
 
+  if [ "$(before_location plannotator-review)" = \
+    "$parity_agents_unresolved/plannotator-review/SKILL.md" ]; then
+    pass "before the install, OpenCode reads Plannotator's copy out of ~/.agents/skills"
+  else
+    fail "before the install, OpenCode reads Plannotator's copy out of ~/.agents/skills: got '$(before_location plannotator-review)'"
+  fi
+
   for live in neobrutalist-pop smuggled-skill; do
     if [ -n "$(before_location "$live")" ]; then
       pass "before the install, OpenCode really does read $live out of the root it was seeded in"
@@ -1396,7 +1454,7 @@ fi
 
 parity_report=$(run_installer "$PARITY_HOME") || fail "the installer runs against seeded extra roots"
 
-for doomed in neobrutalist-pop use-railway lazar-tldraw; do
+for doomed in neobrutalist-pop use-railway plannotator-review lazar-tldraw; do
   if printf '%s\n' "$parity_report" | grep -qF -- "delete  $parity_agents_real/$doomed"; then
     pass "the install names ~/.agents/skills/$doomed before purging it"
   else
@@ -1535,6 +1593,15 @@ if command -v opencode >/dev/null 2>&1; then
     fail "the use-railway OpenCode resolves comes from a root the harness installs to: got '$railway_location'"
     ;;
   esac
+
+  plannotator_location=$(location_of plannotator-review)
+
+  if [ -n "$plannotator_location" ] &&
+    cmp -s -- "$HARNESS_SOURCE/skills/plannotator-review/SKILL.md" "$plannotator_location"; then
+    pass "the plannotator-review OpenCode resolves is the harness's pinned copy"
+  else
+    fail "the plannotator-review OpenCode resolves is the harness's pinned copy: got '$plannotator_location'"
+  fi
 
   # The acceptance criterion, stated as the two sets rather than as a list of names: Claude Code
   # loads exactly what is in its skills dir, OpenCode loads what it resolved, and after a cutover

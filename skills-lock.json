@@ -144,6 +144,54 @@
       "sourceType": "github",
       "skillPath": "skills/productivity/writing-great-skills/SKILL.md",
       "computedHash": "4deb21855fb4deeeb1b8217b041faff003fd0c915d24a22f636851c520bc9c5c"
+    },
+    "plannotator-annotate": {
+      "source": "backnotprop/plannotator",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "apps/skills/core/plannotator-annotate/SKILL.md",
+      "computedHash": "5b1f7d375299f4fc10ae9325f49bba6a811ef6adc990e4928456da4ab2e05462"
+    },
+    "plannotator-compound": {
+      "source": "backnotprop/plannotator",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "apps/skills/extra/plannotator-compound/SKILL.md",
+      "computedHash": "b565361cad06ac5db31940f9f0a6c18f6d3a9521b979350ae6948494d1ba0883"
+    },
+    "plannotator-last": {
+      "source": "backnotprop/plannotator",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "apps/skills/core/plannotator-last/SKILL.md",
+      "computedHash": "b4555aae427c95867fcf32820e4e3dd6ec249f9b6540eede747dd7772ffdc18e"
+    },
+    "plannotator-review": {
+      "source": "backnotprop/plannotator",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "apps/skills/core/plannotator-review/SKILL.md",
+      "computedHash": "8b811a572b96c3dd08a944b3a6a5369bac32f08ea6a3e837c001cf4ed6235a14"
+    },
+    "plannotator-setup-goal": {
+      "source": "backnotprop/plannotator",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "apps/skills/extra/plannotator-setup-goal/SKILL.md",
+      "computedHash": "514ee10638ba0aa245a67fffa65fceaf5983875bd57f3a074ae856e0d0702601"
+    },
+    "plannotator-visual-explainer": {
+      "source": "backnotprop/plannotator",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "apps/skills/extra/plannotator-visual-explainer/SKILL.md",
+      "computedHash": "b70484fd259b8fb657145bf03009aaf2d9b249cb49a11a7d63f7532bac7db56c"
+    },
+    "visual-explainer": {
+      "source": "nicobailon/visual-explainer",
+      "sourceType": "github",
+      "skillPath": "plugins/visual-explainer/SKILL.md",
+      "computedHash": "62a18fec2973791addc538fa78fcafd900964f653f725720180781b9f8368b31"
     }
   }
 }
