@@ -541,10 +541,10 @@ case "${note_path#\~/}" in
 esac
 
 pinned=$(lockfile_skills)
-if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 31 ]; then
-  pass "skills-lock.json pins all 31 vendored skills"
+if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 34 ]; then
+  pass "skills-lock.json pins all 34 vendored skills"
 else
-  fail "skills-lock.json pins all 31 vendored skills"
+  fail "skills-lock.json pins all 34 vendored skills"
 fi
 
 # The reason lazar-tldraw is vendored rather than hand-kept: an upstream nobody pins is an

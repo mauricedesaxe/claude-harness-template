@@ -76,12 +76,12 @@ else
 fi
 
 # --- a body mentioning the key is not frontmatter, and must survive --------------------------
-# The strip stops at the closing `---`, so a skill that documents the flag (writing-great-skills
-# does exactly this) keeps its prose.
+# The strip stops at the closing `---`, so a skill that documents the flag keeps its prose. No
+# vendored SKILL.md does today, so the fixture below is what holds the cut in place.
 
 cat >"$fixture/SKILL.md" <<'EOF'
 ---
-name: writing-great-skills
+name: writing-for-agents
 description: How to write a skill.
 disable-model-invocation: true
 ---
