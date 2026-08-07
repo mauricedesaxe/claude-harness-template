@@ -552,7 +552,7 @@ similar earns its keep only against §13's bar.
 
 ---
 
-## §25. Realtime — polling first
+## §25. Realtime: polling first
 
 **Rule.** **Default to polling** for any "the UI should reflect the latest server
 state" need. Reach for **WebSockets, SSE, or webhooks only when polling
