@@ -42,11 +42,16 @@ else
 fi
 
 HEADERS=(
-  -H "Authorization: Bearer $TOKEN"
   -H "Content-Type: application/json"
   -H "X-Railway-Skill-Id: $SKILL_ID"
   -H "X-Railway-Skill-Version: $SKILL_VERSION"
   -H "X-Railway-Agent-Session: $RAILWAY_AGENT_SESSION"
 )
 
-curl -s https://backboard.railway.com/graphql/v2 "${HEADERS[@]}" -d "$PAYLOAD"
+# Keep the token and the request body out of argv: /proc/<pid>/cmdline is
+# readable by any other local user, so anything passed as an argument leaks on a
+# shared host. The bearer goes in through --config on a pipe, the payload on stdin.
+printf '%s' "$PAYLOAD" | curl -s https://backboard.railway.com/graphql/v2 \
+  "${HEADERS[@]}" \
+  --config <(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN") \
+  -d @-

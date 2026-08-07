@@ -117,7 +117,7 @@ skills/
   lazar-ship/               bookmark → push → PR → gate → rebase-merge → close out on the tracker
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
-  matt-*/                   Matt Pocock's 22 skills, vendored (see below)
+  matt-*/                   Matt Pocock's 25 skills, vendored (see below)
   use-railway/              Railway ops, vendored — unprefixed on purpose (see below)
                             all are generated — edit the upstream or the patch, not the file
 docs/
@@ -257,7 +257,9 @@ Five upstreams are vendored through the [`skills` CLI](https://skills.sh):
 [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer) as the visual
 dependency Plannotator delegates to.
 Nothing here is hand-edited, so there is nothing to hand-merge and no local edits an update could
-lose:
+lose. `lazar-tldraw` is the one exception. Its divergence lives in `patches/lazar-tldraw.patch`,
+re-applied on every run. Edit the vendored file and you have to run `--regen-patch`, or the next
+vendor reverts the edit:
 
 ```sh
 ./vendor-skills.sh --update    # pull upstream's current content and repin the lockfile
@@ -286,14 +288,15 @@ would call that built-in instead of `matt-code-review`.
 
 That makes the vendored prose diverge from upstream, which is a bug everywhere except here: the
 rename is a step of the vendor script, re-derived from scratch on every run and never
-hand-maintained, so it survives each future update without anyone remembering it. Only the 22
+hand-maintained, so it survives each future update without anyone remembering it. Only the 25
 vendored names are rewritten, so Claude Code's own `/compact` still means `/compact`, and only
 where a reference and not a path is being written, so `docs/agents/triage-labels.md` and the
-route `/prototype/<name>` are left alone.
+route `/prototype/<name>` are left alone. Every file in a skill is rewritten, not the markdown
+alone: `matt-wizard` ships a `template.sh` that names `/wizard` in its header.
 
 ### The invocation lock, stripped
 
-Upstream ships 13 of its 22 skills with `disable-model-invocation: true`, which makes them
+Upstream ships 14 of its 25 skills with `disable-model-invocation: true`, which makes them
 reachable only by a hand-typed slash command. The vendor removes that line.
 
 The flag guards against an agent spontaneously firing an expensive workflow, which is a real
@@ -305,9 +308,11 @@ written.
 
 It is a frontmatter transform rather than a patch for the same reason the prefix is: the patch tool
 matches context exactly and refuses to fuzz, so a patch would break the next time upstream edited
-anything near that frontmatter. The strip stops at the closing `---`, so a skill that *documents*
-the flag in its prose keeps it — `matt-writing-great-skills` does exactly that, and
-`test/model-invocation.sh` pins it, along with leaving an explicit `false` alone.
+anything near that frontmatter. The strip stops at the closing `---`, so prose that *documents* the
+flag keeps it. It also reads `SKILL.md` alone, so a supporting file is out of its reach either way.
+No vendored `SKILL.md` documents the flag today: upstream moved that prose into
+`matt-writing-for-agents`'s `SKILL-MECHANICS.md` at v1.2.0. `test/model-invocation.sh` pins the
+frontmatter cut on a fixture instead, along with leaving an explicit `false` alone.
 
 Each skill still gates itself in its own instructions, and `CLAUDE.md`'s "nudge, don't nag, don't
 auto-run" rule already covers this class of skill. If a specific skill turns out to need the guard

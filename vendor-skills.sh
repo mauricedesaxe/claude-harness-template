@@ -52,8 +52,8 @@ VISUAL_EXPLAINER_UPSTREAM="nicobailon/visual-explainer"
 VISUAL_EXPLAINER_SKILL="visual-explainer"
 VISUAL_EXPLAINER_LICENSE_URL="https://raw.githubusercontent.com/$VISUAL_EXPLAINER_UPSTREAM/HEAD/LICENSE"
 
-# Upstream's engineering/ and productivity/ sets. Its in-progress/, personal/ and deprecated/
-# skills are deliberately not vendored.
+# Upstream's engineering/ and productivity/ sets. Its in-progress/ and deprecated/ skills are
+# deliberately not vendored. Its personal/ bucket is gone: upstream deleted it at v1.2.0.
 UPSTREAM_SKILLS=(
   ask-matt
   code-review
@@ -72,11 +72,14 @@ UPSTREAM_SKILLS=(
   to-tickets
   triage
   wayfinder
+  wizard
   grill-me
   grilling
   handoff
   teach
-  writing-great-skills
+  to-questionnaire
+  wait-what
+  writing-for-agents
 )
 
 usage() {
@@ -190,6 +193,9 @@ strip_model_invocation_lock() {
 # matt-code-review — the very collision the prefix exists to prevent. Only a reference is
 # rewritten, never a path: the leading anchor skips `docs/agents/triage-labels.md`, the trailing
 # one skips the route `/prototype/<name>`.
+#
+# Every file, not just markdown: `matt-wizard` ships a `template.sh` that names `/wizard`, and
+# `test/install-smoke.sh` pins that no installed skill dispatches to an unprefixed name.
 apply_prefix_to_references() {
   local skill_dir=$1 names
   names=$(
@@ -197,7 +203,7 @@ apply_prefix_to_references() {
     printf '%s' "${UPSTREAM_SKILLS[*]}"
   )
   # shellcheck disable=SC2016 # $ENV{} is perl's, and must reach perl unexpanded
-  find "$skill_dir" -type f -name '*.md' -exec \
+  find "$skill_dir" -type f -exec \
     env NAMES="$names" PREFIX="$PREFIX" perl -pi \
     -e 's{(?<=[ `])/($ENV{NAMES})(?![\w/-])}{/$ENV{PREFIX}$1}g' {} + ||
     die "$skill_dir: rewriting cross-references failed"
