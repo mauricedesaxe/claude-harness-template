@@ -701,7 +701,7 @@ Two modes:
   place, and **connection lines** as `arrow`s whose `props.text` names the *action/transition*
   (e.g. "submit → confirmation"). Lay places left→right in flow order. A breadboard answers "what
   leads where", not "what does it look like".
-- **Fat-marker sketch** (rough spatial idea): the UI-wireframe vocabulary above but even coarser, 
+- **Fat-marker sketch** (rough spatial idea): the UI-wireframe vocabulary above but even coarser,
   a few big boxes and arrows, no greeking, just the shape of the thing.
 
 **Conventions:**
