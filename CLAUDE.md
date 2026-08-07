@@ -18,12 +18,12 @@ it.
 
 The spine is paradigm-agnostic and loads in every session. The packs are stack-specific
 (`packs/web.md`, `packs/ai.md`), and Claude Code applies each one when the agent touches a file it
-matches. `§N` numbers are stable IDs that survive a section moving between spine and pack, which is
-what lets the global reviewers cite doctrine instead of restating it. The spine's Section index says
-which file each one lives in.
+matches. `§N` numbers are stable IDs. They survive a section that moves between spine and pack,
+and that is what lets the global reviewers cite doctrine instead of restating it. The spine's
+Section index says which file each one lives in.
 
-**Subagents inherit neither this file nor the rules**, so a subagent handed a `§N` opens the section
-at the path above and reads it before acting on it.
+**Subagents inherit neither this file nor the rules.** A subagent handed a `§N` opens the section
+at the path above and reads it first.
 
 ## The lifecycle
 
@@ -36,8 +36,8 @@ fork that reproduced its original step for step, then drifted.
 
 In three places, and only three.
 
-- **`lazar-review` stands in for `matt-code-review`.** It runs Matt's review as one of its axes, so
-  `matt-code-review` is an implementation detail now and never gets invoked by hand.
+- **`lazar-review` stands in for `matt-code-review`.** It runs Matt's review as one of its axes.
+  `matt-code-review` is an implementation detail now, and it never gets invoked by hand.
 - **`lazar-commit` and `lazar-ship` extend the flow past its end.** `matt-implement` finishes at
   "commit your work to the current branch". No push, no PR, no land. `lazar-commit` records atomic
   conventional commits as the work goes, and `lazar-ship` carries a bookmark through push, PR, CI,
@@ -49,8 +49,8 @@ In three places, and only three.
 ## Writing
 
 `§30` owns the **mechanics**, and they apply to everything written: specs, ADRs, PRDs, issues, PR
-bodies, docs, commit messages, chat. They aren't restated here. This section owns my **voice**, which
-is narrower: it applies to prose posted **as me**, meaning PR reviews, PR and issue comments,
+bodies, docs, commit messages, chat. They aren't restated here. This section owns my **voice**,
+which is narrower. It applies to prose posted **as me**: PR reviews, PR and issue comments,
 standups, tracker comments, and messages to teammates. Anything not posted as me is out of its scope.
 
 - Start sentences with capital letters, like a normal person. Talk directly and forwardly, somewhat
@@ -58,15 +58,15 @@ standups, tracker comments, and messages to teammates. Anything not posted as me
   they add nothing; the occasional one is fine but it is not my signature.
 - Short, direct questions instead of suggestions: "would it be useful to have a branded type?" not
   "Consider whether a branded type might be beneficial here."
-- I hedge when I'm genuinely unsure ("I don't know if", "I'm not sure", "probably worth") and I'm
-  blunt when I am sure ("this is not on this PR", "I think we can ignore the sidebar").
+- I hedge when I'm genuinely unsure: "I don't know if", "I'm not sure", "probably worth".
+  I am blunt when I am sure: "this is not on this PR", "I think we can ignore the sidebar".
 - I say what unblocks things plainly: "happy to approve once that's in."
 - Plain words, no corporate phrasing.
 - Don't over-structure. Headers and bullets only when there are genuinely separate topics. Short
   prose paragraphs are my default.
 
-**Calibration examples** (things I actually wrote; the older ones predate my switch to sentence case
-and fewer interjections, so match their tone and length, not their capitalisation):
+**Calibration examples**, things I actually wrote. The older ones predate my switch to sentence
+case and fewer interjections. Match their tone and length, not their capitalisation:
 
 - "overall code looks good, let me pull and look at the stories myself"
 - "would it be useful to have a branded type?"
@@ -77,9 +77,9 @@ and fewer interjections, so match their tone and length, not their capitalisatio
 
 ### Writing to me
 
-The voice above is for prose posted as me. This is the other half, and it is not optional: how you
-write **to** me, in chat, in a diagnosis, in a handoff, in a summary. `/bro` produces it on demand.
-It should be the default, so that invoking `/bro` never changes anything.
+The voice above is for prose posted as me. This is the other half, and it is not optional. It is how
+you write **to** me: in chat, in a diagnosis, in a handoff, in a summary. `/bro` produces it on
+demand. It should be the default, so that invoking `/bro` never changes anything.
 
 - Lead with the answer in a plain sentence. No preamble and no restating my question back at me.
 - Write it the way you would say it out loud to another engineer. If a sentence would sound strange
@@ -152,9 +152,9 @@ collides (`§28`).
 
 Isolation covers the working copy and nothing else. `.jj` and `.git` metadata and every piece of
 GitHub state (PR numbers, issues, project boards) are shared and can change mid-run. So reuse the
-exact identifiers a command returns, like the PR number from `gh pr create`, never a guessed one, and
-re-read a PR's `headRefName` and `state` before merging it. When terminal output looks duplicated or
-dropped, write it to a file and read it back.
+exact identifiers a command returns, like the PR number from `gh pr create`, never a guessed one.
+Re-read a PR's `headRefName` and `state` before you merge it. When terminal output looks
+duplicated or dropped, write it to a file and read it back.
 
 ## Tracker resolution
 
@@ -184,8 +184,8 @@ the trailing `.git`. So `git@github.com:iconicshift/platform.git` and
 gets no note. Infer, and ask if you must, but there's nowhere to remember the answer.
 
 It's a plain file under `$HOME`, read with `cat` and written with `mkdir -p` plus a redirect. `$HOME`
-is the one thing Claude Code, OpenCode, and a sandbox all agree on, and the note sits under neither
-runtime's home so neither owns it. Claude Code's auto-memory is **not** used: it covers Claude Code
+is the one thing Claude Code, OpenCode, and a sandbox all agree on. The note sits under neither
+runtime's home, so neither owns it. Claude Code's auto-memory is **not** used: it covers Claude Code
 alone and would leave the other two asking every session forever. The note records what the harness
 must not guess at:
 
@@ -208,8 +208,8 @@ Add a convention the moment a repo teaches you one. Editing the note by hand is 
 ## Skills
 
 `matt-*` is Matt Pocock's, `lazar-*` is mine, and `/bro` is my user-invoked plain-language reset.
-Anything else unprefixed is the runtime's or the repo's, bar `use-railway`: Railway's own installer
-writes that name into `~/.claude/skills`, so renaming it restarts the fight it ended. Leave it alone.
+Anything else unprefixed is the runtime's or the repo's, bar `use-railway`. Railway's own installer
+writes that name into `~/.claude/skills`, so a rename restarts the fight it ended. Leave it alone.
 Reach for Matt's through `/matt-ask-matt`, not from memory. My `lazar-*` set has seven:
 
 | Skill | Reach for it when |
