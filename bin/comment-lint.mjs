@@ -9,7 +9,8 @@
  * that has a doc-comment form is a comment sitting where §21 says it shouldn't,
  * because the fix is to move it onto the symbol or onto the line. Doc-comments,
  * tooling directives, shebangs, license headers, and trailing on-the-line
- * comments pass. A density cap catches a wall even when each line is allowed.
+ * comments pass. A density cap catches a wall even when each line is allowed. It
+ * weighs lines and characters both, because a wall hides from each one differently.
  *
  * Modes:
  *   comment-lint claude-hook   stdin = Claude Code PostToolUse JSON; writes the §21
@@ -21,8 +22,11 @@
  * linter bug must never brick a session or a commit.
  */
 
-const DENSITY_RATIO = 0.3;
+const DENSITY_LINE_RATIO = 0.3;
 const DENSITY_MIN_COMMENT_LINES = 4;
+const DENSITY_CHAR_RATIO = 0.4;
+/** Four normally-wrapped lines of prose, so both floors admit the same size of why. */
+const DENSITY_MIN_COMMENT_CHARS = 250;
 const LICENSE_HEADER_SCAN_LINES = 5;
 
 const C_STYLE = "c-style";
@@ -90,8 +94,8 @@ function classify(kind, countsToDensity) {
   return { kind, countsToDensity };
 }
 
-function mk(line, raw, kind, countsToDensity) {
-  return { line, snippet: raw.trim(), ...classify(kind, countsToDensity) };
+function mk(line, raw, kind, countsToDensity, chars) {
+  return { line, snippet: raw.trim(), chars, ...classify(kind, countsToDensity) };
 }
 
 function scanCStyle(lines) {
@@ -101,7 +105,7 @@ function scanCStyle(lines) {
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
     if (inBlock) {
-      comments.push(mk(i, raw, blockIsDoc ? "doc" : "loose", true));
+      comments.push(mk(i, raw, blockIsDoc ? "doc" : "loose", true, weightOf(raw)));
       if (raw.includes("*/")) inBlock = false;
       continue;
     }
@@ -115,16 +119,16 @@ function scanCStyle(lines) {
     if (idx === blockIdx && (blockIdx <= lineIdx || lineIdx < 0)) {
       const isDoc = raw.startsWith("/**", idx) || raw[idx + 2] === "*";
       if (raw.indexOf("*/", idx + 2) < 0) { inBlock = true; blockIsDoc = isDoc; }
-      if (isDirective(text)) { comments.push(mk(i, raw, "directive", false)); continue; }
-      if (isDoc) { comments.push(mk(i, raw, "doc", true)); continue; }
-      comments.push(mk(i, raw, trailing ? "trailing" : "loose", true));
+      if (isDirective(text)) { comments.push(mk(i, raw, "directive", false, 0)); continue; }
+      if (isDoc) { comments.push(mk(i, raw, "doc", true, weightOf(text))); continue; }
+      comments.push(mk(i, raw, trailing ? "trailing" : "loose", true, weightOf(text)));
       continue;
     }
     const isDoc = text.startsWith("///") || text.startsWith("//!");
-    if (isDirective(text)) { comments.push(mk(i, raw, "directive", false)); continue; }
-    if (isLicenseHeader(i, text)) { comments.push(mk(i, raw, "license", false)); continue; }
-    if (isDoc) { comments.push(mk(i, raw, "doc", true)); continue; }
-    comments.push(mk(i, raw, trailing ? "trailing" : "loose", true));
+    if (isDirective(text)) { comments.push(mk(i, raw, "directive", false, 0)); continue; }
+    if (isLicenseHeader(i, text)) { comments.push(mk(i, raw, "license", false, 0)); continue; }
+    if (isDoc) { comments.push(mk(i, raw, "doc", true, weightOf(text))); continue; }
+    comments.push(mk(i, raw, trailing ? "trailing" : "loose", true, weightOf(text)));
   }
   return comments;
 }
@@ -134,14 +138,14 @@ function scanPython(lines) {
   let inTriple = null;
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    if (i === 0 && raw.startsWith("#!")) { comments.push(mk(i, raw, "shebang", false)); continue; }
+    if (i === 0 && raw.startsWith("#!")) { comments.push(mk(i, raw, "shebang", false, 0)); continue; }
     const r = scanPythonLine(raw, inTriple);
     inTriple = r.triple;
     if (r.index < 0) continue;
     const text = raw.slice(r.index);
-    if (isDirective(text)) { comments.push(mk(i, raw, "directive", false)); continue; }
-    if (isLicenseHeader(i, text)) { comments.push(mk(i, raw, "license", false)); continue; }
-    comments.push(mk(i, raw, r.codeBefore ? "trailing" : "loose", true));
+    if (isDirective(text)) { comments.push(mk(i, raw, "directive", false, 0)); continue; }
+    if (isLicenseHeader(i, text)) { comments.push(mk(i, raw, "license", false, 0)); continue; }
+    comments.push(mk(i, raw, r.codeBefore ? "trailing" : "loose", true, weightOf(text)));
   }
   return comments;
 }
@@ -198,20 +202,48 @@ function pickFirst(a, b) {
   return Math.min(a, b);
 }
 
+/** Non-whitespace only, so a reflow to a different wrap width cannot move the number. */
+function weightOf(text) {
+  return text.replace(/\s/g, "").length;
+}
+
 function lint(fileName, text) {
   const lang = langOf(fileName);
   if (!lang) return { violations: [], density: null };
   const lines = text.split("\n");
   const comments = lang === PYTHON ? scanPython(lines) : scanCStyle(lines);
   const loose = comments.filter((c) => c.kind === "loose");
-  const densityLines = comments.filter((c) => c.countsToDensity).length;
-  const nonBlank = lines.filter((l) => l.trim().length > 0).length || 1;
-  const ratio = densityLines / nonBlank;
-  const density =
-    densityLines >= DENSITY_MIN_COMMENT_LINES && ratio > DENSITY_RATIO
-      ? { commentLines: densityLines, nonBlank, pct: Math.round(ratio * 100) }
-      : null;
-  return { violations: loose, density };
+  const counted = comments.filter((c) => c.countsToDensity);
+  return {
+    violations: loose,
+    density: weighDensity({
+      commentLines: counted.length,
+      nonBlank: lines.filter((l) => l.trim().length > 0).length || 1,
+      commentChars: counted.reduce((sum, c) => sum + c.chars, 0),
+      allChars: weightOf(text) || 1,
+    }),
+  };
+}
+
+/**
+ * Two measures, either of which trips, because a wall hides from each one differently.
+ * Prose wrapped long is few lines and most of the characters; a comment beside every
+ * line of code is most of the lines and few of the characters. Each floor keeps a
+ * genuine short why below the ratio it would otherwise fail.
+ */
+function weighDensity({ commentLines, nonBlank, commentChars, allChars }) {
+  const lineRatio = commentLines / nonBlank;
+  const charRatio = commentChars / allChars;
+  const byLine = commentLines >= DENSITY_MIN_COMMENT_LINES && lineRatio > DENSITY_LINE_RATIO;
+  const byChar = commentChars >= DENSITY_MIN_COMMENT_CHARS && charRatio > DENSITY_CHAR_RATIO;
+  if (!byLine && !byChar) return null;
+  return {
+    commentLines,
+    nonBlank,
+    linePct: Math.round(lineRatio * 100),
+    charPct: Math.round(charRatio * 100),
+    byChar,
+  };
 }
 
 function readStdin() {
@@ -248,15 +280,18 @@ function reasonFor(results) {
         parts.push(`  ${v.snippet.slice(0, 100)}`);
       }
     }
-    if (r.density) {
-      parts.push(
-        `${r.file}: ${r.density.pct}% of the change is comments (${r.density.commentLines} comment lines). That reads as a wall; keep only the load-bearing ones.`
-      );
-    }
+    if (r.density) parts.push(densityLine(r.file, r.density));
     parts.push("");
   }
   parts.push(FIX_MENU);
   return parts.join("\n");
+}
+
+function densityLine(file, d) {
+  const measure = d.byChar
+    ? `${d.charPct}% of the text is comment, across ${d.commentLines} comment line(s)`
+    : `${d.linePct}% of the lines are comment (${d.commentLines} of ${d.nonBlank})`;
+  return `${file}: ${measure}. That reads as a wall; keep only the load-bearing ones.`;
 }
 
 async function runClaudeHook() {
