@@ -5,8 +5,8 @@ description: Commit the changes made in this session as one or more atomic conve
 
 # lazar-commit
 
-Commit the work from this session, now. The bias is toward landing small, atomic commits as
-soon as a logical chunk is finished, not batching a session's worth of edits into one
+Commit the work from this session, now. The bias is toward small, atomic commits that land as
+soon as a logical chunk is finished. Not a session's worth of edits batched into one
 megacommit at the end.
 
 This skill is **jj-native** (PHILOSOPHY §28): the working copy is Jujutsu, colocated with
@@ -49,8 +49,8 @@ jj st                 # files changed in @ vs its parent
 jj diff --stat        # the same, with line counts
 ```
 
-If `@` already holds changes that predate this session (work left in this workspace before
-the conversation started, not yours to claim), they are **not** ours to commit wholesale.
+Sometimes `@` already holds changes that predate this session, left in this workspace before
+the conversation started. They are not yours to claim, and **not** ours to commit wholesale.
 Carve only your files into their own commit with explicit paths (Step 5), or stop and ask. A
 path-less `jj commit` would sweep everything in `@` into one commit and mix unrelated work
 into our change.
@@ -109,9 +109,9 @@ on). Because jj has already snapshotted everything into `@`, the checks run agai
 what you're about to commit.
 
 **Comment gate (harness).** Run the harness comment-lint over the change before committing.
-It enforces the *placement* half of PHILOSOPHY §21 (floating what-comments and walls of prose
-get bounced; doc-comments, directives, shebangs, and trailing on-the-line comments pass), and
-it's the runtime-neutral backstop for the Claude Code write-time hook, so it's what catches a
+It enforces the *placement* half of PHILOSOPHY §21. Floating what-comments and walls of prose
+get bounced. Doc-comments, directives, shebangs, and trailing on-the-line comments pass.
+It is also the runtime-neutral backstop for the Claude Code write-time hook, so it catches a
 comment written under OpenCode or a sandbox where that hook never fired.
 
 ```sh
@@ -119,10 +119,12 @@ LINT="$HOME/.lazar-harness/bin/comment-lint"
 if [ -x "$LINT" ]; then jj diff --git | "$LINT" diff; fi
 ```
 
-The `if` guard is load-bearing: on a machine without the harness bin the whole gate is skipped
-and exits 0 (fail-open), so an absent linter never blocks a commit. When it's present, the
-pipe's exit status is comment-lint's. Exit 0, proceed. Nonzero, the output lists the offending
-comments and the §21 fix order (make the code say it; else attach a doc-comment to the symbol;
+The `if` guard is load-bearing. On a machine without the harness bin, the whole gate is
+skipped and exits 0, so an absent linter never blocks a commit. When it's present, the pipe's
+exit status is comment-lint's. Exit 0, proceed.
+
+Nonzero, and the output lists the offending comments plus the §21 fix order (make the code say
+it; else attach a doc-comment to the symbol;
 else a trailing comment on the line; else move prose to docs). Fix in the working copy, which jj
 re-snapshots into `@`, and re-run. Don't commit over it. This gate is the commit-time
 counterpart to the `clarity-reviewer` agent, which judges comment *content* (the why-vs-what
@@ -142,8 +144,8 @@ Each `-m` becomes its own paragraph. Subject first; the rest become the body. **
 trailers**, no `Co-Authored-By`.
 
 For **multiple atomic commits** from one working copy, run `jj commit <paths>` once per unit
-in **dependency order** (the base change first, since each commit becomes the parent of the
-next), then a final path-less `jj commit -m "..."` to sweep any remainder. Each commit should
+in **dependency order**. The base change goes first, because each commit becomes the parent of
+the next. Then run a final path-less `jj commit -m "..."` to sweep any remainder. Each commit should
 leave the tree buildable. When the whole session is one coherent change, a single path-less
 `jj commit -m "..."` is right.
 
@@ -152,9 +154,9 @@ you don't need to move it per commit.
 
 ## When the checks fail
 
-If the verification gate fails, **don't commit**. Read the output, fix the underlying problem
-(lint error, type error, failing test) in the working copy, which jj re-snapshots into `@`
-automatically, re-run the checks, and commit once green. There's nothing to `--amend`: the
+If the verification gate fails, **don't commit**. Read the output and fix the underlying problem in
+the working copy: a lint error, a type error, a failing test. jj re-snapshots it into `@`
+automatically. Re-run the checks, and commit once green. There's nothing to `--amend`: the
 fix just lands in `@` before you finalize it.
 
 If it's already committed, fold the fix in with `jj squash --from <fix> --into <commit>`. No

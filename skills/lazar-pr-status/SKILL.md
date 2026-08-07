@@ -52,8 +52,8 @@ The point is to judge the PR against decisions already made, not from scratch.
 - **PR-level conversation** (not review threads, those are Step 4):
   `env -u GITHUB_TOKEN gh api "repos/$R/issues/<n>/comments"`.
 - **Design docs and ADRs.** Where these live is a per-repo fact, and the machine-local note
-  (see **The machine-local note** in `CLAUDE.md`) records it. Read the note first. On some repos
-  the system design sits in the Linear issue and there's no ADR in the tree at all, so don't go
+  (see **The machine-local note** in `CLAUDE.md`) records it. Read the note first. On some repos the
+  system design sits in the Linear issue, with no ADR in the tree at all. So don't go
   hunting `docs/adr/` on a repo that never had one.
 - **Whatever else reaches**: any connected MCP, the linked issue's own links, a doc the PR body
   points at.
@@ -79,16 +79,16 @@ env -u GITHUB_TOKEN gh api graphql -f query='
           originalCommit { oid } commit { oid } diffHunk } } } } } } }'
 ```
 
-**No reviews at all** (both come back empty) means stop here. Report the TLDR from Steps 1 to 3:
-what the PR does, what the issue asked for, what context bears on it, and what it changes. Then
-say there are no reviews yet and stop. Don't invent a review of your own. This skill being
+**No reviews at all** (both come back empty) means stop here. Report the TLDR from Steps 1 to 3. What
+the PR does, what the issue asked for, what context bears on it, and what it changes. Then
+say there are no reviews yet, and stop. Don't invent a review of your own. This skill being
 useful *before* review starts is the point, not a degraded mode.
 
 ## Step 5: reconstruct the code at each review point
 
 A review is anchored to a sha: `commit_id` on the review, `originalCommit.oid` on the comment.
-That sha is what the reviewer actually saw, and it's the only honest fixed point. **`commit_id`
-on the review is the PR head at the time of review**, so one review is one point in time, however
+That sha is what the reviewer actually saw, and it's the only honest fixed point. **`commit_id` on
+the review is the PR head at the time of review.** So one review is one point in time, however
 many threads hang off it.
 
 Three ways to get the code back, cheapest first:
@@ -117,8 +117,8 @@ sha before you call something a change the author made.
 For each thread, decide which of three it is. The distinction is the whole product.
 
 - **Addressed in code.** The code the comment pointed at changed after the review, in a way that
-  answers it. Establish it in two moves: the compare from that thread's review sha to head touches
-  the thread's `path`, and the change at that region actually does what the comment asked. Then
+  answers it. Establish it in two moves. The compare from that thread's review sha to head touches
+  the thread's `path`. And the change at that region does what the comment asked. Then
   say what the fix was in one line, so I can stop re-checking it.
 - **Answered in a reply only.** The thread has a reply from the author but the code is unchanged
   since the review. **Judge the reply.** "Sufficient" when it answers the question, corrects a
@@ -134,8 +134,8 @@ For each thread, decide which of three it is. The distinction is the whole produ
 - `isOutdated: true` only means the line no longer appears in the current diff. An edit three
   lines away outdates a comment without addressing a word of it. Never read it as "fixed".
 - `isResolved` records that someone clicked resolve. It's evidence about intent, not about code.
-  A resolved thread whose code never moved and whose reply defers is **answered in a reply only**,
-  and worth flagging precisely because the checkbox says otherwise.
+  A resolved thread whose code never moved, and whose reply defers, is **answered in a reply
+  only**. Flag it precisely because the checkbox says otherwise.
 
 Both are worth reporting when they disagree with the code. That disagreement is a finding.
 
@@ -145,8 +145,8 @@ Anything introduced since the PR opened that no review mentioned. This is code t
 unexamined, which is the failure the whole skill guards.
 
 Compare the earliest review's sha to head, take the files the reviews never point at, and read
-what changed there. A file no thread names is a candidate, not automatically drift: a change the
-author made *because* of a review is addressed work, even where it lands in an untouched file.
+what changed there. A file no thread names is a candidate, not automatically drift. A change
+the author made *because* of a review is addressed work, even in an untouched file.
 Read it and decide.
 
 **If there's no drift, say nothing about drift.** No heading, no "no drift found" line, no
@@ -186,24 +186,24 @@ Net: <n> addressed, <n> answered, <n> open<, plus drift in <n> files>.
 
 ## This doesn't write unless I ask it to
 
-Nothing goes out under my name without me seeing it first. The default is the report in front of
-me and nothing published: `gh pr view`, `gh issue view`, `gh api` with GET, and the tracker's read
-tools are the whole surface. Never resolve a thread, never touch the tracker's state, never
+Nothing goes out under my name without me seeing it first. The default is the report in front of me
+and nothing published. `gh pr view`, `gh issue view`, `gh api` with GET, and the tracker's
+read tools are the whole surface. Never resolve a thread, never touch the tracker's state, never
 `gh api` with a write method.
 
-The default holds wherever this runs. This report's audience is me, not the PR: it's the briefing
-I read before reviewing someone else's work, so posting it unasked would drop my private notes on
-their PR. That's what makes it different from `lazar-review`, whose output *is* a review and whose
+The default holds wherever this runs. This report's audience is me, not the PR. It's the
+briefing I read before I review someone else's work. To post it unasked would drop my private
+notes on their PR. That's what makes it different from `lazar-review`, whose output *is* a review and whose
 destination *is* the PR.
 
 **Publishing happens only when I ask for it, and only after you ask me.** If I say to post it,
 say what you're about to post and where, then wait for me to confirm. A confirmed post is a PR
-comment (`gh pr comment`) and nothing else: never `gh pr review`, which carries an approval state
+comment (`gh pr comment`) and nothing else. Never `gh pr review`, which carries an approval state
 this skill never formed an opinion on, and never a merge, a close, or an edit to an issue body.
 
-**If nothing answers, don't post.** A sandbox isn't the same thing as an unattended run: a session
-I'm driving has me reading it, an automation run has nobody, and you can't tell which one you're
-in. So treat silence as a no. Say in the report that a post was asked for, that the confirmation
+**If nothing answers, don't post.** A sandbox isn't the same thing as an unattended run. A
+session I'm driving has me reading it, and an automation run has nobody. You can't tell which
+one you're in. So treat silence as a no. Say in the report that a post was asked for, that the confirmation
 went unanswered, and that nothing went out.
 
 The working copy is off limits too. Don't check the PR out, don't fetch, don't switch branches.

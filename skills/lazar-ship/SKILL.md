@@ -13,13 +13,13 @@ description: >
 
 # lazar-ship
 
-End-to-end "land this on trunk". I may be anywhere in the flow (fresh changes, partially
-committed, pushed-no-PR, PR-no-merge) and ship works out where I am and runs only the missing
+End-to-end "land this on trunk". I may be anywhere in the flow: fresh changes, partially
+committed, pushed-no-PR, or PR-no-merge. Ship works out where I am and runs only the missing
 steps. It composes the `lazar-commit` skill for the atomic-commit step; everything else
 (push, PR, merge, follow-ups) is inlined.
 
 This skill is **jj-native** (PHILOSOPHY §28): the working copy is Jujutsu, colocated with
-git. Local version control is jj (workspaces, `jj commit`, bookmarks, `jj git push`); the PR
+git. Local version control is jj: workspaces, `jj commit`, bookmarks, `jj git push`. The PR
 and the merge belong to the code host, and git stays underneath only as the remote those talk
 to.
 
@@ -36,19 +36,19 @@ branch is deleted, the issue is closed out on its tracker, and I'm prompted for 
 ## The code host and the tracker are two different systems
 
 The PR lives where the code lives, so `gh` is right for `gh pr create` and `gh pr merge`
-whenever the remote is GitHub. **The issue does not necessarily live there.** Resolve which
-tracker owns this repo's issues per **Tracker resolution** in `CLAUDE.md`, once, at Step 1,
+whenever the remote is GitHub. **The issue does not necessarily live there.** Resolve
+which tracker owns this repo's issues per **Tracker resolution** in `CLAUDE.md`. Once, at Step 1,
 and use that tracker's own tooling for every issue step: `gh issue view` on GitHub, the
 Linear MCP on Linear, and so on.
 
-The two coincide on a personal GitHub repo and come apart on a work repo whose code is on
+The two coincide on a personal GitHub repo. They come apart on a work repo whose code is on
 GitHub and whose issues are in Linear.
 
 ## Auth quirk: gh keyring vs `GITHUB_TOKEN`
 
-Where the host is GitHub: if both a `GITHUB_TOKEN` env var and a `gh auth login` keyring
-token exist, `gh` prefers the env var, and an ambient one is usually narrower (a CI or
-sandbox token with, say, only `read:packages`). Mutations (`gh pr create`, `gh pr merge`,
+Where the host is GitHub, a `GITHUB_TOKEN` env var and a `gh auth login` keyring token can
+both exist. `gh` prefers the env var, and an ambient one is usually narrower: a CI or
+sandbox token with, say, only `read:packages`. Mutations (`gh pr create`, `gh pr merge`,
 `gh issue create`) need the keyring's `repo` scope. That is the whole reason for the `env -u`
 below, and it's why read calls (`gh pr view`, `gh pr checks`, `gh issue list`) work on either
 token:
@@ -96,9 +96,10 @@ only the Step 7 cleanup differs. Stay in your workspace for every jj, `gh` and t
 operation. Never `cd` into the default workspace to run a step, since its `@` belongs to
 another run.
 
-In jj there's no "current branch": the working copy is always some `@`, with or without a
-bookmark naming it. So the state is just (a) does `@` hold uncommitted work, (b) are there
-commits in `trunk()..@`, (c) is there a bookmark for them and is it pushed, (d) is there an
+In jj there is no "current branch". The working copy is always some `@`, with or without a
+bookmark that names it.
+ So the state is just four questions. (a) Does `@` hold uncommitted work? (b) Are there
+commits in `trunk()..@`? (c) Is there a bookmark for them, and is it pushed? (d) Is there an
 open PR. Decide which steps need to run:
 
 | If…                                                          | Run step(s)            |
@@ -133,8 +134,8 @@ bookmark after committing (Step 3) so it can point at the real tip:
 jj bookmark create <name> -r @-     # @- is the tip commit, since jj commit leaves an empty @
 ```
 
-Because Step 1 already ran `jj git fetch`, if your commits sit on a now-stale trunk, rebase
-before pushing so the PR isn't born stale: `jj rebase -d 'trunk()'` (see Step 6).
+Step 1 already ran `jj git fetch`. So if your commits sit on a now-stale trunk, rebase before
+you push, and the PR isn't born stale: `jj rebase -d 'trunk()'` (see Step 6).
 
 ## Step 3: commit the dirty tree (only if uncommitted changes)
 
@@ -152,8 +153,8 @@ running it inside ship:
 
 <!-- surface:sandbox -->
 
-- **Commit without waiting to be OK'd.** Nobody is watching a transcript here, so an approval
-  gate on the first step is an approval that never arrives, and push, PR, gate and merge all sit
+- **Commit without waiting to be OK'd.** Nobody watches a transcript here, so an approval
+  gate on the first step is an approval that never arrives. Push, PR, gate, and merge all sit
   downstream of it. Waiting strands finished work uncommitted in a
   checkout that's torn down at the end of the run. Commit to `lazar-commit`'s rules and list the
   commits in the Step 9 report, which is the thing here that outlives the sandbox.
@@ -161,8 +162,8 @@ running it inside ship:
 <!-- /surface:sandbox -->
 
 - **Foreign changes in `@`.** jj has no staging area, so `@` already holds everything in the
-  working copy. If Step 1's `jj st` showed changes that predate this work and aren't ours,
-  don't sweep them in: commit only our paths (`jj commit <paths>`), or stop and ask.
+  working copy. Step 1's `jj st` sometimes shows changes that predate this work and aren't ours.
+  Don't sweep them in. Commit only our paths (`jj commit <paths>`), or stop and ask.
 
 The `lazar-commit` skill runs the verification gate (the project's check commands; no git
 hook fires under jj). If it fails, don't commit. Fix and retry before Step 4.
@@ -181,15 +182,15 @@ jj bookmark set <name> -r @-           # advance to the tip (create with `jj boo
 jj git push --bookmark <name>          # first push auto-tracks the remote; later pushes are force-with-lease
 ```
 
-`jj git push --bookmark` is the whole reason not to reach for a raw `git push` here: it
-auto-tracks the remote, and it is **force-with-lease by default**, so it updates the remote
-only if it still matches what jj last fetched. A clean rebase pushes without ceremony and no
-`--force` flag is ever needed. A raw `git push` leaves the bookmark untracked in jj and can
-spawn divergent duplicates. If the push reports that the remote moved underneath you (someone
-else advanced the branch), surface it and re-fetch rather than forcing past the safety check.
+`jj git push --bookmark` is the whole reason not to reach for a raw `git push` here. It
+auto-tracks the remote, and it is **force-with-lease by default**. It updates the remote
+only where that remote still matches what jj last fetched. A clean rebase pushes without
+ceremony, and no `--force` flag is ever needed. A raw `git push` leaves the bookmark untracked in jj and can
+spawn divergent duplicates. The push sometimes reports that the remote moved underneath you, because someone
+else advanced the branch. Surface it and re-fetch rather than forcing past the safety check.
 
-If the project runs its check gate locally on push (a push wrapper that runs the gate before
-`jj git push`), push through that wrapper so the gate fires. A raw `jj git push` bypasses it.
+Some projects run their check gate locally on push, through a wrapper that runs the gate
+before `jj git push`. Push through that wrapper so the gate fires. A raw `jj git push` bypasses it.
 See `CLAUDE.md` for how this project gates.
 
 ## Step 5: open a PR (only if no PR exists)
@@ -204,12 +205,12 @@ Linear, whatever Step 1 resolved), in order:
    `jj log -r 'trunk()..@' --no-graph -T 'description ++ "\n"'`. Look for the key, and for
    `Closes` / `Fixes` / `Refs` next to it.
 
-Resolve to one closing issue: a single match, use it; several, ask which one closes (the rest
-are references); none, ask once whether this PR closes one. Don't fabricate a closing
+Resolve to one closing issue. A single match, use it. Several, ask which one closes, because
+the rest are references. None, ask once whether this PR closes one. Don't fabricate a closing
 reference. A wrong auto-close is worse than none.
 
-Read the issue with the tracker's own tooling to write the PR body from what it actually
-asked for, not from what the diff happens to do.
+Read the issue with the tracker's own tooling. Write the PR body from what the issue asked
+for, not from what the diff happens to do.
 
 ### 5b. Compose and open
 
@@ -220,9 +221,9 @@ Body via heredoc. How the issue is linked depends on whether the tracker *is* th
 
 - **Tracker is the code host** (GitHub issues on a GitHub repo): `Closes #N` at the top, so
   GitHub picks it up and auto-closes on merge.
-- **Tracker is elsewhere** (Linear issues, GitHub code): GitHub has no issue of its own to
-  close, so a `Closes #N` there would be a lie or, worse, would close an unrelated issue that
-  happens to have that number. Link the issue by key and URL instead, and close it out
+- **Tracker is elsewhere**, meaning Linear issues over GitHub code. GitHub has no issue of
+  its own to close. A `Closes #N` there would be a lie, or worse, would close an unrelated
+  issue that happens to carry that number. Link the issue by key and URL instead, and close it out
   yourself in Step 8.
 
 ```markdown
@@ -367,11 +368,11 @@ closes and never moves to done.
 Prompt once: *"Any follow-ups to file from this PR? Things that came up during
 implementation, open seams worth tracking, deferred TODOs, regressions to investigate."*
 
-For each follow-up I name, apply the felt-outcome gate in PHILOSOPHY §30 before writing it
-down: name the product outcome it delivers, and check it's one I'd feel using the product.
+For each follow-up I name, apply the felt-outcome gate in PHILOSOPHY §30 first. Name the
+product outcome it delivers, and check it's one I would feel in the product.
 "Cleaner" and "more testable" don't clear it. Then cross-check the tracker's open issues for
-a duplicate and comment there instead if one exists. If it's new, draft a one-paragraph body
-referencing the PR it surfaced in and file it with the tracker's own tooling
+a duplicate. Comment there instead if one exists. If it's new, draft a one-paragraph body
+that references the PR it surfaced in. File it with the tracker's own tooling
 (`env -u GITHUB_TOKEN gh issue create` on GitHub, the Linear MCP on Linear).
 
 No follow-ups, skip. Don't fabricate work.

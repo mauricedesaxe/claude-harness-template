@@ -33,10 +33,12 @@ the issue-key format and the destination, then gather.
 
 ## How to gather
 
-Gather wide, then narrow. Every command below answers the question you put to it and also carries
-evidence you didn't ask for, and the post comes out wrong in exactly the places you took one
-result at face value. Two habits carry most of it. Read each output for everything it says, not
-only for the field you went in for. And treat a thin or empty result as a fact about the query
+Gather wide, then narrow. Every command below answers the question you put to it, and it also
+carries evidence you didn't ask for. The post comes out wrong in exactly the places you took
+one result at face value.
+
+Two habits carry most of it. Read each output for everything it says, not only for the field
+you went in for. And treat a thin or empty result as a fact about the query
 before you treat it as a fact about the day: a week with nothing in it, next to a local side that
 shows work every day, means the filter is wrong, not that nothing happened.
 
@@ -47,8 +49,8 @@ shows work every day, means the filter is wrong, not that nothing happened.
    Gather from both sides and reconcile them:
 
    - **Remote.** Everything that landed in the window, then split by my part in it. Never scope
-     the merged query to my own authorship. Landing someone else's PR is my work too, and on a
-     repo where I'm the one who lands them, an `--author me` filter hides that whole half of the
+     the merged query to my own authorship. To land someone else's PR is my work too. On a repo
+     where I'm the one who lands them, an `--author me` filter hides that whole half of the
      day:
 
      ```bash
@@ -60,7 +62,7 @@ shows work every day, means the filter is wrong, not that nothing happened.
      landed, and it earns its own bullet ("landed copy changes leftover from John").
 
      **A landed PR does not always say MERGED.** Where trunk takes fast-forward pushes, the PR
-     closes without GitHub ever marking it merged, and its head sha isn't an ancestor of trunk
+     closes without GitHub ever marking it merged. Its head sha isn't an ancestor of trunk
      either, so neither `--state merged` nor an ancestry check finds it. Read trunk's own log for
      the window and match by subject:
 
@@ -88,8 +90,8 @@ shows work every day, means the filter is wrong, not that nothing happened.
 
    - **The names are evidence, not just the commits under them.** A workspace, worktree or
      bookmark is named by whoever cut it, so the list is a record of what I've had open and why.
-     Read it twice. A name carrying a key that doesn't match this repo's issue-key pattern is work
-     tracked somewhere else, and it needs its ref before it can be a bullet, so ask me. A name
+     Read it twice. A name that carries a key not matching this repo's issue-key pattern is work
+     tracked somewhere else. It needs its ref before it can be a bullet, so ask me. A name
      saying what the work *is* (`*-diagnose`, `done-*`, `review-*`) tells you how to phrase it:
      diagnosing a live failure is not the same bullet as shipping a feature. `jj workspace list`
      shows registered workspaces only, so read `.jj/ws/` as well and don't skip the forgotten ones.
@@ -99,25 +101,25 @@ shows work every day, means the filter is wrong, not that nothing happened.
      Don't double-count the same work once as local and once as remote.
 
    - **Date every status field before you quote it.** A PR's `reviewDecision`, and a review's
-     state, are sticky: `CHANGES_REQUESTED` sits there until that same reviewer submits again, so
-     it can be describing last week while the work has moved on twice since. Compare the newest
+     state, are sticky. `CHANGES_REQUESTED` sits there until that same reviewer submits again.
+     So it can describe last week, while the work moved on twice since. Compare the newest
      review's `submittedAt` against the head commit and against local activity before you let it
      name the day's work. When the newest activity is my own review rounds (review-record commits,
      `review-*` workspaces, a round number in a commit subject), the honest line is that I'm
      working through my own automated reviews, not that I'm addressing a teammate's.
 
-3. **Problems:** only things someone other than me could act on: a dependency not ready, a
-   decision I'm waiting on from the team, an environment issue affecting others. My own gating
+3. **Problems:** only things someone other than me could act on. A dependency not ready, a
+   decision I'm waiting on from the team, or an environment issue that affects others. My own gating
    tasks (re-recording cassettes, finishing my own PR) are not problems. Usually `none rn`.
 
 4. **Priorities:** check each open PR's draft state
    (`gh pr list --author <login> --state open --json number,title,isDraft,baseRefName,headRefName`)
-   and phrase the action to match it (open vs finish+open vs land, see the phrasing rule in
-   Rules). Plus the next issues I'm picking up. Note stacking when one builds on another.
+   and phrase the action to match it. Open, finish+open, or land: see the phrasing rule in
+   Rules. Plus the next issues I'm picking up. Note stacking when one builds on another.
 
    Where the local trail shows a cadence I'm partway through, name the step that's actually next
    instead of the generic verb. "work through one more round of automated reviews then dogfood and
-   open PR#424" is what I'll do today; "finish + open PR#424" is only the shape of it. The verb
+   open PR#424" is what I'll do today. "finish + open PR#424" is only the shape of it. The verb
    from the Rules is the floor, not the target.
 
 5. If I've just planned my day in another skill, pull the priorities straight from the plan I
@@ -136,26 +138,26 @@ Confirm the draft with me before I post it. This goes out under my name to a tea
   - `start the Clarity preprocessing pipeline (WCO) for ICON-147 stacked on PR#316 (office extraction)`
   - `mapped out where artefact submission + strategic summary actually stand, what's blocked vs what i can pick up`
 - **One item per line.** Never combine two issues or PRs on one line ("ICON-148 and ICON-146 …"). Split them into separate lines, even when the action is the same.
-- **Links (settled 2026-07-16, Slack now renders markdown):** I turned on markdown rendering in my Slack, so inline markdown links `[text](url)` now work and are the format I want from now on. Wrap the ref word itself in the link, with the short parenthetical name in plain text after it:
+- **Links (settled 2026-07-16, Slack now renders markdown):** I turned on markdown rendering in my Slack. Inline markdown links `[text](url)` now work, and they are the format I want from now on. Wrap the ref word itself in the link, with the short parenthetical name in plain text after it:
   - PRs: `[PR#<n>](<repo-url>/pull/<n>)`, built from the inferred repo, e.g. `land [PR#369](https://github.com/iconicshift/platform/pull/369) (conflict detection, ICON-286)`.
   - Tracker issues: `[<KEY>](<full issue url>)` in the repo's own key format, e.g. `started on [ICON-93](https://linear.app/iconicshift/issue/ICON-93/context-capture-recovery-loop) (context capture recovery loop)`. Use the real URL the tracker's API returns (Linear's `url` field carries the slug; the slug-less `…/issue/ICON-93` form is not what I use). On a GitHub-tracked repo the key is `#<n>` and the URL is the issue URL.
-  - I still copy the post as raw markdown **source** (from the fenced code block), so the markdown links paste straight into Slack and render there, and that's why the whole thing must stay in a code block.
+  - I still copy the post as raw markdown **source**, from the fenced code block. The markdown links then paste straight into Slack and render there. That's why the whole thing must stay in a code block.
   - Inline markdown links don't fire Slack's unfurl previews, so the old "only first 5 previews are shown" caveat no longer applies. Nothing to restructure or work around.
 - **Still hand me the whole post as raw markdown inside a fenced code block**, so I copy the source rather than a rendered preview.
 
 ## Rules
 
-- **A problem is something someone OTHER than me could or should act on.** A genuine problem is cross-team: I'm blocked on a person or a dependency, waiting on a decision, or hitting a team-wide nuisance, something where listing it prompts someone else to do something. Work I can handle entirely on my own is NOT a problem, even when it's hard, tedious, or gating my own other work (e.g. "I still have to re-record my cassettes" is my own task, not a problem). When in doubt, ask: could anyone but me move this? If no, it's not a problem.
+- **A problem is one that someone OTHER than me could or should act on.** A genuine problem is cross-team. I'm blocked on a person or a dependency, waiting on a decision, or hitting a team-wide nuisance. Listing it prompts someone else to act. Work I can handle entirely on my own is NOT a problem, even when it's hard, tedious, or gating my own other work (e.g. "I still have to re-record my cassettes" is my own task, not a problem). When in doubt, ask: could anyone but me move this? If no, it's not a problem.
 - **Do NOT put review requests in Problems.** A PR needing review belongs in Priorities, not Problems. (It came out of the Iconic team asking to stop listing "need a review on PR#X" as a problem, but it holds everywhere.)
 - If nothing meets that bar, Problems is just `none rn`. That's the common case, not a fallback.
-- **Progress = what actually changed since the last standup, stated honestly about its state.** A PR moving to MERGED is progress. A draft PR, and equally a stack that only exists on my machine, is work-in-progress, NOT something "opened for review". Never phrase it as "opened PR#X" or word it so the team thinks it's ready to look at, because that pulls reviewers in before it's ready. If you mention wip work at all, keep it light ("got the X fix together, still wip", "clarity moving along, still wip") and do not detail its internals. That invites scrutiny it isn't ready for and tells the team more than they need.
+- **Progress = what actually changed since the last standup, stated honestly about its state.** A PR moving to MERGED is progress. A draft PR, and equally a stack that only exists on my machine, is work-in-progress, NOT something "opened for review". Never phrase it as "opened PR#X". Never word it so the team thinks it's ready to look at, because that pulls reviewers in early. If you mention wip work at all, keep it light: "got the X fix together, still wip", "clarity moving along, still wip". Do not detail its internals. That invites scrutiny it isn't ready for, and tells the team more than they need.
 - **One bullet per distinct thing done. Do NOT pad Progress with bullets that just explain a single PR**: the files it touched, that checks passed, its internal structure. That's all inside the PR and anyone can click through to see it; it isn't separate work I progressed on. If the day's progress is one PR, Progress is one bullet.
-- **Phrase each priority by the PR's actual state, not the end goal.** The next action depends on where the PR is: not yet a PR → "open PR#X" / "get PR#X up"; a draft / still wip → "finish + open PR#X" (it can't be landed before it's even open for review); already open for review → "land PR#X". Never say "land PR#X" for something that isn't open for review yet, landing is only the priority once it's actually reviewable.
+- **Phrase each priority by the PR's actual state, not the end goal.** The next action depends on where the PR is. Not yet a PR → "open PR#X" or "get PR#X up". A draft or still wip → "finish + open PR#X", because it can't land before it's even open for review. Already open for review → "land PR#X". Never say "land PR#X" for something that isn't open for review yet, landing is only the priority once it's actually reviewable.
 - Keep it short. My updates are a handful of bullets per section, not paragraphs. (Teammates who write longer prose updates, that's their style, not mine.)
 - **Matter-of-fact, no editorialising.** State what happened, not the colour around it. Don't thank people, don't celebrate unblocks, don't narrate dependencies landing ("prompts landed, thanks James" → just "started working on ICON-148"). A review coming back is "got approved by John with some comments I am to address", not a story.
 - **My verbs, exactly:** "address John's review" (never "action" the review), "keep working on" (never "keep finishing"), "started working on", "landed", "got approved".
 - **A review that approved-with-comments is a Priority, not a Problem**. Phrase it "address John's review on PR#X + land". An approval with action items is still the PR's work to absorb; it is never a Problem.
-- **Don't park speculative cross-team questions in Problems.** Whether some finding is really someone else's call (a schema/compliance decision, an ownership question) is something I settle once I'm in the PR and can see what's what, not when drafting the 3 Ps. If you're unsure whether something is a genuine cross-team blocker, that uncertainty is not itself a Problem: leave it out or ask me, don't invent one.
+- **Don't park speculative cross-team questions in Problems.** Some findings are really someone else's call: a schema or compliance decision, an ownership question. I settle that once I'm in the PR and can see what's what, not when drafting the 3 Ps. If you're unsure whether something is a genuine cross-team blocker, that uncertainty is not itself a Problem. Leave it out or ask me. Don't invent one.
 - Voice: plain, lowercase, contractions, occasional "rn". Follow the "writing in my voice" rules in the global CLAUDE.md (no em dashes, no LLM tells, no over-structuring).
 
 ## Calibration sample (Iconic, 2026-06-29)
@@ -191,8 +193,8 @@ Why it landed:
 
 ## Calibration sample (Iconic, 2026-08-04)
 
-The second one I posted unedited, and it's here because the draft I was handed first missed four
-things that were all recoverable from the machine. Read it against **How to gather**.
+I posted the second one unedited. It's here because the draft I was handed first missed four
+things, all of them recoverable from the machine. Read it against **How to gather**.
 
 ```
 *Progress*
@@ -208,21 +210,21 @@ none rn
 - finish + open [PR#433](https://github.com/iconicshift/platform/pull/433) (target shaping, [ICON-341](https://linear.app/iconicshift/issue/ICON-341/founders-can-shape-their-road-map-targets-with-game-gate-revision)), stacked on PR#424
 ```
 
-What the first draft got wrong, and where the answer was sitting:
+What the first draft got wrong, and where the answer sat:
 
-- **"landed copy changes leftover from John" was missing entirely.** The draft ran
+- **"landed copy changes leftover from John" never made the post.** The draft ran
   `--author me --state merged`, got nothing newer than a week back, and reported that nothing
-  landed. Two PRs had merged in the window with `author: graphcs` and `mergedBy: mauricedesaxe`.
+  landed. Two PRs merged in the window with `author: graphcs` and `mergedBy: mauricedesaxe`.
   A week of silence next to a busy local tree was the tell, and one unscoped query with `mergedBy`
   recovers the whole line.
 - **The 287 work is my own automated review rounds, not a teammate's review.** The draft read
   GitHub's `CHANGES_REQUESTED` and wrote "addressing James's review". That review was six days
   old. Local commits said "Record the round-12 review of PR 424", and four `review-*` workspaces
   were open. A twelfth round is nobody's single pass.
-- **WEB-1T went in unlinked, and framed as delivery.** A workspace named `web1s-diagnose` was
-  already in the output the draft had printed, in a key format this repo's Linear doesn't use.
+- **WEB-1T went in unlinked, and framed as delivery.** A workspace named `web1s-diagnose` sat
+  in the output the draft already printed, in a key format this repo's Linear doesn't use.
   That's the moment to ask for the ref, and `*-diagnose` is the moment to say "did diagnosis work"
   rather than "got the diagnostics together".
-- **Priorities named the shape, not the step.** "finish + open PR#424" is true and useless next to
-  "one more round of automated reviews then dogfood and open PR#424", which is the actual next
+- **Priorities named the shape, not the step.** "finish + open PR#424" is true, and useless next to
+  "one more round of automated reviews then dogfood and open PR#424". That is the actual next
   thing given where the review cadence had got to.

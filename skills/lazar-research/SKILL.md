@@ -17,9 +17,9 @@ questions and to synthesize what comes back.
 
 ## 1. Read the issue
 
-Resolve the tracker per **Tracker resolution** in `CLAUDE.md`, then read the issue with that
-tracker's own tooling (`gh issue view` on GitHub, the Linear MCP on Linear, and so on). Read the
-comments too. Prior research often already lives there. A closed issue is still worth
+Resolve the tracker per **Tracker resolution** in `CLAUDE.md`. Then read the issue with that
+tracker's own tooling: `gh issue view` on GitHub, the Linear MCP on Linear, and so on. Read
+the comments too. Prior research often already lives there. A closed issue is still worth
 researching.
 
 The arg is an issue ref in whatever key format that tracker uses, optionally followed by
