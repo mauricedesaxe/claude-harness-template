@@ -7,7 +7,7 @@ Guidance for Codex, OpenCode, and any other agent working in **this** repository
 `~/.config/opencode/AGENTS.md`. Read it as both, because a harness that doesn't hold in its own
 repo doesn't hold anywhere.
 
-It points at the philosophy rather than restating it, and the philosophy is installed, not carried
+It points at the philosophy rather than restating it. The philosophy is installed, never carried
 by a repo: `~/.claude/rules/PHILOSOPHY.md` with the packs under `~/.claude/rules/packs/`, or the
 same files under `~/.config/opencode/rules/`. This repo also holds their **source**, at
 `docs/PHILOSOPHY.md` and `docs/packs/`. Edit the source here; read the installed copy anywhere
@@ -27,6 +27,5 @@ What's specific to this repo, and easy to get wrong:
   `skills/visual-explainer`. Edit upstream or `patches/lazar-tldraw.patch`, then re-run
   `./vendor-skills.sh`.
 - **Never pass `--install` to `install.sh` here.** It honours `$HOME`, `$CLAUDE_CONFIG_DIR` and
-  `$XDG_CONFIG_HOME`, so with the flag it overwrites whatever live harness the shell you are
-  standing in is configured with. Exercise it with `bash test/install-smoke.sh`, which scrubs the
+  `$XDG_CONFIG_HOME`. With the flag it overwrites the live harness your current shell points at. Exercise it with `bash test/install-smoke.sh`, which scrubs the
   environment first. Without the flag it only reports, so running it bare is safe.
