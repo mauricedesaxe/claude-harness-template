@@ -5,9 +5,8 @@ description: The one review command. Runs the global reviewer agents, whatever r
 
 # lazar-review
 
-One review, one verdict. It always runs my global agents, it runs whatever reviewer
-agents the repo ships, and it folds in `matt-code-review`, which is why I never invoke that
-one by hand.
+One review, one verdict. It always runs my global agents, and whatever reviewer agents the
+repo ships. It folds in `matt-code-review` too, which is why I never invoke that one by hand.
 
 ## Step 1: gather the diff
 
@@ -31,8 +30,8 @@ see this working copy at all.
 
 <!-- surface:local -->
 
-**The reviewers share this filesystem.** A subagent here is a tool call on the same disk, so it
-can read work that exists nowhere else yet, and reviewing uncommitted edits is most of the value.
+**The reviewers share this filesystem.** A subagent here is a tool call on the same disk, so
+it reads work that exists nowhere else yet. A review of uncommitted edits is most of the value.
 
 jj snapshots the working copy into `@`, so committed work and uncommitted edits come out in
 one diff. There's no separate staged gather.
@@ -49,8 +48,8 @@ If the path list is empty, say so and stop. There's nothing to review.
 <!-- surface:sandbox -->
 
 **Each reviewer is a sandbox of its own and cannot see this working copy.** A spawned agent
-boots a clean clone of the repo's base branch and never receives this checkout. So a prompt
-naming a path here resolves to nothing on the machine that reads it, and every reviewer fails
+boots a clean clone of the repo's base branch and never receives this checkout. So a prompt that names a
+path here resolves to nothing on the machine that reads it. Every reviewer then fails
 identically after booting a full sandbox to do it.
 
 The review is therefore of the **pushed PR**, which a child fetches for itself:
@@ -62,11 +61,11 @@ env -u GITHUB_TOKEN gh pr view <n> --json commits  # the stack, for git-hygiene-
 ```
 
 **Push first, then fan out.** Reviewers may check the head out to read around a hunk and inspect
-call sites, rather than reading the diff alone. So the head has to be pushed and current before a
-single agent is spawned, and a reviewer spawned ahead of the push races a ref that isn't there yet.
+call sites, rather than reading the diff alone. So the head has to be pushed and current before
+a single agent is spawned. A reviewer spawned ahead of the push races a ref that isn't there.
 
 **Nothing pushed means stop.** No PR is not a small diff to review, it's no diff any reviewer
-can reach. Say there's nothing pushed, name what would have been reviewed, and spawn nobody.
+can reach. Say there's nothing pushed, name what the review would cover, and spawn nobody.
 Pushing belongs to `lazar-ship`, not here, so hand it back rather than pushing to make the
 review possible.
 
@@ -122,8 +121,8 @@ and when it applies. Two things it may say:
 Nothing else is inferred from the description. If it doesn't scope itself, it runs.
 
 **On shadowing.** Agents resolve by name, and a repo's agent wins over a global one with the
-same name. So a repo that ships its own `yagni-reviewer` doesn't add a name to the roster, it
-changes what that name resolves to, and the global copy can't be reached at all. That's the
+same name. So a repo that ships its own `yagni-reviewer` doesn't add a name to the roster. It
+changes what that name resolves to, and the global copy becomes unreachable. That's the
 repo's call to make and the union already handles it. Just don't claim the global one ran:
 note in the report that the repo's version shadowed it.
 
@@ -134,8 +133,8 @@ already, so give it the inputs and nothing more:
 
 1. The diff source, worded as below.
 2. The list of changed paths.
-3. That its findings get converged into one report with everyone else's, so it should be
-   concrete (path, line, the fix) and skip restating its own scope.
+3. That its findings converge into one report with everyone else's. So it should be concrete,
+   with path, line, and the fix, and it should skip restating its own scope.
 
 The diff source is the one input that changes with where this runs, and Step 1 already resolved
 which one applies. Hand it over verbatim:
@@ -158,9 +157,9 @@ Don't pre-filter a reviewer by which files changed, beyond the description-scopi
 A reviewer that sees nothing in its scope returns "no issues found" in seconds, which is the
 expected outcome, not a waste.
 
-`git-hygiene-reviewer` reads the commit graph and the PR, not just the file diff, so its prompt
-gets what the others don't: the resolved base (`trunk()`), the stack as Step 1 resolved it, and
-the PR number from Step 1, or "no PR yet" where Step 1 allowed one. Tell it not to re-run
+`git-hygiene-reviewer` reads the commit graph and the PR, not just the file diff. So its prompt
+gets what the others don't. The resolved base (`trunk()`). The stack as Step 1 resolved it. The
+PR number from Step 1, or "no PR yet" where Step 1 allowed one. Tell it not to re-run
 `jj git fetch`, so it judges the same snapshot everyone else did.
 
 ## Step 4: run matt-code-review with its inputs pinned
@@ -215,9 +214,9 @@ gets a single "no findings" row. A predictable shape is most of the value.
 - **An agent that errored or returned nothing** gets a row saying so. A reviewer that silently
   didn't run is worse than one that failed loudly.
 
-Convergence ranks findings against each other. It does not let one axis mask another, which is
-the thing `matt-code-review` keeps its two axes apart to protect: a Spec finding never gets
-dropped because Standards came back clean.
+Convergence ranks findings against each other. It does not let one axis mask another. That is
+what `matt-code-review` keeps its two axes apart to protect. A Spec finding never gets dropped
+because Standards came back clean.
 
 Pull out the findings. Don't paste raw agent transcripts.
 
@@ -237,8 +236,8 @@ the same, and pass it on to `matt-code-review`: the output is a chat report and 
 
 ## Post the review
 
-**Posting is the deliverable here.** There is no chat for anyone to read and this sandbox is torn
-down when the run ends, so a report you keep to yourself is a review that never happened.
+**Posting is the deliverable here.** There is no chat for anyone to read, and this sandbox is
+torn down when the run ends. A report you keep to yourself is a review that never happened.
 
 The rule this replaces exists to stop anything going out **under Alex's name** that he hasn't read.
 That concern doesn't arise here: the review carries the bot's identity, not his. If a runtime ever
@@ -246,9 +245,9 @@ posts under his personal token, the local rule applies again and this section do
 
 Post the converged report as a PR review or a PR comment. Two limits hold:
 
-- **Only the review.** Merging, closing, editing an issue body, or any other `gh api` write is out
-  of scope, and the read-only rule still covers everything except publishing the report itself.
+- **Only the review.** A merge, a close, an edit to an issue body, or any other `gh api` write
+  is out of scope. The read-only rule covers everything except the report you publish.
 - **Say what didn't run.** A reviewer that was skipped, a `gh` call that failed, a `§N` you couldn't
-  open: name it in the posted review. Nobody is watching the transcript to notice a silent gap.
+  open: name it in the posted review. Nobody watches the transcript to notice a silent gap.
 
 <!-- /surface:sandbox -->

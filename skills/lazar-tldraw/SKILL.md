@@ -42,14 +42,14 @@ there's no viewer and no browser to open an export in, so the export commands be
 `whiteboard` ships with the sandbox and drives the board through a `board` command on PATH
 (`board create`, `board mutate`, `board snapshot`). It owns the record format; read it there.
 
-**Its records are not this file's records**, so don't translate one into the other. The live board
-validates against a later tldraw schema and rejects these shapes outright rather than degrading
+**Its records are not this file's records**, so don't translate one into the other. The live
+board validates against a later tldraw schema. It rejects these shapes outright rather than degrading
 them: labels are `props.richText` rather than `props.text`, arrows bind through standalone
 `binding:` records rather than `props.start.boundShapeId`, and the page is `page:page`. Carrying a
 shape across is how you get a batch rejected whole.
 
-What this file is still good for here is the judgement, not the JSON: whether a diagram is worth
-drawing at all, which diagram type fits, and the layout and label-sizing rules.
+What this file is still good for here is the judgement, not the JSON. Whether a diagram is
+worth drawing at all, which diagram type fits, and the layout and label-sizing rules.
 
 **The loop doesn't wait to be approved.** Locally it runs until the user says approved, done, or
 LGTM. Here the board is live and in front of them the moment it's created, so creating it *is* the
@@ -62,7 +62,7 @@ nobody to give it strands the diagram in a sandbox that's about to be torn down.
 
 ## Overview
 
-Generate modern whiteboard-style diagrams as `.tldr` JSON files and export to PNG/SVG using `@kitschpatrol/tldraw-cli`. tldraw produces clean hand-drawn aesthetic diagrams with rich shape libraries and smooth arrow routing, and it is well-suited for casual or whiteboard-style visualizations.
+Generate modern whiteboard-style diagrams as `.tldr` JSON files. Export to PNG/SVG using `@kitschpatrol/tldraw-cli`. tldraw produces clean hand-drawn diagrams with rich shape libraries and smooth arrow routing. It suits casual or whiteboard-style visualizations.
 
 **Format:** `.tldr` JSON
 **Export:** PNG, SVG (via `@kitschpatrol/tldraw-cli`)
@@ -123,7 +123,7 @@ Skip clarification if the request already specifies these details or is clearly 
 2. **Plan**: identify shapes (geo type per node), connections (arrows with source/target), and layout (TB or LR, group by tier/role). Sketch a coordinate grid before writing JSON.
 3. **Generate**: write the `.tldr` JSON file. Default output dir is the user's working dir; if the user specified a path or directory (e.g. `./artifacts/`), `mkdir -p` it first and write there. Apply the same dir choice to PNG/SVG exports in steps 4 and 7.
 4. **Export draft**: run CLI to produce a PNG for preview.
-5. **Self-check**: use the agent's built-in vision capability to read the exported PNG, catch obvious issues, auto-fix before showing the user (requires a vision-enabled model such as Claude Sonnet/Opus). If vision is unavailable, skip this step.
+5. **Self-check**: use the agent's built-in vision capability to read the exported PNG. Catch obvious issues and auto-fix them before you show the user. This needs a vision-enabled model such as Claude Sonnet or Opus. If vision is unavailable, skip this step.
 6. **Review loop**: show image to user, collect feedback, apply targeted JSON edits, re-export, repeat until approved.
 7. **Final export**: export the approved version to all requested formats; report file paths for both the `.tldr` source and exported image(s).
 
@@ -131,7 +131,7 @@ Skip clarification if the request already specifies these details or is clearly 
 
 After exporting the draft PNG, use the agent's vision capability (e.g., Claude's image input) to read the image and check for these issues before showing the user. If the agent does not support vision, skip self-check and show the PNG directly.
 
-tldraw's own AI agent flags exactly three structural defects: **text overflow** (a box too small for its label), **overlapping text**, and **friendless arrows** (an arrow with an unbound end). The first three rows below target those; size boxes correctly up front (see "Sizing shapes to fit labels") and they rarely occur.
+tldraw's own AI agent flags exactly three structural defects. **Text overflow**, where a box is too small for its label. **Overlapping text**. And **friendless arrows**, meaning an arrow with an unbound end. The first three rows below target those; size boxes correctly up front (see "Sizing shapes to fit labels") and they rarely occur.
 
 | Check | What to look for | Auto-fix action |
 |-------|-----------------|-----------------|
@@ -399,7 +399,7 @@ When multiple arrows connect to the same shape, assign different `normalizedAnch
 
 ### Multiple Arrows Between the Same Two Nodes
 
-The anchor-distribution rule above spreads arrows going to *different* nodes. When **N arrows connect the same pair** (e.g., bidirectional request/response, or several relationships A↔B), anchors can't separate them. instead spread the `bend` values symmetrically so the arrows fan out into distinct arcs:
+The anchor-distribution rule above spreads arrows going to *different* nodes. Sometimes **N arrows connect the same pair**, such as a bidirectional request/response or several relationships A↔B. Anchors can't separate those. Spread the `bend` values symmetrically instead, so the arrows fan out into distinct arcs:
 
 - Pick a max bend `amount` (≈ 30–60; larger for nodes that are far apart).
 - Assign the N arrows bends evenly spaced from `−amount` to `+amount`:
@@ -510,7 +510,7 @@ Example: a size-`m` box labeled `"API Gateway"` (11 chars, 1 line) → `w ≈ 11
 
 **Why this matters:** if a box is too short for its text, tldraw silently **grows it taller** on render (it sets the shape's `growY`), so the box ends up bigger than the `h` you wrote and collides with whatever you placed below it. Sizing correctly up front keeps `growY` at 0 and your layout intact. This is the single most common cause of "the diagram looks cramped / boxes overlap" after export.
 
-**Then scale for the `geo`, and the formula above is for a `rectangle` only.** tldraw lays a label
+**Then scale for the `geo`.** The formula above is for a `rectangle` only. tldraw lays a label
 into the shape's **bounding box**, not into the outline it draws inside that box. So on any shape
 that isn't a full-bleed rectangle, a label sized to `w`×`h` renders *outside the drawn edges*: it
 spills past a diamond's left and right points, past a triangle's bottom corners, past an ellipse's
