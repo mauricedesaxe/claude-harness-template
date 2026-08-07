@@ -1,6 +1,6 @@
 ---
 name: lazar-tldraw
-description: Draw on a tldraw canvas by describing what you want (talk or voice-to-text) — generates .tldr JSON and exports PNG/SVG via @kitschpatrol/tldraw-cli. Use for system-design / architecture diagrams, API / sequence flows, database / ERD schemas, flowcharts, ML diagrams, AND low-fidelity fat-marker UI/UX wireframes + product shape-up sketches. Also use proactively when explaining a system with 3+ components, a data flow, or sketching a screen/flow before building it.
+description: Draw on a tldraw canvas by describing what you want (talk or voice-to-text): generates .tldr JSON and exports PNG/SVG via @kitschpatrol/tldraw-cli. Use for system-design / architecture diagrams, API / sequence flows, database / ERD schemas, flowcharts, ML diagrams, AND low-fidelity fat-marker UI/UX wireframes + product shape-up sketches. Also use proactively when explaining a system with 3+ components, a data flow, or sketching a screen/flow before building it.
 license: MIT
 homepage: https://github.com/Agents365-ai/tldraw-skill
 compatibility: Requires Node.js + @kitschpatrol/tldraw-cli on PATH (macOS/Linux/Windows). Self-check step requires a vision-enabled model (e.g., Claude Sonnet/Opus); gracefully skipped if unavailable.
@@ -62,7 +62,7 @@ nobody to give it strands the diagram in a sandbox that's about to be torn down.
 
 ## Overview
 
-Generate modern whiteboard-style diagrams as `.tldr` JSON files and export to PNG/SVG using `@kitschpatrol/tldraw-cli`. tldraw produces clean hand-drawn aesthetic diagrams with rich shape libraries and smooth arrow routing — well-suited for casual or whiteboard-style visualizations.
+Generate modern whiteboard-style diagrams as `.tldr` JSON files and export to PNG/SVG using `@kitschpatrol/tldraw-cli`. tldraw produces clean hand-drawn aesthetic diagrams with rich shape libraries and smooth arrow routing, and it is well-suited for casual or whiteboard-style visualizations.
 
 **Format:** `.tldr` JSON
 **Export:** PNG, SVG (via `@kitschpatrol/tldraw-cli`)
@@ -82,7 +82,7 @@ Generate modern whiteboard-style diagrams as `.tldr` JSON files and export to PN
 
 **Skip when:** a simple list or table suffices, the user wants a polished business-presentation diagram (prefer drawio-skill), or the user is in a quick Q&A flow.
 
-**When NOT to use it — route elsewhere:**
+**When NOT to use it, route elsewhere:**
 - Logos / solid-color graphics / filled icons: tldraw has **no opaque fill** (`solid` = light tint; white-on-dark can't be reproduced) → use the **drawio** skill or the original vector file.
 - Precise vector geometry or strict (hollow-arrow) UML → **drawio** (or **plantuml** for UML).
 - Auto-layout of many nodes → **mermaid** (tldraw needs manual coordinates).
@@ -100,7 +100,7 @@ tldraw --version
 
 Works identically on macOS, Windows, and Linux.
 
-**First-export note:** `tldraw export` renders through a pinned Chrome build via puppeteer. The first export can fail with `Could not find Chrome (ver. <x>)`. The error names the exact version it needs — install it once, then exports work:
+**First-export note:** `tldraw export` renders through a pinned Chrome build via puppeteer. The first export can fail with `Could not find Chrome (ver. <x>)`. The error names the exact version it needs. Install it once, then exports work:
 
 ```bash
 # The error message names the version; substitute it here
@@ -112,45 +112,45 @@ npx puppeteer browsers install chrome@<version-from-error>
 ## Workflow
 
 Before starting, assess whether the user's request is specific enough. If key details are missing, ask 1-3 focused questions:
-- **Diagram type** — which preset? (Architecture, Flowchart, Sequence, ML/DL, ERD, UML, or general)
-- **Output format** — PNG (default), SVG?
-- **Output location** — default is the user's working dir; honor any explicit path the user gives (e.g. "put it in `./artifacts/`"). Don't ask if they didn't mention one.
-- **Scope/fidelity** — how many components? Any specific technologies or labels?
+- **Diagram type**: which preset? (Architecture, Flowchart, Sequence, ML/DL, ERD, UML, or general)
+- **Output format**: PNG (default), SVG?
+- **Output location**: default is the user's working dir; honor any explicit path the user gives (e.g. "put it in `./artifacts/`"). Don't ask if they didn't mention one.
+- **Scope/fidelity**: how many components? Any specific technologies or labels?
 
 Skip clarification if the request already specifies these details or is clearly simple (e.g., "draw a flowchart of X").
 
-1. **Check deps** — verify `tldraw --version` succeeds; if missing, run `npm install -g @kitschpatrol/tldraw-cli`.
-2. **Plan** — identify shapes (geo type per node), connections (arrows with source/target), and layout (TB or LR, group by tier/role). Sketch a coordinate grid before writing JSON.
-3. **Generate** — write the `.tldr` JSON file. Default output dir is the user's working dir; if the user specified a path or directory (e.g. `./artifacts/`), `mkdir -p` it first and write there. Apply the same dir choice to PNG/SVG exports in steps 4 and 7.
-4. **Export draft** — run CLI to produce a PNG for preview.
-5. **Self-check** — use the agent's built-in vision capability to read the exported PNG, catch obvious issues, auto-fix before showing the user (requires a vision-enabled model such as Claude Sonnet/Opus). If vision is unavailable, skip this step.
-6. **Review loop** — show image to user, collect feedback, apply targeted JSON edits, re-export, repeat until approved.
-7. **Final export** — export the approved version to all requested formats; report file paths for both the `.tldr` source and exported image(s).
+1. **Check deps**: verify `tldraw --version` succeeds; if missing, run `npm install -g @kitschpatrol/tldraw-cli`.
+2. **Plan**: identify shapes (geo type per node), connections (arrows with source/target), and layout (TB or LR, group by tier/role). Sketch a coordinate grid before writing JSON.
+3. **Generate**: write the `.tldr` JSON file. Default output dir is the user's working dir; if the user specified a path or directory (e.g. `./artifacts/`), `mkdir -p` it first and write there. Apply the same dir choice to PNG/SVG exports in steps 4 and 7.
+4. **Export draft**: run CLI to produce a PNG for preview.
+5. **Self-check**: use the agent's built-in vision capability to read the exported PNG, catch obvious issues, auto-fix before showing the user (requires a vision-enabled model such as Claude Sonnet/Opus). If vision is unavailable, skip this step.
+6. **Review loop**: show image to user, collect feedback, apply targeted JSON edits, re-export, repeat until approved.
+7. **Final export**: export the approved version to all requested formats; report file paths for both the `.tldr` source and exported image(s).
 
 ### Step 5: Self-Check
 
 After exporting the draft PNG, use the agent's vision capability (e.g., Claude's image input) to read the image and check for these issues before showing the user. If the agent does not support vision, skip self-check and show the PNG directly.
 
-tldraw's own AI agent flags exactly three structural defects — **text overflow** (a box too small for its label), **overlapping text**, and **friendless arrows** (an arrow with an unbound end). The first three rows below target those; size boxes correctly up front (see "Sizing shapes to fit labels") and they rarely occur.
+tldraw's own AI agent flags exactly three structural defects: **text overflow** (a box too small for its label), **overlapping text**, and **friendless arrows** (an arrow with an unbound end). The first three rows below target those; size boxes correctly up front (see "Sizing shapes to fit labels") and they rarely occur.
 
 | Check | What to look for | Auto-fix action |
 |-------|-----------------|-----------------|
-| Text overflow | Label spills past the shape's border, or the box looks taller than you set (tldraw auto-grows an undersized box) | Increase `w`/`h` to fit the label — see the sizing formula below |
-| Label outside a non-rectangular shape | Label sits inside the shape's bounding box but crosses the drawn outline — past a diamond's points, a triangle's corners, an ellipse's curve | Apply the shape's `geo` factor (see "Sizing shapes to fit labels"), or shorten the label / switch to `rectangle` |
+| Text overflow | Label spills past the shape's border, or the box looks taller than you set (tldraw auto-grows an undersized box) | Increase `w`/`h` to fit the label, see the sizing formula below |
+| Label outside a non-rectangular shape | Label sits inside the shape's bounding box but crosses the drawn outline, past a diamond's points, a triangle's corners, an ellipse's curve | Apply the shape's `geo` factor (see "Sizing shapes to fit labels"), or shorten the label / switch to `rectangle` |
 | Overlapping text | Two text-bearing shapes' labels touch or overlap, hurting legibility | Shift shapes apart by ≥200px |
 | Friendless arrow | An arrow with one end not connected to a shape (floats loose) | Bind both ends: every arrow's `start` and `end` need a `boundShapeId` matching an existing shape |
 | Off-canvas shapes | Shapes at negative coordinates or far from the main group | Move to positive coordinates near the cluster |
 | Arrow-shape overlap | An arrow visually crosses through an unrelated shape | Adjust `bend` value or move endpoints to a different `normalizedAnchor` side |
 | Stacked arrows | Multiple arrows overlap each other on the same path | Distribute `normalizedAnchor` across the shape perimeter (use different x/y values) |
 
-- Max **2 self-check rounds** — if issues remain after 2 fixes, show the user anyway.
+- Max **2 self-check rounds**. If issues remain after 2 fixes, show the user anyway.
 - Re-export after each fix and re-read the new PNG.
 
 ### Step 6: Review Loop
 
 After self-check, show the exported image and ask the user for feedback.
 
-**Targeted edit rules** — for each type of feedback, apply the minimal JSON change:
+**Targeted edit rules.** For each type of feedback, apply the minimal JSON change:
 
 | User request | JSON edit action |
 |-------------|-----------------|
@@ -161,12 +161,12 @@ After self-check, show the exported image and ask the user for feedback.
 | Resize shape X | Update `props.w`/`props.h` |
 | Add arrow from A to B | Append a new arrow record binding to A and B's shape ids |
 | Change label text | Update `props.text` on the matching shape or arrow |
-| Change layout direction | **Full regeneration** — replan the grid and rebuild |
+| Change layout direction | **Full regeneration**: replan the grid and rebuild |
 
 **Rules:**
-- For single-element changes: edit the existing JSON in place — preserves layout tuning from prior iterations.
+- For single-element changes: edit the existing JSON in place, which preserves layout tuning from prior iterations.
 - For layout-wide changes (e.g., swap LR↔TB, "start over"): regenerate full JSON.
-- Overwrite the same `{name}.png` each iteration — do not create `v1`, `v2`, `v3` files.
+- Overwrite the same `{name}.png` each iteration. do not create `v1`, `v2`, `v3` files.
 - After applying edits, re-export and show the updated image.
 - Loop continues until user says approved / done / LGTM.
 - **Safety valve:** after 5 iteration rounds, suggest the user open the `.tldr` file in tldraw.com or the desktop app for fine-grained adjustments.
@@ -208,8 +208,8 @@ After self-check, show the exported image and ask the user for feedback.
 - All shapes go in the `records` array after the page record.
 - All shapes have `"parentId": "page:page1"`.
 - Shape IDs use format `"shape:xxx"` with unique suffix (e.g., `"shape:s1"`, `"shape:a1"`).
-- `index` values are fractional-index keys. Use `"a"` + **one** base-62 character, in order: `"a0"`–`"a9"`, then `"aA"`–`"aZ"`, then `"aa"`–`"az"` (62 ordered keys — enough for any normal diagram).
-- **Do not append a second character: `"a10"` is invalid.** And never use a leading `"b"`/`"c"` (`"b1"`, `"c1"`, `"b0"`) — those encode a longer integer part, so they are malformed fractional keys and trigger `invalidRecords`. Stick to the single-character `"a*"` keys above.
+- `index` values are fractional-index keys. Use `"a"` + **one** base-62 character, in order: `"a0"`–`"a9"`, then `"aA"`–`"aZ"`, then `"aa"`–`"az"` (62 ordered keys, enough for any normal diagram).
+- **Do not append a second character: `"a10"` is invalid.** And never use a leading `"b"`/`"c"` (`"b1"`, `"c1"`, `"b0"`). Those encode a longer integer part, so they are malformed fractional keys and trigger `invalidRecords`. Stick to the single-character `"a*"` keys above.
 
 ---
 
@@ -248,7 +248,7 @@ After self-check, show the exported image and ask the user for feedback.
 ```
 
 **`w` and `h` above are worked examples, not defaults.** They are what the sizing rules below
-yield for a size-`m` `rectangle` labeled `"API Gateway"` — nothing more. Copying `200`/`60` onto a
+yield for a size-`m` `rectangle` labeled `"API Gateway"`, nothing more. Copying `200`/`60` onto a
 shape with a longer label or a non-rectangular `geo` is the single biggest source of unreadable
 diagrams. Compute both from the label and the `geo` before you write the record: see
 "Sizing shapes to fit labels".
@@ -268,7 +268,7 @@ diagrams. Compute both from the label and the `geo` before you write the record:
 | `pentagon` | stages, milestones |
 | `octagon` | stop / terminal / blocking states |
 | `trapezoid` | manual operations, transforms |
-| `rhombus` / `rhombus-2` | parallelograms — I/O steps (left/right slant) |
+| `rhombus` / `rhombus-2` | parallelograms, I/O steps (left/right slant) |
 | `arrow-right` / `arrow-left` / `arrow-up` / `arrow-down` | directional flow blocks, data movement |
 | `x-box` | failed / invalid / rejected states (box with ✕) |
 | `check-box` | passed / validated / done states (box with ✓) |
@@ -399,7 +399,7 @@ When multiple arrows connect to the same shape, assign different `normalizedAnch
 
 ### Multiple Arrows Between the Same Two Nodes
 
-The anchor-distribution rule above spreads arrows going to *different* nodes. When **N arrows connect the same pair** (e.g., bidirectional request/response, or several relationships A↔B), anchors can't separate them — instead spread the `bend` values symmetrically so the arrows fan out into distinct arcs:
+The anchor-distribution rule above spreads arrows going to *different* nodes. When **N arrows connect the same pair** (e.g., bidirectional request/response, or several relationships A↔B), anchors can't separate them. instead spread the `bend` values symmetrically so the arrows fan out into distinct arcs:
 
 - Pick a max bend `amount` (≈ 30–60; larger for nodes that are far apart).
 - Assign the N arrows bends evenly spaced from `−amount` to `+amount`:
@@ -414,7 +414,7 @@ The anchor-distribution rule above spreads arrows going to *different* nodes. Wh
 
 Beyond `geo` and `arrow`, two more shape types are useful for technical diagrams.
 
-### Frame (labeled container — tiers, subsystems, swimlanes)
+### Frame (labeled container: tiers, subsystems, swimlanes)
 
 A `frame` is a native rectangular container with a title. Use it to group a tier or subsystem with a visible boundary; stack several frames to approximate swimlanes.
 
@@ -429,11 +429,11 @@ A `frame` is a native rectangular container with a title. Use it to group a tier
 
 - `props.name` is the title shown at the frame's top-left.
 - **Child shapes set `"parentId": "shape:frame1"`** (not `page:page1`), and their `x`/`y` are **relative to the frame's top-left corner**, not the page. A child at `x: 40, y: 60` sits 40px in and 60px down from the frame's origin.
-- Frames render as a clean (non-hand-drawn) rectangle — good for structural grouping. Arrows can still bind across frames normally.
+- Frames render as a clean (non-hand-drawn) rectangle, good for structural grouping. Arrows can still bind across frames normally.
 
 ### Note (sticky-note annotation / callout)
 
-A `note` is a sticky note — ideal for TODOs, callouts, and comments layered onto a diagram.
+A `note` is a sticky note, ideal for TODOs, callouts, and comments layered onto a diagram.
 
 ```json
 {
@@ -446,9 +446,9 @@ A `note` is a sticky note — ideal for TODOs, callouts, and comments layered on
 }
 ```
 
-- A note has **no `w`/`h`** — it's a fixed square (~200px) that auto-grows for longer text. Don't add `w`/`h`.
+- A note has **no `w`/`h`**. It's a fixed square (~200px) that auto-grows for longer text. Don't add `w`/`h`.
 - `yellow` is the classic sticky color; any palette color works.
-- Use notes sparingly — for annotations *about* the diagram, not as primary nodes (use `geo` for those).
+- Use notes sparingly, for annotations *about* the diagram, not as primary nodes (use `geo` for those).
 
 ---
 
@@ -469,7 +469,7 @@ aa, ab, ac, ... az          ← continue here past aZ; never "a10"
 
 ## Layout Tips
 
-**Spacing — scale with complexity:**
+**Spacing, scale with complexity:**
 
 | Diagram complexity | Nodes | Horizontal gap | Vertical gap |
 |-------------------|-------|----------------|--------------|
@@ -477,10 +477,10 @@ aa, ab, ac, ... az          ← continue here past aZ; never "a10"
 | Medium | 6–10 | 280px | 200px |
 | Complex | >10 | 350px | 250px |
 
-**These gaps are empty space between two shapes' facing edges — they are not a
+**These gaps are empty space between two shapes' facing edges, they are not a
 centre-to-centre pitch, and not a step to add to `x`.** Getting this backwards is the other
 half of "the diagram looks cramped": shapes are sized to their labels, so a fixed step makes the
-real gap *shrink as labels get longer* — a 280px step past a 280px-wide `"Payments Service"` box
+real gap *shrink as labels get longer*, so a 280px step past a 280px-wide `"Payments Service"` box
 leaves exactly 0px, and the two boxes touch. Place each shape from the **previous shape's actual
 size**:
 
@@ -490,7 +490,7 @@ y_next = y_prev + h_prev + vertical_gap
 ```
 
 For a row of shapes with different widths, that means a different step per shape. Centre a row by
-computing its total width (`Σ w + gaps`) first, then laying it out from the left edge — never by
+computing its total width (`Σ w + gaps`) first, then laying it out from the left edge, never by
 assuming every shape is the same size.
 
 **Sizing shapes to fit labels (do this up front, not in self-check):** the `draw` font is wide. Compute `w`/`h` from the label so text never clips. Approximate per-character width and line height for the default `draw` font:
@@ -506,15 +506,15 @@ With `padding = 16` on each side:
 - `w = ceil(longest_line_chars * char_width + 2*padding)`, then round up to the next multiple of 10.
 - `h = ceil(num_lines * line_height + 2*padding)`, rounded up to a multiple of 10.
 
-Example: a size-`m` box labeled `"API Gateway"` (11 chars, 1 line) → `w ≈ 11*15 + 32 = 197 → 200`, `h ≈ 28 + 32 = 60`. Multi-line labels (with `\n`) count the **longest** line for `w` and the line count for `h`. Err slightly large — extra padding looks fine, a too-narrow box hard-wraps a word mid-letters.
+Example: a size-`m` box labeled `"API Gateway"` (11 chars, 1 line) → `w ≈ 11*15 + 32 = 197 → 200`, `h ≈ 28 + 32 = 60`. Multi-line labels (with `\n`) count the **longest** line for `w` and the line count for `h`. Err slightly large: extra padding looks fine, a too-narrow box hard-wraps a word mid-letters.
 
-**Why this matters:** if a box is too short for its text, tldraw silently **grows it taller** on render (it sets the shape's `growY`) — so the box ends up bigger than the `h` you wrote and collides with whatever you placed below it. Sizing correctly up front keeps `growY` at 0 and your layout intact. This is the single most common cause of "the diagram looks cramped / boxes overlap" after export.
+**Why this matters:** if a box is too short for its text, tldraw silently **grows it taller** on render (it sets the shape's `growY`), so the box ends up bigger than the `h` you wrote and collides with whatever you placed below it. Sizing correctly up front keeps `growY` at 0 and your layout intact. This is the single most common cause of "the diagram looks cramped / boxes overlap" after export.
 
-**Then scale for the `geo` — the formula above is for a `rectangle` only.** tldraw lays a label
+**Then scale for the `geo`, and the formula above is for a `rectangle` only.** tldraw lays a label
 into the shape's **bounding box**, not into the outline it draws inside that box. So on any shape
 that isn't a full-bleed rectangle, a label sized to `w`×`h` renders *outside the drawn edges*: it
 spills past a diamond's left and right points, past a triangle's bottom corners, past an ellipse's
-curve. Worst on the shapes the presets reach for most — `triangle` gateways, `diamond` decisions,
+curve. Worst on the shapes the presets reach for most: `triangle` gateways, `diamond` decisions,
 `ellipse` databases, `cloud` external APIs.
 
 Multiply the rectangle's `w`/`h` by the shape's factor, then round up to a multiple of 10:
@@ -539,27 +539,27 @@ Example: `"API Gateway"` in a `triangle` → rectangle size 200×60, then `w = 2
 `h = 60*1.8 = 108 → 110`. In a `diamond` → 400×120.
 
 **The cheaper fix is often a shorter label or a different `geo`.** A `triangle` that needs to say
-`"Payments Service"` wants ~640px of width to do it — at which point use a `rectangle` and carry
+`"Payments Service"` wants ~640px of width to do it, at which point use a `rectangle` and carry
 the meaning in `color`, or shorten the label to `"Gateway"`. Reserve the dramatic shapes for short
 labels.
 
 **Routing corridors:** between shape rows/columns, leave an extra ~80px empty corridor where arrows can route without crossing other shapes. Never place a shape in a gap that arrows need to traverse.
 
-**Grid alignment:** snap all `x`, `y`, `w`, `h` values to **multiples of 10** — this matches tldraw's default `gridSize: 10` and makes manual editing easier.
+**Grid alignment:** snap all `x`, `y`, `w`, `h` values to **multiples of 10**. This matches tldraw's default `gridSize: 10` and makes manual editing easier.
 
 **General rules:**
-- Plan the grid before assigning x/y coordinates — sketch node positions mentally first.
+- Plan the grid before assigning x/y coordinates. Sketch node positions mentally first.
 - Group related nodes in the same horizontal or vertical band.
 - Place heavily-connected "hub" nodes centrally so arrows radiate outward instead of crossing.
 - For wide shapes (like an API Gateway spanning multiple downstream services), set `w` to cover the full span.
 - Center-align a child node under its parent (same center x) to avoid diagonal routing.
-- **Event bus pattern**: place the bus (hexagon) in the **center of the service row**, not below — services on either side reach it with short horizontal arrows (`normalizedAnchor.x = 1` left side, `0` right side), eliminating crossings.
+- **Event bus pattern**: place the bus (hexagon) in the **center of the service row**, not below. Services on either side reach it with short horizontal arrows (`normalizedAnchor.x = 1` left side, `0` right side), eliminating crossings.
 - Horizontal connections never cross vertical nodes in the same row; use them for peer-to-peer and publish connections.
 
 **Avoiding arrow-shape overlap:**
-- Before finalizing coordinates, trace each arrow path mentally — if it must cross an unrelated shape, either move the shape or use `bend` to curve around.
+- Before finalizing coordinates, trace each arrow path mentally. If it must cross an unrelated shape, either move the shape or use `bend` to curve around.
 - For tree/hierarchical layouts: assign nodes to layers (rows), connect only between adjacent layers to minimize crossings.
-- For star/hub layouts: place the hub center, satellites around it — arrows stay short and radial.
+- For star/hub layouts: place the hub center, satellites around it. Arrows stay short and radial.
 
 ---
 
@@ -610,7 +610,7 @@ tldraw doesn't have native lifeline shapes. Approximate with:
 
 ### ML / Deep Learning Model Diagram
 
-For neural network architecture diagrams — useful for paper figures and explainers.
+For neural network architecture diagrams, useful for paper figures and explainers.
 
 | Element | `geo` | `color` | Notes |
 |---------|-------|---------|-------|
@@ -622,7 +622,7 @@ For neural network architecture diagrams — useful for paper figures and explai
 | Loss / Activation | `rectangle` | `red` | Final loss / softmax / activation |
 | Skip connection | arrow with `bend: 30`, `dash: dashed` | `grey` | Curved dashed bypass |
 
-**Tensor shape annotation:** include the dimensions in `props.text` on a second line. tldraw renders `\n` literally inside JSON strings, so use a real newline (the JSON encoder will write `\n`):
+**Tensor shape annotation:** include the dimensions in `props.text` on a second line. Tldraw renders `\n` literally inside JSON strings, so use a real newline (the JSON encoder will write `\n`):
 
 ```
 "text": "Conv2D\n(B, 64, 32, 32)"
@@ -637,7 +637,7 @@ tldraw lacks native table/row shapes. Approximate each entity as a tall rectangl
 | Element | `geo` | `color` | Notes |
 |---------|-------|---------|-------|
 | Entity | `rectangle` (`fill: solid`, `color: light-blue`) | `light-blue` | Title + columns as one multi-line text label |
-| Column list | embedded in `props.text` with `\n` between rows | — | Mark PK with `*` prefix, FK with `>` |
+| Column list | embedded in `props.text` with `\n` between rows | n/a | Mark PK with `*` prefix, FK with `>` |
 | Relationship | arrow with `arrowheadStart: arrow`, `arrowheadEnd: arrow` | `black` | Both ends arrowed for many-to-many |
 | Optional / weak relationship | arrow with `dash: dashed` | `grey` | Dashed for optional FK |
 
@@ -650,8 +650,8 @@ Label the arrow with cardinality (e.g., `1..*`, `0..1`) via `props.text`.
 | Element | `geo` | `color` | Notes |
 |---------|-------|---------|-------|
 | Class | `rectangle` (`fill: solid`, `color: light-blue`) | `light-blue` | Title + attributes + methods as one multi-line `text` |
-| Inheritance | arrow with `arrowheadEnd: triangle` | `black` | tldraw renders a filled `triangle` arrowhead — point it at the parent class |
-| Composition | arrow with `arrowheadStart: diamond`, `arrowheadEnd: none` | `black` | tldraw renders a filled `diamond` head — put it on the owner (whole) end |
+| Inheritance | arrow with `arrowheadEnd: triangle` | `black` | tldraw renders a filled `triangle` arrowhead. Point it at the parent class |
+| Composition | arrow with `arrowheadStart: diamond`, `arrowheadEnd: none` | `black` | tldraw renders a filled `diamond` head. Put it on the owner (whole) end |
 | Aggregation | arrow with `arrowheadStart: diamond` | `black` | Same diamond head; distinguish from composition via a label or note |
 | Association | arrow with `arrowheadEnd: arrow` | `black` | Standard arrow |
 
@@ -661,29 +661,29 @@ Label the arrow with cardinality (e.g., `1..*`, `0..1`) via `props.text`.
 
 ### UI / UX Wireframe (low-fidelity, fat-marker)
 
-Rough screen mockups, not pixel-faithful UI. The hand-drawn look is the point — it signals
+Rough screen mockups, not pixel-faithful UI. The hand-drawn look is the point, it signals
 "this is a sketch, argue with the layout, not the pixels."
 
 | Element | How to draw it |
 |---------|----------------|
 | Screen / viewport boundary | `frame` with the URL or screen name as `props.name`; place all screen content as its **children** (child `x`/`y` are relative to the frame's top-left) |
-| UI region / card / panel | `rectangle`, `fill: none`, `color: grey`, `dash: draw` — an outline box |
-| Button / chip / tag / pill | small `rectangle`, `fill: semi`, `size: s`; color by **role** — blue primary, grey secondary, green go/confirm, red destructive, violet nav/meta, light-blue info |
+| UI region / card / panel | `rectangle`, `fill: none`, `color: grey`, `dash: draw`, an outline box |
+| Button / chip / tag / pill | small `rectangle`, `fill: semi`, `size: s`; color by **role**: blue primary, grey secondary, green go/confirm, red destructive, violet nav/meta, light-blue info |
 | Body text / paragraph (greeking) | thin `rectangle`, `fill: solid`, `color: grey`, `h: 16`, varied `w`; stack 2–3 to imply a paragraph. **Never** write lorem ipsum |
 | Heading / label | `rectangle`, `fill: none`, real text, `size: m`/`l` |
 | Input field | `rectangle`, `fill: none`, placeholder text left-aligned (`align: start`) |
-| Annotation / callout | `note` (sticky) in `yellow` — for design notes *about* the screen |
+| Annotation / callout | `note` (sticky) in `yellow`, for design notes *about* the screen |
 | Meter / status / rating | short `rectangle` whose text is a glyph run (e.g. `●●●●○○`) |
 
 **Conventions:**
-- Keep `font: draw` and `dash: draw` everywhere — the marker aesthetic *is* the low-fi signal.
+- Keep `font: draw` and `dash: draw` everywhere, the marker aesthetic *is* the low-fi signal.
 - One vertical column per screen, regions stacked top→down. For multiple screens (states,
   responsive variants, before/after) place several `frame`s side by side.
 - **Size every box to its label up front** (see "Sizing shapes to fit labels"). A chip that
-  overflows past its card is the #1 wireframe defect — leave ≥20px between a chip's bottom edge
+  overflows past its card is the #1 wireframe defect. Leave ≥20px between a chip's bottom edge
   and its container's bottom edge.
 - Convey hierarchy / importance by **position and size**, not color. Reserve color for role.
-- Greek the prose; spell out only the words that carry a design decision — the headline, the
+- Greek the prose; spell out only the words that carry a design decision: the headline, the
   button labels, the key numbers. That's what makes it readable as a *wireframe* not a mockup.
 
 **Layout:** single column ~700–760px wide inside the frame; ~40px page padding; each row is its
@@ -692,7 +692,7 @@ content height + a ~20px gap. Snap to multiples of 10.
 ### Product Shape-up sketch (breadboard / fat-marker)
 
 Shaping an idea's elements and flow *before* committing to build it (37signals' Shape Up).
-Coarser than a wireframe — deliberately no layout fidelity, so it stays cheap to redraw.
+Coarser than a wireframe, deliberately no layout fidelity, so it stays cheap to redraw.
 
 Two modes:
 
@@ -701,13 +701,13 @@ Two modes:
   place, and **connection lines** as `arrow`s whose `props.text` names the *action/transition*
   (e.g. "submit → confirmation"). Lay places left→right in flow order. A breadboard answers "what
   leads where", not "what does it look like".
-- **Fat-marker sketch** (rough spatial idea): the UI-wireframe vocabulary above but even coarser —
+- **Fat-marker sketch** (rough spatial idea): the UI-wireframe vocabulary above but even coarser, 
   a few big boxes and arrows, no greeking, just the shape of the thing.
 
 **Conventions:**
 - Label the arrows with the *action*, not the data.
 - Keep it small: a shape-up that needs >8 places has outgrown a sketch and wants a real wireframe.
-- Use a `yellow` `note` for the appetite / open question / rabbit-hole callout — the Shape Up
+- Use a `yellow` `note` for the appetite / open question / rabbit-hole callout, the Shape Up
   metadata that isn't part of the flow itself.
 
 ---
@@ -718,10 +718,10 @@ Two modes:
 # Check CLI version
 tldraw --version
 
-# PNG at 2x scale (recommended) — outputs diagram.png in ./
+# PNG at 2x scale (recommended), outputs diagram.png in ./
 tldraw export diagram.tldr -f png --scale 2 -o ./
 
-# SVG — outputs diagram.svg in ./
+# SVG, outputs diagram.svg in ./
 tldraw export diagram.tldr -f svg -o ./
 
 # Transparent background
@@ -730,7 +730,7 @@ tldraw export diagram.tldr -f png --scale 2 --transparent -o ./
 # Dark theme
 tldraw export diagram.tldr -f png --scale 2 --dark -o ./
 
-# Custom output directory (e.g. CI artifacts dir) — create if missing, then export there
+# Custom output directory (e.g. CI artifacts dir), create if missing, then export there
 mkdir -p ./artifacts && tldraw export diagram.tldr -f png --scale 2 -o ./artifacts/
 ```
 

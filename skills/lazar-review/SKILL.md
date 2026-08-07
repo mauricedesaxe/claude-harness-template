@@ -150,7 +150,7 @@ which one applies. Hand it over verbatim:
 <!-- surface:sandbox -->
 
 > the pushed PR, `env -u GITHUB_TOKEN gh pr diff <n>`, which you fetch yourself in your own
-> sandbox — there is no parent working copy for you to read, and no path from one to quote back
+> sandbox. There is no parent working copy for you to read, and no path from one to quote back
 
 <!-- /surface:sandbox -->
 
