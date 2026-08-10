@@ -112,6 +112,7 @@ skills/
   bro/                      user-invoked plain-language reset
   lazar-commit/             atomic conventional commits, jj-native, no AI attribution
   lazar-pr-status/          a PR number → its issue, what's addressed, what's only replied to, drift
+  lazar-qa/                 drive a change in a real browser (preview or local) → bugs, UX, intent gaps
   lazar-research/           an issue's open questions → /deep-research + matt-prototype → a verdict
   lazar-review/             the one review: global agents + the repo's own + matt-code-review
   lazar-ship/               bookmark → push → PR → gate → rebase-merge → close out on the tracker

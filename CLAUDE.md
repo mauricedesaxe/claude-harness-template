@@ -210,11 +210,12 @@ Add a convention the moment a repo teaches you one. Editing the note by hand is 
 `matt-*` is Matt Pocock's, `lazar-*` is mine, and `/bro` is my user-invoked plain-language reset.
 Anything else unprefixed is the runtime's or the repo's, bar `use-railway`. Railway's own installer
 writes that name into `~/.claude/skills`, so a rename restarts the fight it ended. Leave it alone.
-Reach for Matt's through `/matt-ask-matt`, not from memory. My `lazar-*` set has seven:
+Reach for Matt's through `/matt-ask-matt`, not from memory. My `lazar-*` set has eight:
 
 | Skill | Reach for it when |
 |---|---|
 | `lazar-review` | Before a commit, push, or merge. The one review command; see the deviations above. |
+| `lazar-qa` | Exercising a change in a real browser before it ships. Prefers a preview deploy, else hosts locally, drives via the Playwright MCP, and reports bugs, UX gaps, and intent misses to chat or the PR. |
 | `lazar-commit` | A logical chunk of work is done. Record it as atomic conventional commits, as you go, not all at the end. |
 | `lazar-ship` | Landing work on `main`: bookmark, commit, push, PR, CI, rebase merge. Runs only the steps still missing. |
 | `lazar-pr-status` | Re-entering a PR. What each review asked for, what was addressed in code, what was answered only in a reply, what's unaddressed, and any drift since. |
