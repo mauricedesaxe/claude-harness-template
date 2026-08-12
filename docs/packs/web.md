@@ -606,3 +606,73 @@ connections bypass the CDN entirely.
 **Earn-its-keep.** WebSockets / SSE / inbound webhooks earn their keep on a
 named, measured latency or resource problem, not "it would be cooler." The
 complexity tax is real and shows up at the worst time.
+
+---
+
+## §34. UI and UX design principles
+
+**Rule.** Two layers guide the interface. **Visual design** makes it readable and
+hierarchical. **Cognitive fit** makes it match how the user thinks. Both are
+defaults, not matters of taste. A deviation earns its keep the way §1 requires,
+by naming a felt problem the default does not solve.
+
+The primary sources are *Refactoring UI* (Adam Wathan and Steve Schoger) for the
+visual layer, and *Laws of UX* (Jon Yablonski, [lawsofux.com](https://lawsofux.com))
+for the cognitive layer. This section carries the principles that held up across
+both. Cite the source, and do not paraphrase it from memory.
+
+### Visual design
+
+- **Hierarchy is a budget.** Spend size, weight, and color on the few things
+  that matter. Most of a page stays quiet. When everything shouts, nothing is
+  heard.
+- **Space does the grouping.** Use more whitespace than feels comfortable at
+  first. Related items sit close. Unrelated items sit apart. Proximity carries
+  relationship faster than a heading does.
+- **One accent, many grays.** Pick a single hue and use its shades and tints.
+  Lean on grays for the rest. Dark text on a light ground beats light gray on
+  white. Borders and backgrounds separate before saturated color does.
+- **Depth signals interaction.** Shadows and elevation mark what the user can
+  act on. Layer two or three soft shadows rather than drop one hard block. A
+  deliberate style, neo-brutalism or a dense data UI, picks its own vocabulary
+  for the same cue. The principle holds either way.
+- **Type stays readable.** Body text is dark enough and large enough. Line-height
+  is generous on long passages, tighter on headings.
+- **One primary action per view.** Distinguish primary, secondary, and tertiary
+  actions by style, not by color alone.
+
+### Cognitive fit
+
+These are heuristics. Apply them where the interface gives the user a decision
+or a target.
+
+- **Hick's Law.** Decision time grows with the number of options. Cut choices,
+  most of all where the user is under load.
+- **Fitts's Law.** The time to hit a target depends on its size and distance.
+  Make the primary target large and near.
+- **Jakob's Law.** Users expect your product to work like the others they
+  already know. Follow convention unless you have a named reason.
+- **Miller's Law.** Working memory holds about seven items, plus or minus two.
+  Chunk, don't list.
+- **Serial position effect.** First and last items in a sequence are remembered
+  best. Put the key action at an end.
+- **Von Restorff effect.** The item that differs from its neighbors is the one
+  recalled. Make the important thing distinct.
+- **Principle of proximity.** Items placed near each other are perceived as a
+  group. This is the cognitive half of the spacing rule above.
+- **Aesthetic-usability effect.** Users perceive attractive things as more
+  usable. Polish is functional. It raises tolerance for real friction.
+- **Doherty threshold.** A response under about 400 ms feels instant. §20 owns
+  the mechanics. This section owns the perception.
+
+**Why.** An interface that follows these is felt as good without the user
+knowing why. The heuristics are stable, researched, and cheap to apply at design
+time. They are expensive to retrofit, because a hierarchy problem scattered
+across fifty components is fifty edits, not one.
+
+**Earn-its-keep.** A deliberate visual style earns its keep when it serves the
+product. Neo-brutalism, a dense trading UI, a terminal tool: each picks a
+different vocabulary for the same underlying principle. Hierarchy still holds.
+Proximity still groups. The important thing still stands out. Name the style,
+and name which principles it reinterpret. A dense UI that drops hierarchy isn't
+a style, it's a violation.
