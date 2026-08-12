@@ -64,6 +64,7 @@ clause (when deviation is allowed, and what bar a deviation has to clear).
 | §31 | Code style | Spine |
 | §32 | Complexity and deep modules | Spine |
 | §33 | Controlled language | Spine |
+| §34 | UI and UX design principles | packs/web.md |
 
 ---
 
