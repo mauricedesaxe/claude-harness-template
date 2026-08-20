@@ -37,9 +37,9 @@ deliberately not paraphrased here.
 
 The pstack flow runs as written, with these standing overrides.
 
-- **`lazar-review` is the one review command.** It runs the global reviewer agents, the repo's own,
-  and Matt's review as one axis. `pstack-interrogate`, the multi-model adversarial pass, is a step
-  it can call, not a second entry point.
+- **`lazar-review` is the one review command.** It runs only the global doctrine agents, converged
+  into one verdict, and nothing else. Not a repo's own reviewers, and not `pstack-interrogate`, the
+  separate multi-model adversarial pass, which is a different tool for a different job.
 - **`lazar-commit` and `lazar-ship` own the landing.** pstack's Shipping playbook defers to them.
   `lazar-commit` records atomic conventional commits as the work goes, and `lazar-ship` carries a
   bookmark through push, PR, CI, and a rebase merge.
