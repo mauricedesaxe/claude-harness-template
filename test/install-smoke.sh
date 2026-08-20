@@ -163,6 +163,12 @@ assert_same_file "models.md installs as a Claude Code rule" \
 assert_same_file "models.md installs as an OpenCode rule" \
   "$HARNESS_SOURCE/docs/models.md" "$opencode/rules/models.md"
 
+# The per-machine model config is seeded once from the shipped defaults, into ~/.lazar-harness where
+# no runtime owns it. A fresh install creates it; the not-clobbered half is asserted after the
+# reinstall below.
+assert_same_file "a fresh install seeds the machine-local models.md" \
+  "$HARNESS_SOURCE/docs/models.md" "$TEST_HOME/.lazar-harness/models.md"
+
 if [ -n "$(rule_paths "$claude/rules/PHILOSOPHY.md")" ]; then
   fail "the spine carries no paths:, so it loads in every repo"
 else
@@ -836,7 +842,17 @@ mkdir -p -- "$claude/skills/newsjack-detector"
 printf -- '---\nname: newsjack-detector\n---\n' >"$claude/skills/newsjack-detector/SKILL.md"
 : >"$claude/skills/newsjack-detector/.newsjack-installed"
 
+# The machine-local models.md was seeded on the first install; a hand edit to it must outlive a
+# reinstall, because it holds this machine's provider and credit choices.
+printf '\n# EDITED BY THE OPERATOR\n' >>"$TEST_HOME/.lazar-harness/models.md"
+
 reinstall_report=$(run_installer "$TEST_HOME") || fail "installing twice is safe"
+
+if grep -qF 'EDITED BY THE OPERATOR' "$TEST_HOME/.lazar-harness/models.md"; then
+  pass "reinstalling leaves an edited machine-local models.md untouched"
+else
+  fail "reinstalling leaves an edited machine-local models.md untouched"
+fi
 
 if [ -f "$claude/skills/newsjack-detector/SKILL.md" ]; then
   pass "reinstalling leaves a foreign skill another tool installed"

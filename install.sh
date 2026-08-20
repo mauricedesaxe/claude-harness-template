@@ -63,6 +63,12 @@ LAZAR_BIN="$HOME/.lazar-harness/bin"
 SKILLS_MANIFEST="$HARNESS_SOURCE/skills-manifest.txt"
 SKILLS_FOOTPRINT="$HOME/.lazar-harness/installed-skills"
 
+# The per-machine model config the pstack fan-out skills resolve first. It is seeded from the shipped
+# docs/models.md once and never overwritten, so the OpenAI-vs-GLM swap and any per-machine slug edit
+# survive every reinstall. It sits under ~/.lazar-harness beside the tracker notes, owned by no
+# runtime, for the same reason the footprint and the notes do.
+MODELS_LOCAL="$HOME/.lazar-harness/models.md"
+
 # The prefixes and bare names the harness owns, used once to seed the footprint on the first run
 # after this landed, when no footprint exists yet but a prior wholesale install left the harness's
 # skills on disk unrecorded. After that first run the footprint is authoritative and names stop
@@ -169,6 +175,7 @@ report_plan() {
   report_write "$OPENCODE_RULES/PHILOSOPHY.md"
   report_write "$CLAUDE_RULES/models.md"
   report_write "$OPENCODE_RULES/models.md"
+  report_models_local
   report_write "$OPENCODE_HOME/opencode.json" merge
   report_write "$CLAUDE_HOME/settings.json" merge
   report_replace "$CLAUDE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
@@ -281,6 +288,24 @@ report_skills_tracked() {
 write_skills_footprint() {
   mkdir -p -- "$(dirname -- "$SKILLS_FOOTPRINT")"
   LC_ALL=C sort -u -- "$SKILLS_MANIFEST" >"$SKILLS_FOOTPRINT"
+}
+
+# Seed the per-machine model config once. Create-only: an existing file is the user's, edited for
+# their machine's providers and credits, and a reinstall must never clobber it.
+seed_models_local() {
+  [ -e "$MODELS_LOCAL" ] && return 0
+  mkdir -p -- "$(dirname -- "$MODELS_LOCAL")"
+  cp -- "$HARNESS_SOURCE/docs/models.md" "$MODELS_LOCAL"
+}
+
+# The dry-run counterpart: names it a seed when absent, and says it is left alone when present, so the
+# plan never implies it would overwrite an edited file.
+report_models_local() {
+  if [ -e "$MODELS_LOCAL" ]; then
+    printf '  %-7s %s (yours; left as-is)\n' keep "$MODELS_LOCAL"
+  else
+    printf '  %-7s %s (seeded from docs/models.md)\n' seed "$MODELS_LOCAL"
+  fi
 }
 
 # The one arrangement in which emptying a root would empty the harness itself.
@@ -552,6 +577,7 @@ install_philosophy() {
   # beside the spine so a skill finds it at a stable path in whichever runtime it runs.
   cp -- "$HARNESS_SOURCE/docs/models.md" "$CLAUDE_RULES/models.md"
   cp -- "$HARNESS_SOURCE/docs/models.md" "$OPENCODE_RULES/models.md"
+  seed_models_local
   replace_dir "$CLAUDE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   replace_dir "$OPENCODE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   write_opencode_instructions
