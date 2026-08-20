@@ -70,15 +70,17 @@ their output when they run against a thin pool.
 
 ### OpenCode and background-agents (GLM / OpenAI / OpenRouter)
 
-These are placeholders. Set your real slugs in the machine-local override above, because the
-available slugs differ per machine and per subscription.
+No active defaults ship here, because the available slugs differ per machine and per subscription.
+Until you set them in the machine-local override above, every role resolves to the session model, so
+the fan-out skills still run but without vendor diversity. Fill the override to unlock it. The lines
+below are commented examples to copy up and replace with your real slugs:
 
 ```
-code: <your GLM slug>
-code-hard: <your strongest OpenAI or GLM slug>
-code-fast: <your fast GLM slug>
-judge: <your OpenAI slug>
-pool: <GLM slug>, <OpenAI slug>, <optional OpenRouter: deepseek / gemini / minimax>
+# code: glm-4.6
+# code-hard: gpt-5-codex
+# code-fast: glm-4.5-air
+# judge: gpt-5
+# pool: glm-4.6, gpt-5, deepseek-v3, gemini-2.5-pro
 ```
 
 Real vendor diversity is available here, so `pool` should list slugs from different vendors. That is
