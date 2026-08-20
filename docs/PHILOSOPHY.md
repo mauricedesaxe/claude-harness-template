@@ -477,9 +477,13 @@ compile time or commit time, where the fix is cheap.
   repo it's the workspace, not the git worktree. A git worktree isolates files,
   but not jj's single working-copy commit `@`. So jj run from a worktree still
   snapshots the *default* workspace, and concurrent agents collide.
-- **Plan first, attack the plan, gate on the user, then write code.** The `work`
-  skill encodes the workflow, and this is the habit under it. To design in prose
-  costs a paragraph when you get it wrong. To design in code costs more.
+- **Plan in prose, then act; gate on irreversibility, not on the human.** Design
+  first. To design in prose costs a paragraph when you get it wrong, and to
+  design in code costs more. Then proceed on reversible work and present the
+  result. Pause only for the irreversible: a deploy, a force-push to a shared
+  branch, data deletion, a message to a customer. This makes
+  `pstack-principle-never-block-on-the-human` the default, and it retires the
+  older habit of gating every change on the user before code.
 
 **Why.** These habits compound. Each one alone is a small tax. Together they
 shift large classes of bug from "discovered in production" to "caught at the

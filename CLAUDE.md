@@ -27,24 +27,28 @@ at the path above and reads it first.
 
 ## The lifecycle
 
-**`/matt-ask-matt` is the router.** Ask it which skill or flow fits the situation, rather than
-guessing from the skill list. It's the authoritative map of Matt's skills and how they chain, and
-it is deliberately not paraphrased here. Paraphrasing it is exactly how `iconic-work` happened: a
-fork that reproduced its original step for step, then drifted.
+**`pstack-poteto-mode` is the router.** It reads the task, matches one of its playbooks, copies the
+steps in verbatim, and runs the leaf skills each step needs. It works autonomously: it proceeds on
+reversible work and pauses only for the irreversible (deploys, force-push, data deletion, customer
+messages). It replaced `matt-ask-matt`, and its playbooks and 21 `pstack-principle-*` leaves are
+deliberately not paraphrased here.
 
 ### Where my flow deviates
 
-In three places, and only three.
+The pstack flow runs as written, with these standing overrides.
 
-- **`lazar-review` stands in for `matt-code-review`.** It runs Matt's review as one of its axes.
-  `matt-code-review` is an implementation detail now, and it never gets invoked by hand.
-- **`lazar-commit` and `lazar-ship` extend the flow past its end.** `matt-implement` finishes at
-  "commit your work to the current branch". No push, no PR, no land. `lazar-commit` records atomic
-  conventional commits as the work goes, and `lazar-ship` carries a bookmark through push, PR, CI,
-  and a rebase merge.
-- **`lazar-tldraw` gets reached for proactively.** Show the idea, don't only describe it. Diagram any
-  system with three or more components and any data flow, and fat-marker a screen before building it.
-  I react to a sketch faster and more honestly than to finished code.
+- **`lazar-review` is the one review command.** It runs the global reviewer agents, the repo's own,
+  and Matt's review as one axis. `pstack-interrogate`, the multi-model adversarial pass, is a step
+  it can call, not a second entry point.
+- **`lazar-commit` and `lazar-ship` own the landing.** pstack's Shipping playbook defers to them.
+  `lazar-commit` records atomic conventional commits as the work goes, and `lazar-ship` carries a
+  bookmark through push, PR, CI, and a rebase merge.
+- **`lazar-tldraw` and `lazar-qa` get reached for proactively.** Show the idea, don't only describe
+  it, and drive a change through a real browser before it ships. Diagram any system with three or
+  more components and any data flow, and fat-marker a screen before building it.
+- **Three of Matt's skills are retained** for what pstack doesn't cover: `matt-diagnosing-bugs`
+  (reproduce before you touch the code), `matt-codebase-design` (the deep-module vocabulary), and
+  `matt-handoff`.
 
 ## Writing
 
@@ -207,10 +211,11 @@ Add a convention the moment a repo teaches you one. Editing the note by hand is 
 
 ## Skills
 
-`matt-*` is Matt Pocock's, `lazar-*` is mine, and `/bro` is my user-invoked plain-language reset.
-Anything else unprefixed is the runtime's or the repo's, bar `use-railway`. Railway's own installer
-writes that name into `~/.claude/skills`, so a rename restarts the fight it ended. Leave it alone.
-Reach for Matt's through `/matt-ask-matt`, not from memory. My `lazar-*` set has eight:
+`pstack-*` is Lauren Tan's pstack, forked and hand-maintained here. `matt-*` is Matt Pocock's,
+`lazar-*` is mine, and `/bro` is my user-invoked plain-language reset. Anything else unprefixed is
+the runtime's or the repo's, bar `use-railway`. Railway's own installer writes that name into
+`~/.claude/skills`, so a rename restarts the fight it ended. Leave it alone. The engineering flow
+routes through `pstack-poteto-mode`, not from memory. My `lazar-*` set has eight:
 
 | Skill | Reach for it when |
 |---|---|
