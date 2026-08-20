@@ -156,6 +156,13 @@ assert_same_file "the spine installs as a Claude Code rule" \
 assert_same_file "the spine installs as an OpenCode rule" \
   "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$opencode/rules/PHILOSOPHY.md"
 
+# models.md is the per-role model config the pstack fan-out skills read; it has to land beside the
+# spine in both runtimes or a role resolves to nothing.
+assert_same_file "models.md installs as a Claude Code rule" \
+  "$HARNESS_SOURCE/docs/models.md" "$claude/rules/models.md"
+assert_same_file "models.md installs as an OpenCode rule" \
+  "$HARNESS_SOURCE/docs/models.md" "$opencode/rules/models.md"
+
 if [ -n "$(rule_paths "$claude/rules/PHILOSOPHY.md")" ]; then
   fail "the spine carries no paths:, so it loads in every repo"
 else

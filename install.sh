@@ -167,6 +167,8 @@ report_plan() {
   report_write "$OPENCODE_HOME/AGENTS.md"
   report_write "$CLAUDE_RULES/PHILOSOPHY.md"
   report_write "$OPENCODE_RULES/PHILOSOPHY.md"
+  report_write "$CLAUDE_RULES/models.md"
+  report_write "$OPENCODE_RULES/models.md"
   report_write "$OPENCODE_HOME/opencode.json" merge
   report_write "$CLAUDE_HOME/settings.json" merge
   report_replace "$CLAUDE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
@@ -546,6 +548,10 @@ install_philosophy() {
   mkdir -p -- "$CLAUDE_RULES" "$OPENCODE_RULES"
   cp -- "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$CLAUDE_RULES/PHILOSOPHY.md"
   cp -- "$HARNESS_SOURCE/docs/PHILOSOPHY.md" "$OPENCODE_RULES/PHILOSOPHY.md"
+  # models.md is the per-role model config the pstack fan-out skills resolve against. It installs
+  # beside the spine so a skill finds it at a stable path in whichever runtime it runs.
+  cp -- "$HARNESS_SOURCE/docs/models.md" "$CLAUDE_RULES/models.md"
+  cp -- "$HARNESS_SOURCE/docs/models.md" "$OPENCODE_RULES/models.md"
   replace_dir "$CLAUDE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   replace_dir "$OPENCODE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   write_opencode_instructions
