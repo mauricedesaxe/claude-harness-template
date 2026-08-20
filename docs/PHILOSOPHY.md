@@ -69,6 +69,8 @@ clause (when deviation is allowed, and what bar a deviation has to clear).
 
 ## §1. Earn its keep
 
+*The operational form is the `pstack-principle-laziness-protocol` leaf, which a subagent reads and applies. This section carries the why.*
+
 **Rule.** The simpler architecture wins by default. Anything more complex has to
 *earn its keep* before it lands. That covers a second instance, a replica, a queue,
 and a cache layer. It also covers a different language, a different database, an
@@ -120,6 +122,8 @@ concrete defaults. For web/backend that's the TypeScript-first stack in
 ---
 
 ## §4. Modular monolith
+
+*The operational form is the `pstack-principle-model-the-domain` leaf, which a subagent reads and applies. This section carries the why.*
 
 **Rule.** Inside a single deployable, organize code **by business domain**, not
 by technical layer. The folder structure exposes the domains. The inter-module
@@ -174,6 +178,8 @@ domain.
 ---
 
 ## §10. End-to-end type safety
+
+*The operational form is the `pstack-principle-boundary-discipline` leaf, which a subagent reads and applies. This section carries the why.*
 
 **Rule.** Every boundary between machines, processes, and modules is **typed
 end to end**. A schema (Zod / Valibot / Pydantic / serde) parses network responses
@@ -427,6 +433,8 @@ a named way*. Document that named problem in the commit that adopts the build.
 
 ## §14. Code-level discipline
 
+*These habits are formalized as `pstack-principle-*` leaf skills a subagent reads and applies: laziness-protocol, model-the-domain, boundary-discipline, type-system-discipline, prove-it-works, and never-block-on-the-human. This section carries the why.*
+
 **Rule.** A small set of universal coding habits shape every file in every project.
 Not all of them are hard rules. Together they catch entire classes of bug at
 compile time or commit time, where the fix is cheap.
@@ -498,6 +506,8 @@ deviations.
 
 ## §16. Value-type discipline
 
+*The operational form is the `pstack-principle-type-system-discipline` leaf, which a subagent reads and applies. This section carries the why.*
+
 **Rule.** Certain primitive types **lie to you when used naively**. Encode them at
 the boundary so they can't.
 
@@ -549,6 +559,8 @@ commit knows it was deliberate.
 ---
 
 ## §18. Testing philosophy
+
+*The operational form is the `pstack-principle-prove-it-works` leaf, which a subagent reads and applies. This section carries the why.*
 
 **Rule.** **Test behaviour. Climb the fidelity ladder.** Most production bugs
 live at the seams: at integration layers, at I/O boundaries, and in the hand-off
@@ -774,6 +786,8 @@ the system matures and the eval suite stabilizes. Details in §27.
 
 ## §26. Avoid double state: single source of truth, prefer consistency
 
+*The concurrent-writer case is the `pstack-principle-separate-before-serializing-shared-state` leaf, which a subagent reads and applies. This section carries the why.*
+
 **Rule.** The system has **one source of truth** for any given piece of state.
 A second store, a derived index, a cache, or a replicated copy creates state that
 someone must keep in sync. The burden is on that *deviation* to earn its keep.
@@ -827,6 +841,8 @@ strategy *with its failure modes*. The operational cost. Same bar as §1.
 ---
 
 ## §28. Version control: jj (colocated)
+
+*The workspace-isolation rule is the `pstack-principle-separate-before-serializing-shared-state` leaf, which a subagent reads and applies. This section carries the why.*
 
 **Rule.** The working copy is **Jujutsu (jj)**, colocated with git. A `.jj`
 directory sits alongside `.git` at the repo root. git stays underneath as the
@@ -897,6 +913,8 @@ mix of the two is how divergent duplicate commits appear.
 ---
 
 ## §29. Narrative order
+
+*The operational form is the `pstack-principle-minimize-reader-load` leaf, which a subagent reads and applies. This section carries the why.*
 
 **Rule.** Code and prose introduce a concept at the moment it's needed, never
 before. A file opens with its entry point and descends from there. The master
@@ -1112,6 +1130,8 @@ that demands a class or a throw is interface compliance, not a deviation (§14).
 ---
 
 ## §32. Complexity and deep modules
+
+*The operational form is the `pstack-principle-minimize-reader-load` leaf, which a subagent reads and applies. This section carries the why.*
 
 **Rule.** Complexity that cannot be removed belongs behind the smallest honest
 interface that can contain it. Optimize the complexity of the whole system, not
