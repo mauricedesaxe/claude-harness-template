@@ -2,7 +2,7 @@
 name: lazar-research
 description: >
   Answer an issue's open questions without implementing it, and hand back a verdict-first
-  write-up. Web research goes to /deep-research, runnable questions go to matt-prototype.
+  write-up. Web research goes to /deep-research, runnable questions go to a throwaway prototype.
   Never closes the issue. Use when I say "/lazar-research", "research #12", "look into
   ICON-147", "investigate this issue", "is X feasible", or want an issue explored before we
   commit to an approach.
@@ -35,7 +35,7 @@ Turn the target into 3 to 7 falsifiable questions, and sort each into a lane:
 - **The open web** (docs, upstream issues, prior art, how a thing is normally measured) →
   `/deep-research`.
 - **Runnable** ("is the data actually shaped like that", "does this state model hold") →
-  `matt-prototype`.
+  the Prototype playbook in `pstack-poteto-mode`.
 - **This codebase** → read it yourself. It's cheap, and it's the lane where the issue's framing
   turns out to be wrong about the current code. Catching that is a finding.
 
@@ -48,8 +48,9 @@ Hand each web question to **`/deep-research`**, one question per run, phrased sp
 Don't run its pipeline by hand alongside it. It's a workflow bundled with Claude Code, so if it
 isn't available where you're running, say so rather than quietly reimplementing it.
 
-Hand each runnable question to **`matt-prototype`**. A probe that measures something shouldn't
-turn into code I keep by accident, and that skill already builds for the bin.
+Hand each runnable question to the Prototype playbook in `pstack-poteto-mode`
+(`playbooks/prototype.md`). A probe that measures something shouldn't turn into code I keep by
+accident, and that playbook builds throwaway sketches for exactly this.
 
 Synthesize what comes back yourself. A finding you can't trace to a source or a probe is worse
 than no finding.

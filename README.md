@@ -113,12 +113,13 @@ skills/
   lazar-commit/             atomic conventional commits, jj-native, no AI attribution
   lazar-pr-status/          a PR number → its issue, what's addressed, what's only replied to, drift
   lazar-qa/                 drive a change in a real browser (preview or local) → bugs, UX, intent gaps
-  lazar-research/           an issue's open questions → /deep-research + matt-prototype → a verdict
+  lazar-research/           an issue's open questions → /deep-research + a throwaway prototype → a verdict
   lazar-review/             the one review: global agents + the repo's own + matt-code-review
   lazar-ship/               bookmark → push → PR → gate → rebase-merge → close out on the tracker
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
-  matt-*/                   Matt Pocock's 25 skills, vendored (see below)
+  pstack-*/                 the engineering layer: poteto-mode router, playbooks, principle leaves (forked, see below)
+  matt-*/                   Matt Pocock's four kept skills, vendored (see below)
   use-railway/              Railway ops, vendored — unprefixed on purpose (see below)
                             all are generated — edit the upstream or the patch, not the file
 docs/
@@ -280,39 +281,39 @@ The harness owns Plannotator's skill definitions, not its executable or runtime 
 the `plannotator` binary separately on machines that invoke these skills. Sandbox images need the
 same binary before the skills can run there.
 
-Every skill of Matt's is renamed `matt-<name>` on the way in — its directory, its `name:`
-frontmatter, and the `/name` cross-references its prose dispatches through. The prefix is
-load-bearing: upstream
-ships `code-review`, `implement` and `research`, so a skill installed under its own name would
-silently replace Claude Code's built-in `/code-review`, and a body left saying `/code-review`
-would call that built-in instead of `matt-code-review`.
+The four Matt skills the harness still vendors are renamed `matt-<name>` on the way in — the
+directory, the `name:` frontmatter, and the `/name` cross-references the prose dispatches through.
+The rest of Matt's set is retired now that pstack is the engineering layer (see below). The prefix
+is load-bearing: upstream ships `code-review`, so a skill installed under its own name would
+silently replace Claude Code's built-in `/code-review`, and a body left saying `/code-review` would
+call that built-in instead of `matt-code-review`.
 
 That makes the vendored prose diverge from upstream, which is a bug everywhere except here: the
 rename is a step of the vendor script, re-derived from scratch on every run and never
-hand-maintained, so it survives each future update without anyone remembering it. Only the 25
+hand-maintained, so it survives each future update without anyone remembering it. Only the four
 vendored names are rewritten, so Claude Code's own `/compact` still means `/compact`, and only
-where a reference and not a path is being written, so `docs/agents/triage-labels.md` and the
-route `/prototype/<name>` are left alone. Every file in a skill is rewritten, not the markdown
-alone: `matt-wizard` ships a `template.sh` that names `/wizard` in its header.
+where a reference and not a path is being written, so `docs/agents/handoff-labels.md` and the
+route `/code-review/<name>` are left alone. Every file in a skill is rewritten, not the markdown
+alone: a skill that ships a `template.sh` naming a slash command needs the rewrite there too.
 
 ### The invocation lock, stripped
 
-Upstream ships 14 of its 25 skills with `disable-model-invocation: true`, which makes them
-reachable only by a hand-typed slash command. The vendor removes that line.
+Upstream ships most of its skills with `disable-model-invocation: true`, which makes them
+reachable only by a hand-typed slash command. The vendor removes that line from the four it keeps,
+and the pstack fork ships its skills already unlocked.
 
 The flag guards against an agent spontaneously firing an expensive workflow, which is a real
 concern and not the one that bites here. The cost lands on voice-to-text: the agent can name the
 command you should have typed and nothing else, and typing it means abandoning the brain-dump that
-carried the context in the first place. `matt-ask-matt` is itself one of the locked ones, so
-`CLAUDE.md`'s instruction to reach for Matt's skills *through the router* cannot be followed as
-written.
+carried the context in the first place. The router is `pstack-poteto-mode` now, and it has to be
+model-reachable for `CLAUDE.md`'s instruction to route the flow *through it* to be followed from a
+spoken brain-dump at all.
 
 It is a frontmatter transform rather than a patch for the same reason the prefix is: the patch tool
 matches context exactly and refuses to fuzz, so a patch would break the next time upstream edited
 anything near that frontmatter. The strip stops at the closing `---`, so prose that *documents* the
 flag keeps it. It also reads `SKILL.md` alone, so a supporting file is out of its reach either way.
-No vendored `SKILL.md` documents the flag today: upstream moved that prose into
-`matt-writing-for-agents`'s `SKILL-MECHANICS.md` at v1.2.0. `test/model-invocation.sh` pins the
+No vendored `SKILL.md` documents the flag today. `test/model-invocation.sh` pins the
 frontmatter cut on a fixture instead, along with leaving an explicit `false` alone.
 
 Each skill still gates itself in its own instructions, and `CLAUDE.md`'s "nudge, don't nag, don't

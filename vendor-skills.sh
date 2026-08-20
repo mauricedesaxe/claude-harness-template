@@ -60,34 +60,16 @@ VISUAL_EXPLAINER_LICENSE_URL="https://raw.githubusercontent.com/$VISUAL_EXPLAINE
 # the pstack pins already in skills-lock.json rather than recomputing or dropping them.
 PSTACK_UPSTREAM="cursor/plugins"
 
-# Upstream's engineering/ and productivity/ sets. Its in-progress/ and deprecated/ skills are
-# deliberately not vendored. Its personal/ bucket is gone: upstream deleted it at v1.2.0.
+# The four Matt skills the harness still vendors after the pstack migration. pstack-poteto-mode is
+# the router and its playbooks and pstack-principle-* leaves cover the flow Matt's other skills used
+# to, so the rest are retired. `code-review` stays because lazar-review runs it as one axis;
+# `codebase-design` for its deep-module vocabulary; `diagnosing-bugs` for reproduce-before-you-touch;
+# `handoff` for compaction.
 UPSTREAM_SKILLS=(
-  ask-matt
   code-review
   codebase-design
   diagnosing-bugs
-  domain-modeling
-  grill-with-docs
-  implement
-  improve-codebase-architecture
-  prototype
-  research
-  resolving-merge-conflicts
-  setup-matt-pocock-skills
-  tdd
-  to-spec
-  to-tickets
-  triage
-  wayfinder
-  wizard
-  grill-me
-  grilling
   handoff
-  teach
-  to-questionnaire
-  wait-what
-  writing-for-agents
 )
 
 usage() {
@@ -184,8 +166,8 @@ apply_prefix_to_frontmatter() {
 # Upstream locks most of its skills to hand-typed invocation with `disable-model-invocation: true`.
 # That guards against an agent spontaneously firing an expensive workflow, but it also makes the
 # skills unreachable from a spoken brain-dump: the agent can name the slash command it would have
-# run and nothing more. `matt-ask-matt`, the router `CLAUDE.md` sends every other skill through, is
-# itself one of the locked ones, so the documented flow cannot be followed as written.
+# run and nothing more. The four Matt skills the harness keeps are reached from the flow rather than
+# hand-typed, so the strip lets `pstack-poteto-mode` route to them without the human typing a slash.
 #
 # Stripping the line here rather than in a patch keeps it stable across upstream edits near the
 # frontmatter, which the patch tool would refuse to fuzz through.
@@ -204,11 +186,11 @@ strip_model_invocation_lock() {
 # The prefix has to reach the cross-references too: these skills dispatch to each other by slash
 # name, so an unrewritten `/code-review` in a body reaches Claude Code's built-in rather than
 # matt-code-review — the very collision the prefix exists to prevent. Only a reference is
-# rewritten, never a path: the leading anchor skips `docs/agents/triage-labels.md`, the trailing
-# one skips the route `/prototype/<name>`.
+# rewritten, never a path: the leading anchor skips `docs/agents/handoff-labels.md`, the trailing
+# one skips the route `/code-review/<name>`.
 #
-# Every file, not just markdown: `matt-wizard` ships a `template.sh` that names `/wizard`, and
-# `test/install-smoke.sh` pins that no installed skill dispatches to an unprefixed name.
+# Every file, not just markdown: a skill that ships a `template.sh` naming a slash command needs it
+# too, and `test/install-smoke.sh` pins that no installed skill dispatches to an unprefixed name.
 apply_prefix_to_references() {
   local skill_dir=$1 names
   names=$(
