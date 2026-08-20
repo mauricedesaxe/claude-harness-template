@@ -541,10 +541,22 @@ case "${note_path#\~/}" in
 esac
 
 pinned=$(lockfile_skills)
-if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 34 ]; then
-  pass "skills-lock.json pins all 34 vendored skills"
+if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 72 ]; then
+  pass "skills-lock.json pins all 72 vendored skills"
 else
-  fail "skills-lock.json pins all 34 vendored skills"
+  fail "skills-lock.json pins all 72 vendored skills"
+fi
+
+# pstack is a hand-maintained fork, not a CLI-fetched vendor, so its pins carry a pristine-upstream
+# hash for drift detection rather than a re-derivable one. What has to hold is that the whole set is
+# pinned under one source, so --check-pstack-drift has something to compare against.
+pstack_pinned=$(jq -r \
+  '.skills | to_entries[] | select(.value.source == "cursor/plugins") | .key' \
+  "$HARNESS_SOURCE/skills-lock.json")
+if [ "$(printf '%s\n' "$pstack_pinned" | grep -c .)" -eq 38 ]; then
+  pass "all 38 pstack skills are pinned for drift detection"
+else
+  fail "all 38 pstack skills are pinned for drift detection"
 fi
 
 # The reason lazar-tldraw is vendored rather than hand-kept: an upstream nobody pins is an

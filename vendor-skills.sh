@@ -52,6 +52,14 @@ VISUAL_EXPLAINER_UPSTREAM="nicobailon/visual-explainer"
 VISUAL_EXPLAINER_SKILL="visual-explainer"
 VISUAL_EXPLAINER_LICENSE_URL="https://raw.githubusercontent.com/$VISUAL_EXPLAINER_UPSTREAM/HEAD/LICENSE"
 
+# pstack (Lauren Tan's, MIT) is a hand-maintained fork, not a CLI-fetched vendor. Its Cursor coupling
+# is translated by hand for the harness runtimes, so a re-vendor cannot re-derive it the way the
+# matt- prefix rewrite re-derives Matt's set. The skills CLI never touches it. What the lockfile
+# carries for pstack is a pristine-upstream content hash per skill, so `--check-pstack-drift` can
+# flag when upstream has moved and the fork needs a manual reconcile. Every other path preserves
+# the pstack pins already in skills-lock.json rather than recomputing or dropping them.
+PSTACK_UPSTREAM="cursor/plugins"
+
 # Upstream's engineering/ and productivity/ sets. Its in-progress/ and deprecated/ skills are
 # deliberately not vendored. Its personal/ bucket is gone: upstream deleted it at v1.2.0.
 UPSTREAM_SKILLS=(
@@ -84,15 +92,20 @@ UPSTREAM_SKILLS=(
 
 usage() {
   cat >&2 <<'EOF'
-usage: vendor-skills.sh [--update | --update-plannotator | --regen-patch]
+usage: vendor-skills.sh [--update | --update-plannotator | --regen-patch | --check-pstack-drift]
 
   (no flags)            Re-vendor the set pinned in skills-lock.json. Fails if upstream has moved
-                        away from the pinned content hashes.
-  --update              Pull every upstream's current content and repin skills-lock.json to it.
+                        away from the pinned content hashes. Carries the pstack pins through
+                        unchanged; the skills CLI does not fetch pstack.
+  --update              Pull every CLI-fetched upstream's current content and repin
+                        skills-lock.json to it. Preserves the hand-maintained pstack pins.
   --update-plannotator  Pull Plannotator and visual-explainer without changing the other pins.
   --regen-patch         Rebuild patches/lazar-tldraw.patch from the difference between pristine
                         upstream and the vendored skills/lazar-tldraw/SKILL.md. Run this after
                         editing that file to keep a local change across the next re-vendor.
+  --check-pstack-drift  Fetch each pinned pstack skill's pristine upstream and compare its hash to
+                        skills-lock.json. Reports which skills upstream has changed under the fork,
+                        so the divergence is reconciled by hand rather than discovered by accident.
 EOF
   exit 2
 }
@@ -302,8 +315,32 @@ regen_patch() {
   printf 'regenerated %s\n' "${TLDRAW_PATCH#"$HARNESS_SOURCE"/}"
 }
 
+# pstack is hand-maintained, so drift is a fetch-and-compare against the stored pristine hash rather
+# than something a re-vendor would surface. A mismatch means upstream moved under the fork and the
+# translation has to be reconciled by hand; it never rewrites the vendored skills.
+check_pstack_drift() {
+  [ -f "$LOCKFILE" ] || die "no skills-lock.json to check pstack drift against"
+  local drift=0 key path stored fresh
+  while IFS=$'\t' read -r key path stored; do
+    fresh=$(curl -fsSL "https://raw.githubusercontent.com/$PSTACK_UPSTREAM/HEAD/$path" |
+      shasum -a 256 | awk '{print $1}') ||
+      { printf 'pstack: could not fetch %s\n' "$path" >&2; drift=1; continue; }
+    if [ "$fresh" = "$stored" ]; then
+      printf 'ok    %s\n' "$key"
+    else
+      printf 'DRIFT %s  (%s changed upstream; reconcile the fork by hand)\n' "$key" "$path"
+      drift=1
+    fi
+  done < <(jq -r '.skills | to_entries[]
+    | select(.value.source == "cursor/plugins")
+    | [.key, .value.skillPath, .value.computedHash] | @tsv' "$LOCKFILE")
+  [ "$drift" -eq 0 ] &&
+    printf 'pstack: no drift, the fork is current with upstream\n' ||
+    die "pstack: upstream drift detected above"
+}
+
 main() {
-  local update=false update_plannotator=false regen=false skill staged vendored
+  local update=false update_plannotator=false regen=false check_drift=false skill staged vendored
   local tldraw_staged railway_staged visual_explainer_staged
 
   case "${1-}" in
@@ -311,9 +348,15 @@ main() {
   --update) update=true ;;
   --update-plannotator) update_plannotator=true ;;
   --regen-patch) regen=true ;;
+  --check-pstack-drift) check_drift=true ;;
   *) usage ;;
   esac
   [ "$#" -le 1 ] || usage
+
+  if [ "$check_drift" = true ]; then
+    check_pstack_drift
+    return 0
+  fi
 
   staging=$(mktemp -d)
 
@@ -339,6 +382,17 @@ main() {
 
   fetch_upstream "$staging"
   assert_pinned_set "$staging/skills-lock.json"
+
+  # The skills CLI does not fetch pstack, so its staged lock has none of the cursor/plugins pins.
+  # Carry them across from the committed lock so the cmp gate below matches and the final write
+  # keeps them. Without this, every re-vendor would drop the whole pstack pin set on the floor.
+  if [ -f "$LOCKFILE" ]; then
+    jq --slurpfile lock "$LOCKFILE" '
+      .skills += ($lock[0].skills | with_entries(select(.value.source == "cursor/plugins")))
+    ' "$staging/skills-lock.json" >"$staging/skills-lock.pstack.json" ||
+      die "carrying the pstack pins into the staged lock failed"
+    mv -- "$staging/skills-lock.pstack.json" "$staging/skills-lock.json"
+  fi
 
   tldraw_staged="$staging/.claude/skills/$TLDRAW_SKILL"
   [ -d "$tldraw_staged" ] || die "$TLDRAW_SKILL: the skills CLI installed no such skill"
