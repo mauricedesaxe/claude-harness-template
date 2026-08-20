@@ -811,13 +811,37 @@ printf -- '---\nmode: subagent\n---\n' >"$opencode/agents/code-reviewer.md"
 
 # Same for a skill: deleting lazar-work from the repo does nothing for the disk of someone who
 # installed it while the harness still shipped it, and it keeps loading until an install removes it.
+# The harness removes only what it recorded installing, so lazar-work is written into the footprint
+# too — that is what a prior install that shipped it would have left, and it is what makes the next
+# install recognise it as its own orphan rather than a foreign skill it must not touch.
 for root in "$claude" "$opencode"; do
   mkdir -p -- "$root/skills/lazar-work/scripts"
   printf -- '---\nname: lazar-work\n---\n' >"$root/skills/lazar-work/SKILL.md"
   printf -- 'stale\n' >"$root/skills/lazar-work/scripts/run.sh"
 done
+mkdir -p -- "$TEST_HOME/.lazar-harness"
+printf 'lazar-work\n' >>"$TEST_HOME/.lazar-harness/installed-skills"
+
+# A skill another tool installed and marked as its own is not the harness's to purge. Seeded the way
+# Newsjack leaves it, a directory with a `.newsjack-installed` marker, and absent from the footprint,
+# so the reinstall has to leave it and never name it.
+mkdir -p -- "$claude/skills/newsjack-detector"
+printf -- '---\nname: newsjack-detector\n---\n' >"$claude/skills/newsjack-detector/SKILL.md"
+: >"$claude/skills/newsjack-detector/.newsjack-installed"
 
 reinstall_report=$(run_installer "$TEST_HOME") || fail "installing twice is safe"
+
+if [ -f "$claude/skills/newsjack-detector/SKILL.md" ]; then
+  pass "reinstalling leaves a foreign skill another tool installed"
+else
+  fail "reinstalling leaves a foreign skill another tool installed"
+fi
+
+if printf '%s\n' "$reinstall_report" | grep -qF -- "delete  $(cd -- "$claude" && pwd -P)/skills/newsjack-detector"; then
+  fail "a reinstall never names a foreign skill as a deletion"
+else
+  pass "a reinstall never names a foreign skill as a deletion"
+fi
 
 if [ "$(jq -r '.permission.skill | to_entries[-1] | "\(.key)=\(.value)"' \
   "$opencode/opencode.json")" = "bro=deny" ]; then
@@ -1466,13 +1490,22 @@ fi
 
 parity_report=$(run_installer "$PARITY_HOME") || fail "the installer runs against seeded extra roots"
 
-for doomed in neobrutalist-pop use-railway plannotator-review lazar-tldraw; do
+# The harness owns these three names, so it clears its shadows from ~/.agents and names each in the
+# plan. neobrutalist-pop it does not own, so it is left where another tool put it and never named,
+# which is asserted on its own just below.
+for doomed in use-railway plannotator-review lazar-tldraw; do
   if printf '%s\n' "$parity_report" | grep -qF -- "delete  $parity_agents_real/$doomed"; then
     pass "the install names ~/.agents/skills/$doomed before purging it"
   else
     fail "the install names ~/.agents/skills/$doomed before purging it"
   fi
 done
+
+if printf '%s\n' "$parity_report" | grep -qF -- "delete  $parity_agents_real/neobrutalist-pop"; then
+  fail "the install leaves a foreign ~/.agents skill it does not own out of the delete plan"
+else
+  pass "the install leaves a foreign ~/.agents skill it does not own out of the delete plan"
+fi
 
 # The directory is another tool's. Emptying it is the harness's call; removing it is not, and
 # Railway would recreate it regardless.
@@ -1482,15 +1515,22 @@ else
   fail "the install empties ~/.agents/skills rather than removing a directory it does not own"
 fi
 
-# Emptied, and not refilled. A harness copy here would be a third tree of the same skills, drifting
-# against the two the installer already keeps, in a directory another tool rewrites on its own
-# schedule. OpenCode reads ~/.claude/skills directly, so it would buy nothing either.
-left_in_agents=$(find "$PARITY_HOME/.agents/skills" -mindepth 1 -maxdepth 1 2>/dev/null)
+# The harness clears its own shadows so its pinned copies win, and installs nothing of its own here:
+# a harness copy would be a third tree drifting against the two the installer keeps. What it leaves
+# standing is exactly the foreign skills another tool owns. A name the harness ships is a shadow to
+# clear; a name it does not is not its to touch.
+for owned in use-railway plannotator-review lazar-tldraw; do
+  if [ -e "$PARITY_HOME/.agents/skills/$owned" ]; then
+    fail "the harness clears its own shadow $owned from ~/.agents/skills"
+  else
+    pass "the harness clears its own shadow $owned from ~/.agents/skills"
+  fi
+done
 
-if [ -z "$left_in_agents" ]; then
-  pass "the harness installs nothing into ~/.agents/skills, so there is no third copy to drift"
+if [ -e "$PARITY_HOME/.agents/skills/neobrutalist-pop/SKILL.md" ]; then
+  pass "the harness leaves a foreign ~/.agents skill it does not own untouched"
 else
-  fail "the harness installs nothing into ~/.agents/skills:$left_in_agents"
+  fail "the harness leaves a foreign ~/.agents skill it does not own untouched"
 fi
 
 # Asserted to still be there before it is asserted to be empty: `find` on a directory that is gone
@@ -1552,16 +1592,15 @@ if command -v opencode >/dev/null 2>&1; then
     fail "opencode debug skill answers in full, so the assertions below read a real resolution"
   fi
 
-  # Named on its own because the ticket names it: neo-brutalism was decided against as a global
-  # default and belongs to lazar-ecosystem, and it survived the cutover in OpenCode alone. The set
-  # check below subsumes this — the harness ships no such skill, so parity cannot hold while it
-  # resolves — but a criterion worth writing down is worth failing by name rather than as a diff.
-  # use-railway and smuggled-skill are deliberately not asserted here for that reason: they carry no
-  # criterion of their own, and the set check already refuses them.
-  if [ -z "$(location_of neobrutalist-pop)" ]; then
-    pass "OpenCode resolves no neobrutalist-pop after a cutover install"
+  # Named on its own because it is the survivor the ownership rule exists to protect: the harness
+  # ships no neobrutalist-pop, so it never touches the copy another tool seeded in ~/.agents, and
+  # OpenCode goes on resolving it out of that root. The harness-skill set check below excludes it for
+  # the same reason — a foreign skill living only in ~/.agents is OpenCode's to resolve and not the
+  # harness's to equalise away.
+  if [ -n "$(location_of neobrutalist-pop)" ]; then
+    pass "OpenCode still resolves the foreign neobrutalist-pop the harness left untouched"
   else
-    fail "OpenCode resolves no neobrutalist-pop after a cutover install: $(location_of neobrutalist-pop)"
+    fail "OpenCode still resolves the foreign neobrutalist-pop the harness left untouched"
   fi
 
   # The shadow, judged on what OpenCode read rather than where it read it. Content rather than path
@@ -1615,17 +1654,21 @@ if command -v opencode >/dev/null 2>&1; then
     fail "the plannotator-review OpenCode resolves is the harness's pinned copy: got '$plannotator_location'"
   fi
 
-  # The acceptance criterion, stated as the two sets rather than as a list of names: Claude Code
-  # loads exactly what is in its skills dir, OpenCode loads what it resolved, and after a cutover
-  # install those agree. A new skill added to the harness needs no edit here.
+  # The acceptance criterion, restated for the ownership rule: Claude Code loads exactly what is in
+  # its skills dir, OpenCode loads what it resolved, and after a cutover the two agree on every skill
+  # the harness owns. They differ by exactly the foreign skills another tool left in ~/.agents, which
+  # Claude Code never reads and the harness never claims — neobrutalist-pop here. Excluding it by
+  # name is the whole relaxation: strict parity became harness-skill parity the day the harness
+  # stopped purging what it does not own. A new harness skill still needs no edit here.
   claude_resolved=$(find "$PARITY_HOME/.claude/skills" -mindepth 1 -maxdepth 1 -type d \
     -exec basename {} \; 2>/dev/null | sort)
+  opencode_harness_resolved=$(opencode_resolved | grep -vxF neobrutalist-pop || true)
 
-  if [ "$(opencode_resolved)" = "$claude_resolved" ]; then
-    pass "Claude Code and OpenCode resolve the same set of skill names after a cutover install"
+  if [ "$opencode_harness_resolved" = "$claude_resolved" ]; then
+    pass "Claude Code and OpenCode resolve the same harness skills after a cutover install"
   else
-    fail "Claude Code and OpenCode resolve the same set of skill names after a cutover install: $(
-      diff <(printf '%s\n' "$claude_resolved") <(opencode_resolved) | tr '\n' ' '
+    fail "Claude Code and OpenCode resolve the same harness skills after a cutover install: $(
+      diff <(printf '%s\n' "$claude_resolved") <(printf '%s\n' "$opencode_harness_resolved") | tr '\n' ' '
     )"
   fi
 
@@ -1648,16 +1691,22 @@ rm -rf -- "$PARITY_HOME" "$NEUTRAL_CWD"
 # entries, and the purge reports nothing to delete and deletes nothing. Every other assertion in
 # this file stays green while both roots go on serving every skill they hold.
 #
-# So this block is what makes resolve_dir in purge_dir mean anything, and that is not a guess:
-# delete that line with this block removed and the suite still passes, which is the whole failure
-# this ticket is about. A line that no test can kill is a line the next reader deletes as dead.
+# So this block is what makes resolve_dir in purge_harness_skills (the ~/.agents purge) and purge_dir
+# (the singular one) mean anything, and that is not a guess: delete that line with this block removed
+# and the suite still passes, which is the whole failure this ticket is about. A line that no test
+# can kill is a line the next reader deletes as dead.
 LINKED_PURGE_HOME=$(mktemp -d)
 linked_agents="$LINKED_PURGE_HOME/real-agents-skills"
 linked_singular="$LINKED_PURGE_HOME/real-singular-skills"
 
-mkdir -p -- "$linked_agents/stale-agents-skill" "$linked_singular/stale-singular-skill" \
+# matt-implement is a name the harness owns and no longer ships, so its ~/.agents shadow is the
+# harness's to clear; neobrutalist-pop is another tool's, seeded beside it to prove the purge reaches
+# through the link without taking a skill it does not own with it.
+mkdir -p -- "$linked_agents/matt-implement" "$linked_agents/neobrutalist-pop" \
+  "$linked_singular/stale-singular-skill" \
   "$LINKED_PURGE_HOME/.agents" "$LINKED_PURGE_HOME/.config/opencode"
-printf -- '---\nname: stale-agents-skill\n---\n' >"$linked_agents/stale-agents-skill/SKILL.md"
+printf -- '---\nname: matt-implement\n---\n' >"$linked_agents/matt-implement/SKILL.md"
+printf -- '---\nname: neobrutalist-pop\n---\n' >"$linked_agents/neobrutalist-pop/SKILL.md"
 printf -- '---\nname: stale-singular-skill\n---\n' >"$linked_singular/stale-singular-skill/SKILL.md"
 ln -s -- "$linked_agents" "$LINKED_PURGE_HOME/.agents/skills"
 ln -s -- "$linked_singular" "$LINKED_PURGE_HOME/.config/opencode/skill"
@@ -1673,7 +1722,7 @@ linked_singular_real=$(cd -- "$linked_singular" && pwd -P)
 linked_purge_report=$(run_installer "$LINKED_PURGE_HOME") ||
   fail "the installer runs against symlinked purge roots"
 
-for doomed in "$linked_agents_real/stale-agents-skill" "$linked_singular_real/stale-singular-skill"; do
+for doomed in "$linked_agents_real/matt-implement" "$linked_singular_real/stale-singular-skill"; do
   if printf '%s\n' "$linked_purge_report" | grep -qF -- "delete  $doomed"; then
     pass "a symlinked purge root names ${doomed##*/} at the path it really sits at"
   else
@@ -1681,10 +1730,16 @@ for doomed in "$linked_agents_real/stale-agents-skill" "$linked_singular_real/st
   fi
 done
 
-if [ -e "$linked_agents/stale-agents-skill" ]; then
+if [ -e "$linked_agents/matt-implement" ]; then
   fail "purging reaches through a symlinked ~/.agents/skills"
 else
   pass "purging reaches through a symlinked ~/.agents/skills"
+fi
+
+if [ -e "$linked_agents/neobrutalist-pop" ]; then
+  pass "a foreign skill survives through a symlinked ~/.agents/skills"
+else
+  fail "a foreign skill survives through a symlinked ~/.agents/skills"
 fi
 
 if [ -e "$linked_singular/stale-singular-skill" ]; then
@@ -1894,14 +1949,22 @@ live_real=$(cd -- "$live_claude" && pwd -P)
 live_skills_real=$(cd -- "$live_skills" && pwd -P)
 live_hooks_real=$(cd -- "$UNGUARDED_HOME/.claude/hooks" && pwd -P)
 
-for doomed in "$live_skills_real/hand-written-skill" "$live_real/agents/hand-written-agent.md" \
-  "$live_hooks_real/set-tab-title.sh"; do
+# agents/ and hooks/ are still replaced wholesale, so a hand-written one under them is named as a
+# deletion the way it always was. The skills tree is not: a hand-written skill the harness never
+# installed is another's to keep, asserted on its own just below.
+for doomed in "$live_real/agents/hand-written-agent.md" "$live_hooks_real/set-tab-title.sh"; do
   if printf '%s\n' "$unguarded_report" | grep -qF -- "delete  $doomed"; then
     pass "a run with no --install names ${doomed##*/} as a deletion"
   else
     fail "a run with no --install names ${doomed##*/} as a deletion"
   fi
 done
+
+if printf '%s\n' "$unguarded_report" | grep -qF -- "delete  $live_skills_real/hand-written-skill"; then
+  fail "a run with no --install leaves a hand-written skill out of the deletion plan"
+else
+  pass "a run with no --install leaves a hand-written skill out of the deletion plan"
+fi
 
 # The hooks dir is not under the config home the run names, so a reader who only saw the `claude`
 # line would not know which directory this is about to own. It is named whether or not anything in

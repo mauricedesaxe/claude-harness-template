@@ -50,6 +50,30 @@ OPENCODE_COMMANDS="$OPENCODE_HOME/commands"
 # installer's, repos/ is hand-edited, and replace_dir on bin leaves repos/ untouched.
 LAZAR_BIN="$HOME/.lazar-harness/bin"
 
+# The harness manages only the skills it installs, never the whole skills tree. A skills root can
+# hold skills another tool owns (Newsjack drops ~30 under ~/.claude/skills and marks each
+# `.newsjack-installed`, the way Railway drops use-railway), and purging by omission would take
+# them with it. So the harness records the exact set it installs and, on the next run, removes only
+# the recorded skills it no longer ships. Everything it never installed is left untouched.
+#
+# `skills-manifest.txt` is the committed declaration of that set. `test/skills-manifest.sh` fails if
+# it drifts from the `skills/` directories, so adding or renaming a skill is a change nobody makes
+# by accident. The runtime footprint below records what the last install actually put down, keyed
+# under $HOME beside the other machine-local notes so every runtime reads the same one.
+SKILLS_MANIFEST="$HARNESS_SOURCE/skills-manifest.txt"
+SKILLS_FOOTPRINT="$HOME/.lazar-harness/installed-skills"
+
+# The prefixes and bare names the harness owns, used once to seed the footprint on the first run
+# after this landed, when no footprint exists yet but a prior wholesale install left the harness's
+# skills on disk unrecorded. After that first run the footprint is authoritative and names stop
+# mattering, which is the whole point of recording rather than inferring.
+harness_owned_skill() {
+  case "$1" in
+  lazar-* | matt-* | pstack-* | plannotator-* | visual-explainer | bro | use-railway) return 0 ;;
+  *) return 1 ;;
+  esac
+}
+
 # The instructions merge drops its own previous entries by matching this prefix, so changing the
 # spelling orphans an existing install's rather than replacing them. `~` is what OpenCode expands
 # and what is already on disk; only rules landing outside $HOME need the absolute form.
@@ -132,7 +156,7 @@ report_plan() {
   # Same reason, and one more: this directory is the Railway CLI's, not the harness's. It is emptied
   # and never written to, and `railway skills install` puts its skill straight back, so a reader who
   # only saw the delete line below would not know who to expect it back from.
-  printf '  agents    %s (emptied; owned by the Railway CLI)\n' "$AGENTS_SKILLS"
+  printf '  agents    %s (harness skills removed; the rest is another tool'"'"'s)\n' "$AGENTS_SKILLS"
   # Named even though it sits under the opencode home above, because what that header implies is a
   # directory that gets replaced, and this one gets emptied. An empty one prints no delete lines at
   # all, so without this the only root the reader would never learn about is the invisible one.
@@ -147,10 +171,10 @@ report_plan() {
   report_write "$CLAUDE_HOME/settings.json" merge
   report_replace "$CLAUDE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   report_replace "$OPENCODE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
-  report_replace "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
-  report_replace "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
+  report_skills_tracked "$CLAUDE_HOME/skills" "$HARNESS_SOURCE/skills"
+  report_skills_tracked "$OPENCODE_HOME/skills" "$HARNESS_SOURCE/skills"
   report_write "$OPENCODE_COMMANDS/bro.md"
-  report_purge "$AGENTS_SKILLS"
+  report_purge_harness "$AGENTS_SKILLS"
   report_purge "$OPENCODE_SKILL_SINGULAR"
   report_replace "$CLAUDE_HOME/agents" "$HARNESS_SOURCE/agents"
   report_replace "$OPENCODE_HOME/agents" "$HARNESS_SOURCE/agents"
@@ -172,6 +196,89 @@ replace_dir() {
   rm -rf -- "$dest"
   mv -- "$staged/payload" "$dest"
   rmdir -- "$staged"
+}
+
+# The footprint the last install recorded, or a one-time bootstrap from the owned names on disk when
+# there is none yet: the first run after this landed finds the harness's own skills sitting
+# unrecorded from an older wholesale install, and the owned-name check is how it recognises them
+# that once. After the run writes a footprint, this reads it and the names stop being consulted.
+prior_skills_footprint() {
+  local dest=$1 entry base
+  if [ -f "$SKILLS_FOOTPRINT" ]; then
+    cat -- "$SKILLS_FOOTPRINT"
+    return 0
+  fi
+  [ -d "$dest" ] || return 0
+  for entry in "$dest"/*/; do
+    [ -d "$entry" ] || continue
+    base=${entry%/}
+    base=${base##*/}
+    if harness_owned_skill "$base"; then printf '%s\n' "$base"; fi
+  done
+  return 0
+}
+
+# The recorded harness skills a dest still holds that the harness no longer ships. A foreign skill is
+# absent from the footprint, so it never appears here; a shipped skill is in the manifest, so it does
+# not either. What is left is exactly the orphans a wholesale replace used to purge, minus every
+# skill the harness never installed.
+stale_harness_skills() {
+  local dest=$1 name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    [ -e "$dest/$name" ] || continue
+    grep -qxF -- "$name" "$SKILLS_MANIFEST" || printf '%s\n' "$name"
+  done < <(prior_skills_footprint "$dest" | LC_ALL=C sort -u)
+  return 0
+}
+
+# Replaces the wholesale replace for a skills tree. Remove the stale harness skills, drop the freshly
+# built set over the top, and leave every other directory (another tool's skills) alone. Resolved
+# for the same reason replace_dir resolves: on this machine the dest can be a symlink, and the
+# delete and the copy are only right against the target.
+install_skills_tracked() {
+  local dest=$1 source=$2 resolved name base
+  mkdir -p -- "$dest"
+  resolved=$(resolve_dir "$dest")
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    rm -rf -- "${resolved:?}/$name"
+  done < <(stale_harness_skills "$resolved")
+  for name in "$source"/*/; do
+    [ -d "$name" ] || continue
+    base=${name%/}
+    base=${base##*/}
+    rm -rf -- "$resolved/$base"
+    cp -R -- "$name" "$resolved/$base"
+  done
+  return 0
+}
+
+# The dry-run counterpart. A stale harness skill is one delete line; a shipped skill the dest still
+# holds is replaced, so report_replace names its hand-edited files the way it does for any replaced
+# tree. A foreign skill is named nowhere, because the install leaves it alone.
+report_skills_tracked() {
+  local dest=$1 source=$2 resolved name
+  [ -d "$dest" ] || return 0
+  resolved=$(resolve_dir "$dest")
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    printf '  %-7s %s\n' delete "$resolved/$name"
+  done < <(stale_harness_skills "$resolved")
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if [ -d "$resolved/$name" ] && [ -d "$source/$name" ]; then
+      report_replace "$resolved/$name" "$source/$name"
+    fi
+  done < "$SKILLS_MANIFEST"
+  return 0
+}
+
+# Written after both trees are installed, so a run that dies partway leaves the prior footprint
+# describing the prior install rather than a set that was never fully put down.
+write_skills_footprint() {
+  mkdir -p -- "$(dirname -- "$SKILLS_FOOTPRINT")"
+  LC_ALL=C sort -u -- "$SKILLS_MANIFEST" >"$SKILLS_FOOTPRINT"
 }
 
 # The one arrangement in which emptying a root would empty the harness itself.
@@ -220,6 +327,41 @@ purge_dir() {
   [ -d "$dest" ] || return 0
   dest=$(resolve_dir "$dest")
   find "$dest" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+}
+
+# ~/.agents is another tool's root: Railway's, and now Newsjack's too, which drops ~30 skills there
+# alongside the ones it puts in ~/.claude/skills. The harness never installs there, so it keeps no
+# footprint of it. What it has standing to do is stop a copy of its *own* skill in that
+# higher-precedence root from shadowing the one it ships, so it removes only the skills it owns by
+# name, current or retired, and leaves every foreign skill and marker file where the tool that put
+# them there expects them. This is the one place a name check still decides ownership, because a
+# root the harness does not install into records no footprint to consult instead.
+purge_harness_skills() {
+  local dest=$1 entry base
+  [ -d "$dest" ] || return 0
+  dest=$(resolve_dir "$dest")
+  for entry in "$dest"/*/; do
+    [ -d "$entry" ] || continue
+    base=${entry%/}
+    base=${base##*/}
+    if harness_owned_skill "$base"; then rm -rf -- "${dest:?}/$base"; fi
+  done
+  return 0
+}
+
+# The dry-run counterpart to purge_harness_skills: one delete line per owned skill in the root, and
+# nothing for a foreign one, so the plan names exactly what the install would take.
+report_purge_harness() {
+  local dest=$1 entry base
+  [ -d "$dest" ] || return 0
+  dest=$(resolve_dir "$dest")
+  for entry in "$dest"/*/; do
+    [ -d "$entry" ] || continue
+    base=${entry%/}
+    base=${base##*/}
+    if harness_owned_skill "$base"; then printf '  %-7s %s\n' delete "$dest/$base"; fi
+  done
+  return 0
 }
 
 # OpenCode rejects an agent without `mode`. Every agent this harness ships is a reviewer,
@@ -428,10 +570,11 @@ install_skills() {
   cp -R -- "$HARNESS_SOURCE/skills" "$built/skills"
   render_surface_tree "$built/skills"
 
-  replace_dir "$CLAUDE_HOME/skills" "$built/skills"
-  replace_dir "$OPENCODE_HOME/skills" "$built/skills"
+  install_skills_tracked "$CLAUDE_HOME/skills" "$built/skills"
+  install_skills_tracked "$OPENCODE_HOME/skills" "$built/skills"
+  write_skills_footprint
   rm -rf -- "$built"
-  purge_dir "$AGENTS_SKILLS"
+  purge_harness_skills "$AGENTS_SKILLS"
   purge_dir "$OPENCODE_SKILL_SINGULAR"
 }
 
