@@ -1,12 +1,13 @@
 ---
 name: lazar-review
-description: The one review command. Runs the global reviewer agents, whatever reviewer agents the repo ships, and matt-code-review, then converges everything into a single verdict delivered to whoever is there to read it: chat on a laptop, a posted PR comment in an unattended sandbox. Use when the user says "review my changes", "/lazar-review", or otherwise wants a quality check before commit, push, or merge.
+description: The one review command. Runs the global doctrine reviewer agents, then converges everything into a single verdict delivered to whoever is there to read it: chat on a laptop, a posted PR comment in an unattended sandbox. Use when the user says "review my changes", "/lazar-review", or otherwise wants a quality check before commit, push, or merge.
 ---
 
 # lazar-review
 
-One review, one verdict. It always runs my global agents, and whatever reviewer agents the
-repo ships. It folds in `matt-code-review` too, which is why I never invoke that one by hand.
+One review, one verdict. It runs my global doctrine agents, and nothing else. Not a repo's own
+reviewers, and not `pstack-interrogate`, which is a separate adversarial multi-model tool for a
+separate job.
 
 ## Step 1: gather the diff
 
@@ -83,12 +84,12 @@ as changes nobody reviewed. Silently reviewing the older thing is the failure to
 
 ## Step 2: build the roster
 
-The roster is the union of two sets of **names**. Never hardcode either set, which would rot
-the first time an agent was added or renamed.
+The roster is the harness's global doctrine agents, discovered rather than hardcoded, which would
+rot the first time an agent was added or renamed. Only these run here. A repo's own reviewers under
+`.claude/agents/` are deliberately not part of this command.
 
-**The harness's global agents, discovered.** The installer keeps both runtime directories in
-parity. Read both so the skill works under either runtime, take each filename without `.md`,
-and deduplicate the union:
+The installer keeps both runtime directories in parity. Read both so the skill works under either
+runtime, take each filename without `.md`, and deduplicate the union:
 
 ```sh
 for agents_dir in \
@@ -102,29 +103,6 @@ done
 
 Every name discovered there runs on every review. They're what make the code read as if I'd
 written it.
-
-**The repo's own, discovered.** A repo's reviewers live in its `.claude/agents/`. Read the
-directory and take each agent's `name:` frontmatter:
-
-```sh
-ls .claude/agents/*.md 2>/dev/null   # empty is normal and fine
-```
-
-Read the `description:` of each one you find. That's how the agent tells you what it covers
-and when it applies. Two things it may say:
-
-- **It's scoped to an area.** Skip it when the diff doesn't touch that area, and list it as
-  skipped in the report so the omission is visible.
-- **It runs in place of another reviewer** (a stack-tuned `code-reviewer`, say). Honour that
-  and don't spawn the one it replaces.
-
-Nothing else is inferred from the description. If it doesn't scope itself, it runs.
-
-**On shadowing.** Agents resolve by name, and a repo's agent wins over a global one with the
-same name. So a repo that ships its own `yagni-reviewer` doesn't add a name to the roster. It
-changes what that name resolves to, and the global copy becomes unreachable. That's the
-repo's call to make and the union already handles it. Just don't claim the global one ran:
-note in the report that the repo's version shadowed it.
 
 ## Step 3: spawn the roster in parallel
 
@@ -153,31 +131,15 @@ which one applies. Hand it over verbatim:
 
 <!-- /surface:sandbox -->
 
-Don't pre-filter a reviewer by which files changed, beyond the description-scoping in Step 2.
-A reviewer that sees nothing in its scope returns "no issues found" in seconds, which is the
-expected outcome, not a waste.
+Don't pre-filter a reviewer by which files changed. A reviewer that sees nothing in its scope
+returns "no issues found" in seconds, which is the expected outcome, not a waste.
 
 `git-hygiene-reviewer` reads the commit graph and the PR, not just the file diff. So its prompt
 gets what the others don't. The resolved base (`trunk()`). The stack as Step 1 resolved it. The
 PR number from Step 1, or "no PR yet" where Step 1 allowed one. Tell it not to re-run
 `jj git fetch`, so it judges the same snapshot everyone else did.
 
-## Step 4: run matt-code-review with its inputs pinned
-
-Invoke the `matt-code-review` skill. It asks for a fixed point and hunts for a spec, so hand
-it both up front and it won't ask:
-
-- **The fixed point** is the `trunk()` commit Step 1 already resolved. Pass the resolved
-  commit, not the name, so it reads the same snapshot as the agents.
-- **The spec** is the issue named in the stack messages or the PR body from Step 1. Fetch it
-  with `env -u GITHUB_TOKEN gh issue view <n>`, same reason as Step 1, and pass it.
-- **No issue named** means there's no spec. Say so explicitly, so its Spec axis skips and
-  reports that rather than asking where the spec is. Note the skip in the report.
-
-Its two axes are sub-agents of its own, separate from the roster. That's intended: Standards
-and Spec are axes of a diff, not reviewers of a repo.
-
-## Step 5: converge into one verdict
+## Step 4: converge into one verdict
 
 Every reviewer filing its own report is the thing this skill exists to end. Converge by
 **finding**, not by reviewer. The reviewer is attribution on a row, not a heading.
@@ -185,14 +147,14 @@ Every reviewer filing its own report is the thing this skill exists to end. Conv
 ```
 # Review of <N> files vs trunk
 
-Ran: <roster, comma-separated> + matt-code-review (standards, spec).
+Ran: <roster, comma-separated>.
 Skipped: <agent> (<reason>), or omit this line entirely when nothing was skipped.
 
 | # | Finding | From | Decision | How / Why |
 |---|---|---|---|---|
-| 1 | <path>:<line>, <one line> | code-reviewer | **Fix** | <the concrete edit, ≤2 lines> |
+| 1 | <path>:<line>, <one line> | complexity | **Fix** | <the concrete edit, ≤2 lines> |
 | 2 | <path>:<line>, <one line> | yagni, clarity | **Skip** | <why> |
-| 3 | <path>:<line>, <one line> | spec | **Ask** | <the call I need to make> |
+| 3 | <path>:<line>, <one line> | git-hygiene | **Ask** | <the call I need to make> |
 
 Net: <N fixes, N skips, N questions>. Apply the fixes?
 ```
@@ -214,9 +176,9 @@ gets a single "no findings" row. A predictable shape is most of the value.
 - **An agent that errored or returned nothing** gets a row saying so. A reviewer that silently
   didn't run is worse than one that failed loudly.
 
-Convergence ranks findings against each other. It does not let one axis mask another. That is
-what `matt-code-review` keeps its two axes apart to protect. A Spec finding never gets dropped
-because Standards came back clean.
+Convergence ranks findings against each other. It does not let one reviewer's clean pass mask
+another's finding. A correctness finding never gets dropped because a style reviewer came back
+clean.
 
 Pull out the findings. Don't paste raw agent transcripts.
 
@@ -228,7 +190,7 @@ Nothing goes out under my name without me seeing it first. This is a hard rule, 
 
 GitHub is read-only here. `gh pr view` and `gh issue view` are the whole surface. Never
 `gh pr review`, never `gh pr comment`, never `gh api` with a write method. Tell the reviewers
-the same, and pass it on to `matt-code-review`: the output is a chat report and nothing else.
+the same: the output is a chat report and nothing else.
 
 <!-- /surface:local -->
 
