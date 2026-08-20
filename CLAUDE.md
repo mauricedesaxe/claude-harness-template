@@ -165,8 +165,8 @@ duplicated or dropped, write it to a file and read it back.
 Any skill that needs to know which tracker owns a repo resolves it in this order. **Asking is a last
 resort, and it happens at most once per repo**:
 
-1. **The repo's own config**: `docs/agents/issue-tracker.md`, where the repo permits such a file.
-   `/matt-setup-matt-pocock-skills` writes it.
+1. **The repo's own config**: `docs/agents/issue-tracker.md`, where the repo permits such a file,
+   written by hand when the repo is set up.
 2. **The machine-local note** (below), for shared work repos where committing harness config isn't
    an option.
 3. **Inference**: the remote host, issue-key patterns in branch names and commit messages, and
@@ -224,7 +224,7 @@ routes through `pstack-poteto-mode`, not from memory. My `lazar-*` set has eight
 | `lazar-commit` | A logical chunk of work is done. Record it as atomic conventional commits, as you go, not all at the end. |
 | `lazar-ship` | Landing work on `main`: bookmark, commit, push, PR, CI, rebase merge. Runs only the steps still missing. |
 | `lazar-pr-status` | Re-entering a PR. What each review asked for, what was addressed in code, what was answered only in a reply, what's unaddressed, and any drift since. |
-| `lazar-research` | An issue's open questions need answering before we commit to an approach. Delegates the web to `/deep-research` and runnable questions to `matt-prototype`. Never closes the issue. |
+| `lazar-research` | An issue's open questions need answering before we commit to an approach. Delegates the web to `/deep-research` and runnable questions to a throwaway prototype. Never closes the issue. |
 | `lazar-standup` | Writing the daily 3 Ps (Progress / Problems / Priorities), reconciling merged PRs, tracker issues, and unpushed local work into a post in my voice. |
 | `lazar-tldraw` | Showing a diagram or a low-fi wireframe. Reach for it proactively; see the deviations above. Needs `@kitschpatrol/tldraw-cli`. |
 

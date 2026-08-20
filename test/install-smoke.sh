@@ -541,10 +541,10 @@ case "${note_path#\~/}" in
 esac
 
 pinned=$(lockfile_skills)
-if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 72 ]; then
-  pass "skills-lock.json pins all 72 vendored skills"
+if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 51 ]; then
+  pass "skills-lock.json pins all 51 vendored skills"
 else
-  fail "skills-lock.json pins all 72 vendored skills"
+  fail "skills-lock.json pins all 51 vendored skills"
 fi
 
 # pstack is a hand-maintained fork, not a CLI-fetched vendor, so its pins carry a pristine-upstream
