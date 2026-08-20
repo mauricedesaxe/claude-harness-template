@@ -76,12 +76,13 @@ code-fast: openai/gpt-5.6-terra
 judge: openai/gpt-5.6-sol
 pool: openai/gpt-5.6-sol, openai/gpt-5.6-terra
 
-# GLM fallback (Z.AI Coding Plan, needs ZHIPU_API_KEY). Confirm the exact slugs for your plan.
-# code: <glm-normal-slug>
-# code-hard: <glm-hard-slug>
-# code-fast: <glm-normal-slug>
-# judge: <glm-hard-slug>
-# pool: <glm-hard-slug>, <glm-normal-slug>
+# GLM fallback (Z.AI Coding Plan, needs ZHIPU_API_KEY). Comment the OpenAI lines above and
+# uncomment these when you are out of OpenAI credits.
+# code: zai-coding-plan/glm-5.2
+# code-hard: zai-coding-plan/glm-5.3
+# code-fast: zai-coding-plan/glm-5.2
+# judge: zai-coding-plan/glm-5.3
+# pool: zai-coding-plan/glm-5.3, zai-coding-plan/glm-5.2
 ```
 
 Real cross-vendor diversity is available here, so a mixed `pool` (OpenAI plus GLM) is where
