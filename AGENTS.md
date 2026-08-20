@@ -15,17 +15,20 @@ else. `§N` numbers are stable IDs, so a citation resolves through the spine's S
 
 What's specific to this repo, and easy to get wrong:
 
-- **`CLAUDE.md` has a line budget**, asserted by `test/install-smoke.sh`: under 200 lines, because
-  adherence drops as it grows. Make budget by pointing at the philosophy or at `/matt-ask-matt`,
-  not by dropping a rule.
+- **`CLAUDE.md` has a line budget**: keep it lean, because adherence drops as it grows. Make budget
+  by pointing at the philosophy or at `pstack-poteto-mode`, not by dropping a rule.
 - **`surface:local` / `surface:sandbox` blocks are per-environment prose**, in `CLAUDE.md` and in
   `skills/lazar-review/SKILL.md`. The installer keeps the pair matching `HARNESS_SURFACE` and drops
   the rest, so both variants live in the markdown and are edited together. A file carrying one
   surface and not the other stops the install.
-- **Vendored skill directories are never hand-edited.** This covers `skills/matt-*`,
+- **Most vendored skill directories are never hand-edited.** This covers `skills/matt-*`,
   `skills/lazar-tldraw`, `skills/use-railway`, `skills/plannotator-*`, and
   `skills/visual-explainer`. Edit upstream or `patches/lazar-tldraw.patch`, then re-run
   `./vendor-skills.sh`.
+- **`skills/pstack-*` is the exception: a hand-maintained fork.** Its Cursor coupling is translated
+  for the harness by hand, so you edit these files in place. `skills-lock.json` pins each one's
+  pristine-upstream hash, and `./vendor-skills.sh --check-pstack-drift` reports when upstream has
+  moved and the fork needs a manual reconcile. A re-vendor never overwrites them.
 - **Never pass `--install` to `install.sh` here.** It honours `$HOME`, `$CLAUDE_CONFIG_DIR` and
   `$XDG_CONFIG_HOME`. With the flag it overwrites the live harness your current shell points at. Exercise it with `bash test/install-smoke.sh`, which scrubs the
   environment first. Without the flag it only reports, so running it bare is safe.
