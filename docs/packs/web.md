@@ -42,6 +42,11 @@ package-management discipline.
 Within TypeScript: Node, `pnpm` (pinned via `packageManager`), exact dependency
 versions, supply-chain cooldown via `.npmrc` `minimum-release-age`. These are
 the standing conventions; the template's `CLAUDE.md` skeleton restates them.
+Recommend Effect.ts for TypeScript I/O, failures, resource lifetimes, dependency
+composition, and concurrent workflows. Follow the project's established model
+when it cannot adopt Effect. Pure domain code stays plain TypeScript. Run effects
+only from process edges such as HTTP handlers, workers, CLIs, and tests. §14
+defines the language-neutral rule and the Python, Rust, and Go equivalents.
 
 ---
 
@@ -260,8 +265,8 @@ framework's native loader/action typing.
 
 **Default tools** (apply §13 / outsource-the-non-core):
 
-- **Sentry** for error tracking and exception reporting. Even with `Result<T,E>` and
-  no `throw`s (per Hard rules / §11), Sentry's structured error events with context
+- **Sentry** for error tracking and exception reporting. Even with typed failures and
+  no application `throw`s (per §14), Sentry's structured error events with context
   + breadcrumbs are the fastest way to triage failures.
 - **BetterStack** (formerly Logtail) for logs and uptime monitoring; supports
   OpenTelemetry trace ingest for distributed tracing as well.

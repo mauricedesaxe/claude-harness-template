@@ -248,9 +248,9 @@ inFlight.run(key, () =>
 
 **Implementation rules:**
 
-- **Functional.** No classes / `this`. Each primitive is a `createX(opts)`
-  factory returning an object of closures over private state. Matches the
-  `Result` / pure-function grain of the rest of the codebase.
+- **Functional.** No classes / `this`. When a TypeScript project uses Effect,
+  use its concurrency and resource operations rather than project-local effect
+  wrappers. Other languages use their native concurrency model.
 - **Consumer decides policy.** Defaults are conservative. Every knob is a
   caller-supplied option: `maxAttempts`, `baseDelayMs`, `shouldRetry`,
   `onRetry`, breaker `failureThreshold`, breaker `cooldownMs`, limiter
@@ -261,8 +261,10 @@ inFlight.run(key, () =>
   works. If you ever scale to multiple instances (after §1 earns it), you
   swap the in-memory backing for a shared one. You don't pay that complexity
   until you have to.
-- **Each primitive returns a `Result<T, E>`** with a typed error union (e.g.
-  `BreakerOpen`, `RateLimitExceeded`, `RetryExhausted`). It never throws.
+- **Each primitive reports typed errors** (e.g. `BreakerOpen`,
+  `RateLimitExceeded`, `RetryExhausted`). TypeScript projects that use Effect
+  compose them with Effect. Other projects use their native typed-failure model.
+  Application code never throws.
 
 **Earn-its-keep.** Skipping a primitive earns its keep only when:
 
@@ -278,8 +280,7 @@ order above, and pass conservative options.
 
 **Where the code lives.** This document describes the **contract**, not the
 implementation. Each project ships its own implementation in its language of
-choice. See the project's `CLAUDE.md` for the actual module(s). The standing
-reference TypeScript implementation is a `server/concurrency/` module.
+choice. See the project's `CLAUDE.md` for the actual module(s).
 
 ---
 
@@ -446,13 +447,22 @@ compile time or commit time, where the fix is cheap.
   closures over private state, not classes. Reserve classes for genuine
   framework-interface compliance (a React `Component`, a Drizzle `pgTable`,
   etc.), not as a stylistic preference.
-- **`Result<T, E>` over `throw`.** Application code does not throw. Every fallible
-  function returns a `Result` (neverthrow in TypeScript, `Either`/equivalent
-  elsewhere) carrying a typed error union. The caller handles failure as a
-  value. `_unsafeUnwrap` / `_unsafeUnwrapErr` are test-only. Total functions that
-  genuinely cannot fail are the exception. §29 reaches the same rule from
-  reading order: a `throw`'s handler sits in another file, a `Result`'s sits at
-  the call site.
+- **Typed effects over `throw`.** Application code does not throw. A fallible
+  operation exposes success, expected failure, and dependencies in its type.
+  Recommend `Effect<A, E, R>` for TypeScript I/O and workflows. A project may
+  use its established typed-failure model instead. Keep pure domain functions as
+  plain TypeScript. Do not wrap a pure calculation in `Effect`, and do not mix
+  `Effect` and `Result` in one workflow. In Rust, use `async fn` and
+  `Result<T, E>`. In Python, use a typed `Result` plus `async with` and
+  `TaskGroup`. In Go, use return errors, `context.Context`, `defer`, and
+  `errgroup`. `_unsafeUnwrap` / `_unsafeUnwrapErr` are test-only. A process edge
+  may reject or throw when its framework requires it. §29 reaches the same rule
+  from reading order: a thrown error's handler sits in another file, while a
+  typed failure stays at the call site.
+- **Effects stay at the I/O boundary.** Effect's `Context` and `Layer` compose
+  infrastructure at the application boundary. Domain modules expose domain
+  operations, not service tags, layers, scopes, or retry schedules. An
+  integration owns its retry, rate-limit, breaker, and concurrency policy.
 - **Parse at boundaries.** Every external input (env, network response, file
   content) goes through a schema (Zod / Valibot / Pydantic / serde) at the
   boundary. Never `JSON.parse` and cast.
@@ -500,8 +510,9 @@ moment you typed them".
 
 **Earn-its-keep.** A `class` is acceptable when the framework expects one. A
 `throw` is acceptable when the runtime expects one (a thrown `Response` in
-React Router 7, an `error()` in a loader). These are interface compliance, not
-deviations.
+React Router 7, an `error()` in a loader). A small TypeScript script with one
+direct I/O action may use a promise instead of `Effect`. These are interface
+compliance or a smaller shape, not deviations.
 
 ---
 
@@ -577,7 +588,7 @@ is worth ten unit tests of the components in isolation.
 | Unit | One pure function, no collaborators | When the behaviour is genuinely localized: domain math, parser shape, decay curve |
 
 Unit tests have a place; they are **not the load-bearing layer**. A unit-test-heavy
-suite passes while the system is broken. A function that returns `Result.ok({})`
+suite passes while the system is broken. A function that reports success with `{}`
 satisfies a unit test even when its caller expects `{ status: "scored" }`. The
 mock-heavy unit world hides exactly the seam bugs that production exercises.
 
@@ -601,8 +612,9 @@ mock-heavy unit world hides exactly the seam bugs that production exercises.
   fails loudly without the key.
 - **Tests in the same commit as the behaviour.** A new mapping, a new error path,
   a new integration parser: each lands with its coverage.
-- **Drive `Result` to its `err` branch in tests.** A `Result`-returning function
-  whose tests only ever assert `isOk()` isn't tested.
+- **Drive expected failures in tests.** A function whose tests only assert its
+  success result has not tested its failure behavior. When a TypeScript project
+  uses Effect, assert its error channel. Assert native failure values otherwise.
 
 **UI components: stories are the test layer for the view.** A UI component's
 behaviour is mostly *how it renders in a given state*. **Storybook** is the right
@@ -980,11 +992,11 @@ When the first screen is enough, the interface carries the weight and the
 implementation hides below it. When it isn't, the file is shallow no matter how
 it's ordered, and the fix is a design change rather than a reshuffle.
 
-It also gives §14's **`Result` over `throw`** a second, independent argument. A
-`throw` introduces a failure whose handler lives in another file, so the reader
-meets a concept whose resolution is nowhere near it. A `Result` puts the failure
-at the call site, where the reader already is. The type-safety argument and the
-reading-order argument point the same way.
+It also gives §14's **typed effects over `throw`** a second, independent
+argument. A `throw` introduces a failure whose handler lives in another file, so
+the reader meets a concept whose resolution is nowhere near it. A typed failure
+puts the handler at the call site, where the reader already is. The type-safety
+argument and the reading-order argument point the same way.
 
 **Earn-its-keep.** Some files are flat collections with no story: a constants
 file, a config file, a barrel of re-exports. Nobody stops reading them early
@@ -1107,8 +1119,8 @@ Model the domain with explicit types, and prefer variants and tagged unions that
 make invalid states hard to represent (§14). Handle cases exhaustively rather
 than through boolean state bags (§14). Prefer immutable values, pure functions,
 and explicit data flow (§14). Represent expected failure as typed data rather
-than exceptions wherever the language supports it (§14, `Result` over `throw`).
-Parse and validate external input at the boundary (§10).
+than exceptions (§14, typed effects over `throw`). Parse and validate external
+input at the boundary (§10).
 
 Prefer readable output-oriented tests for structured transformations. Still
 assert directly on values where rendering would lose information (§18).
