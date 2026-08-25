@@ -16,9 +16,9 @@ with the packs under `~/.claude/rules/packs/`; OpenCode reads the same files und
 repo-relative `docs/PHILOSOPHY.md` is the old per-repo model and resolves nowhere, so don't reach for
 it.
 
-The spine is paradigm-agnostic and loads in every session. The packs are stack-specific
-(`packs/web.md`, `packs/ai.md`), and Claude Code applies each one when the agent touches a file it
-matches. `§N` numbers are stable IDs. They survive a section that moves between spine and pack,
+The spine is paradigm-agnostic and loads in every session. The packs hold concrete defaults and
+domain-specific rules (`packs/defaults.md`, `packs/ai.md`). Claude Code applies each one when the
+agent touches a file it matches. `§N` numbers are stable IDs. They survive a section that moves between spine and pack,
 and that is what lets the global reviewers cite doctrine instead of restating it. The spine's
 Section index says which file each one lives in.
 

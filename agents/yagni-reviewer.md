@@ -119,8 +119,8 @@ Look only at what the change *adds or expands*. Concrete finding classes:
    every caller passes the same value for. A `switch` or `if` arm no current caller can reach.
    An exported symbol nothing imports. Built "for later" is built for nothing. Remove it.
 6. **Premature infrastructure (§1).** A new read replica, queue, cache layer, message broker,
-   second service or process, or datastore. It arrives without a named, currently-felt,
-   *measured* problem that the single-instance Postgres-backed default doesn't solve. "What if we spike" is not
+   second service, or datastore. It arrives without a named, currently-felt,
+   *measured* problem that the simpler topology doesn't solve. "What if we spike" is not
    a problem. "Reads are throttled by writes at p99 250ms today" is. The `code-reviewer` and
    `data-reviewer` judge whether the primitive is wired correctly. You judge whether it should
    exist yet.
