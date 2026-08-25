@@ -5,12 +5,11 @@ skills and agents that
 [`lazar-harness`](https://github.com/mauricedesaxe/claude-harness-template) installs.
 
 This file is the paradigm-agnostic **spine**, the engineering principles that hold
-for any codebase, whether or not it is a web product. The web/backend prescriptions
-(single-instance Postgres, hosting, frontend, background jobs, blob storage, realtime)
-live in [`packs/web.md`](packs/web.md). The AI/LLM prescriptions live in
+for any codebase, whether or not it is a web product. Concrete technology choices
+live in [`packs/defaults.md`](packs/defaults.md). The AI/LLM prescriptions live in
 [`packs/ai.md`](packs/ai.md). A repo **always** applies the spine, then layers on
-whatever packs match its paradigm. A smart-contract or mobile repo takes the spine
-and omits the web pack.
+whatever packs match its paradigm. A project ignores defaults that do not fit its
+runtime or product.
 
 Section numbers are **stable IDs**. A section keeps its number wherever it lands,
 and inline `§N` cross-references resolve through the index below, which records the
@@ -31,61 +30,63 @@ clause (when deviation is allowed, and what bar a deviation has to clear).
 
 | § | Title | Location |
 |---|---|---|
-| §1 | Earn its keep | Spine |
-| §2 | Languages | Spine + packs/web.md (web specifics) |
-| §3 | Single-instance default | packs/web.md |
-| §4 | Modular monolith | Spine + packs/web.md (web specifics) |
-| §5 | Data: Postgres only | packs/web.md |
-| §6 | Hosting: managed platforms over IaC and k8s | packs/web.md |
-| §7 | Web layer: no serverless, no edge | packs/web.md |
-| §8 | Web app architecture | packs/web.md |
-| §9 | CDN: Cloudflare | packs/web.md |
-| §10 | End-to-end type safety | Spine + packs/web.md (web specifics) |
+| §1 | Earn its keep and Grug-brained development | Spine |
+| §2 | Typed languages | Spine + packs/defaults.md |
+| §3 | Deployment topology | packs/defaults.md |
+| §4 | Modular monolith | Spine + packs/defaults.md |
+| §5 | Data stores | packs/defaults.md |
+| §6 | Hosting | packs/defaults.md |
+| §7 | Runtime model | packs/defaults.md |
+| §8 | Web app architecture | packs/defaults.md |
+| §9 | Cloudflare | packs/defaults.md |
+| §10 | End-to-end type safety | Spine + packs/defaults.md |
 | §11 | API integration primitives | Spine |
-| §12 | Observability | Spine + packs/web.md (web specifics) |
+| §12 | Observability | Spine + packs/defaults.md |
 | §13 | Outsource the non-core | Spine |
 | §14 | Code-level discipline | Spine |
-| §15 | Database discipline | packs/web.md |
+| §15 | Database discipline | packs/defaults.md |
 | §16 | Value-type discipline | Spine |
-| §17 | Feature flags | packs/web.md |
+| §17 | Feature flags | packs/defaults.md |
 | §18 | Testing philosophy | Spine |
-| §19 | Commercial readiness and authorization | Spine + packs/web.md (web specifics) |
-| §20 | Frontend defaults and local-first | packs/web.md |
+| §19 | Commercial readiness and authorization | Spine + packs/defaults.md |
+| §20 | Frontend defaults and local-first | packs/defaults.md |
 | §21 | Documentation discipline | Spine |
-| §22 | Background jobs and scheduled work | packs/web.md |
-| §23 | File and blob storage | packs/web.md |
-| §24 | CI/CD discipline | Spine + packs/web.md (web specifics) |
-| §25 | Realtime: polling first | packs/web.md |
+| §22 | Background work | packs/defaults.md |
+| §23 | Object storage | packs/defaults.md |
+| §24 | CI/CD discipline | Spine + packs/defaults.md |
+| §25 | Realtime delivery | packs/defaults.md |
 | §26 | Avoid double state | Spine |
 | §27 | AI / LLM integration | packs/ai.md |
 | §28 | Version control: jj (colocated) | Spine |
 | §29 | Narrative order | Spine |
 | §30 | Felt outcome and writing | Spine |
 | §31 | Code style | Spine |
-| §32 | Complexity and deep modules | Spine |
+| §32 | Complexity, deep modules, and locality of behaviour | Spine |
 | §33 | Controlled language | Spine |
-| §34 | UI and UX design principles | packs/web.md |
+| §34 | UI and UX design principles | packs/defaults.md |
 
 ---
 
-## §1. Earn its keep
+## §1. Earn its keep and Grug-brained development
 
 *The operational form is the `pstack-principle-laziness-protocol` leaf, which a subagent reads and applies. This section carries the why.*
 
 **Rule.** The simpler architecture wins by default. Anything more complex has to
-*earn its keep* before it lands. That covers a second instance, a replica, a queue,
-and a cache layer. It also covers a different language, a different database, an
+*earn its keep* before it lands. That covers a second service, a replica, a queue,
+and a cache layer. It also covers another language, another database, an
 infrastructure-as-code tool, and a hosting platform with more moving parts. The
 bar is the same one §30 applies to product work: a **felt, current, specific
 problem** that the simpler option doesn't solve. Hypothetical, future, or
 aesthetic ("cleaner") reasons don't qualify.
 
-**Why.** Most software is killed by complexity it didn't need. The single-machine
-Postgres-backed monolith ships faster, is easier to debug, has fewer moving
-parts on-call, and scales further than people expect. The premature reach for
-microservices / Kafka / k8s / Redis is the modal failure mode in our reference
-class. We treat that reach as a special case requiring justification, not the
-default.
+**Why.** Most software is killed by complexity it didn't need. A modular monolith
+on managed infrastructure ships faster and is easier to debug than a fleet of
+services. Premature microservices and infrastructure layers are the common failure
+mode. The compute model and database remain workload choices.
+
+[*The Grug Brained Developer*](https://grugbrain.dev/) gives this rule its practical
+posture. Complexity is the main enemy, and useful module boundaries appear after the
+code reveals them. The `pstack-principle-laziness-protocol` leaf owns the procedure.
 
 **Earn-its-keep.** A deviation qualifies when:
 
@@ -103,11 +104,12 @@ This is the meta-rule. Every other section here is an instance of it.
 
 ---
 
-## §2. Languages
+## §2. Typed languages
 
-**Rule.** Pick one primary language for the stack and make everything else earn
-its keep. A second or third language is a deliberate, justified choice; a fourth
-needs a major justification. Don't let languages sprawl.
+**Rule.** Prefer languages and toolchains that preserve types. Use TypeScript instead
+of JavaScript. In dynamic languages, use static analysis and typed boundary schemas
+where the ecosystem supports them. Pick one primary language for the stack and make
+additional languages earn their maintenance cost.
 
 **Why.** Every additional language doubles one surface area: how do we lint, test,
 deploy, lockfile-pin, and supply-chain-cooldown this part? One primary language
@@ -115,10 +117,9 @@ keeps the toolchain, type system, and dependency discipline singular. Where both
 ends of a boundary share a language, end-to-end type safety (§10) comes nearly
 free.
 
-**Earn-its-keep.** A secondary language earns its keep when its ecosystem is
-genuinely the right tool, not a preference. The project's paradigm pack names the
-concrete defaults. For web/backend that's the TypeScript-first stack in
-[`packs/web.md`](packs/web.md) §2.
+**Earn-its-keep.** A secondary language earns its keep when its ecosystem is the
+right tool for a current need. Concrete defaults live in
+[`packs/defaults.md`](packs/defaults.md) §2.
 
 ---
 
@@ -256,11 +257,10 @@ inFlight.run(key, () =>
   `onRetry`, breaker `failureThreshold`, breaker `cooldownMs`, limiter
   `tokensPerWindow`, limiter `windowMs`, semaphore `maxConcurrent`, and
   inFlight `keyFn`.
-- **In-memory by default.** State lives in the process. This is a deliberate
-  choice tied to §3: a single instance is the default, so in-process state
-  works. If you ever scale to multiple instances (after §1 earns it), you
-  swap the in-memory backing for a shared one. You don't pay that complexity
-  until you have to.
+- **Match state to the runtime.** A single long-running process can keep these
+  controls in memory. Serverless or multi-instance runtimes need platform or shared
+  coordination where global enforcement matters. Do not add shared state when
+  per-instance limits satisfy the upstream contract.
 - **Each primitive reports typed errors** (e.g. `BreakerOpen`,
   `RateLimitExceeded`, `RetryExhausted`). TypeScript projects that use Effect
   compose them with Effect. Other projects use their native typed-failure model.
@@ -351,16 +351,13 @@ problem, not toward becoming a platform team for your own infrastructure.
 
 **Applications across the philosophy** (these are §13 in action):
 
-- **Hosting (§6)**: managed Docker platforms over IaC and k8s.
-- **CDN (§9)**: Cloudflare's CDN over a homebrew edge cache.
+- **Hosting (§6)**: managed platforms over self-operated infrastructure.
+- **Cloud platform (§9)**: Cloudflare services over equivalent components built in-house.
 - **Observability (§12)**: Sentry + BetterStack over a self-hosted Grafana stack.
-- **Data (§5)**: **Railway Postgres** or **DigitalOcean Managed Postgres**
-  (plain managed Postgres, no abstraction layer above it) over your own instance.
-  Avoid "Postgres-plus-platform" products (Supabase, etc.) that abstract the
-  database away and lock you to their surface. By the "own the data" rule below,
-  you want managed *Postgres*, not "a service backed by Postgres".
+- **Data (§5)**: a managed, mature database over one you operate yourself. Keep
+  export and restore paths for durable domain data.
 - **Auth**: **BetterAuth**, an open-source library that runs on your own backend,
-  so the user records live in your own Postgres. Hosted-identity SaaS (Clerk,
+  so the user records live in your authoritative store. Hosted-identity SaaS (Clerk,
   Auth0, Descope, etc.) outsources more aggressively and gives up data ownership.
   See the "own the data" rule below.
 - **Email / SMS**: Resend, Postmark, Twilio over your own MTA. The data here is
@@ -371,7 +368,7 @@ problem, not toward becoming a platform team for your own infrastructure.
 
 Some outsourced solutions offer two forms. One is a **managed SaaS**, where the
 vendor holds your data on their infrastructure. The other is a **library or
-service you run yourself**. There the data stays in your own Postgres, object
+service you run yourself**. There the data stays in your own database, object
 store, or process. Prefer the library version.
 
 The running code is a short-term productivity gain, and the data is a long-term
@@ -387,9 +384,8 @@ This applies most strongly to **durable, identifying, or strategic data**:
   over hosted-identity SaaS by this rule. When you migrate auth providers, a user
   table already on your side of the wall decides everything. It is the difference
   between "swap the library" and "data migration project".
-- **Customer records, content, domain state**: these belong in your own DB
-  (per §5 Postgres only), not in a CMS-as-a-service or a Firestore-shaped
-  vendor lock-in.
+- **Customer records, content, domain state**: these belong in an authoritative
+  store you can export, not behind a vendor surface with no practical exit path.
 - **Anything that's a moat**: proprietary data, scores, recommendations,
   curated content, stays on your side, period.
 
@@ -765,8 +761,8 @@ as a durable principle.
 
 **Rule.** **Green CI is non-negotiable**, with one partial exception for evals
 (see §27). **The commit-msg hook is re-enforced server-side.** **Deploy on every
-merge to `main`.** Per-PR full-stack preview deploys are a web/backend
-prescription, in [`packs/web.md`](packs/web.md) §24.
+merge to `main`.** Preview deployment defaults live in
+[`packs/defaults.md`](packs/defaults.md) §24.
 
 **Why.** Tight feedback loops are how you ship multiple times a day with
 confidence. A PR that can be clicked-through on a real preview deploy removes
@@ -811,7 +807,7 @@ after the §1 reach for a bigger architecture. Every duplicate is a sync problem
 in waiting. The indexer falls behind, the cache goes stale, the replica diverges.
 Bugs from these are notoriously hard to reproduce, because they depend on *which*
 copy you read and *when*. The cheapest strategy is to avoid the duplicate: one
-Postgres source-of-truth that everything reads.
+authoritative source that everything reads.
 
 **The CAP-theorem stance.** Most products aren't Google-scale. A brief drop in
 availability during a partition or write spike costs little, and an
@@ -821,19 +817,13 @@ and recoverable. Data corruption from eventually-consistent merges is not.
 
 **Applications:**
 
-- **Search.** Postgres FTS (`tsvector` + `tsquery`, `pg_trgm`, GIN indexes) is
-  the default. A dedicated search index (Meilisearch, Typesense, OpenSearch,
-  Algolia) duplicates the indexed data. It needs sync through CDC, dual-writes,
-  or background reindexers, each with its own failure modes. It earns its keep
-  only at a scale or a feature shape Postgres FTS genuinely can't serve. That
-  means advanced relevance ranking, faceted search at enormous scale, or fuzzy
-  multi-language. Most products outgrow their original search problem before
-  they outgrow Postgres FTS.
+- **Search.** Use the authoritative store's search features when they meet the
+  product need. A dedicated search index duplicates data and needs a sync strategy.
+  Add one for a current relevance, language, scale, or latency requirement.
 - **Caching.** A cache is duplicate state. Eat the database read first. Reach for
   the cache only when a real, current, measured performance problem demands it.
   When you do, prefer an *invalidatable* cache over a merely *time-bounded* one.
-  A Postgres `*_cache` table you control beats Redis with a TTL. The §11
-  in-flight map protects against a stampede on egress without a second store.
+  The §11 in-flight map protects against an egress stampede without a second store.
 - **Read replicas.** Same pattern as §3. They earn their keep on a measured
   read/write contention problem, never preemptively.
 - **Materialized views.** Acceptable as cached aggregates the app already knows
@@ -1142,7 +1132,7 @@ that demands a class or a throw is interface compliance, not a deviation (§14).
 
 ---
 
-## §32. Complexity and deep modules
+## §32. Complexity, deep modules, and locality of behaviour
 
 *The operational form is the `pstack-principle-minimize-reader-load` leaf, which a subagent reads and applies. This section carries the why.*
 
@@ -1170,6 +1160,9 @@ modules so the cost stays local:
 - **Hide design decisions, not only data.** Representation, algorithms, ordering,
   policy, and translation rules stay behind the interface. When the same decision
   appears in two modules, information leaked.
+- **Keep behaviour local.** A reader should understand what a code unit does by
+  looking at that unit. Keep the declaration or invocation of behaviour near the
+  element it affects. Do not force the reader to hunt through unrelated files.
 - **Prefer depth over pass-through layers.** A wrapper that exposes nearly every
   operation or parameter of what it wraps adds another interface without hiding
   complexity. Delete it or give it enough responsibility to simplify its callers.
@@ -1192,6 +1185,12 @@ this section: **module**, **interface**, **depth**, **seam**, **adapter**,
 owns why that process exists. The distinction follows John Ousterhout's
 [*A Philosophy of Software Design*](https://web.stanford.edu/~ouster/cgi-bin/book.php):
 the primary job of design is managing complexity.
+
+[Locality of Behaviour](https://htmx.org/essays/locality-of-behaviour/) does not mean
+that every implementation belongs inline. The call site should make the behaviour
+obvious. A deep module can still hide how it works behind that visible invocation.
+When locality conflicts with DRY or separation by technical concern, prefer the
+choice that leaves less code for the reader to trace.
 
 **Why.** A module can be simple in itself and still make the system harder. It
 forces the caller to sequence operations, translate representations, repeat

@@ -442,10 +442,8 @@ vendor, since the alternative is shipping a `lazar-tldraw` with its local fixes 
 Neither of the two offline seams reaches the network; `vendor-skills.sh` itself does, so it is
 run by hand rather than by a test.
 
-`docs/PHILOSOPHY.md` is the load-bearing reference doc — read it once, then let
-`CLAUDE.md` point at its section numbers (§1 Earn its keep, §3 Single-instance
-default, §5 Postgres only, §7 No serverless / no edge, §11 API integration
-primitives, §30 Felt outcome and writing, etc.).
+`docs/PHILOSOPHY.md` is the load-bearing reference doc. `CLAUDE.md` points at its
+stable section numbers. `docs/packs/defaults.md` owns concrete technology choices.
 
 The skills lean on a few MCP servers, which are user-scope and so are yours to wire. The
 load-bearing one is the **browser MCP (Playwright)**: the review flow verifies UI changes by
@@ -463,78 +461,13 @@ Improvements still land here first (open a PR against
 `mauricedesaxe/claude-harness-template`), and they reach you by reinstalling rather than by
 re-bootstrapping each repo.
 
-## Philosophy in one breath
+## Policy ownership
 
-- **Earn its keep.** Any complexity beyond the single-machine default needs a
-  named, current problem and an articulated reason the simpler thing won't work.
-- **Outsource the non-core; own the data.** Pay for the managed solution unless
-  the problem *is* your core competency. When both exist, prefer a library that
-  runs on your own backend (e.g. **BetterAuth**) over a SaaS that holds your data
-  — vendor lock-in is much harder to escape once the data has lived elsewhere.
-  Building from scratch or self-hosting earns its keep only on a current cost or
-  reliability problem.
-- **TypeScript by default.** Python and Rust earn their keep.
-- **Single instance, one Postgres, modular monolith.** Replicas, queues like
-  Kafka, Redis, k8s all earn their keep. Background queues on Postgres (Graphile,
-  pg-boss) are the default async story.
-- **Postgres only.** Reject SQLite, Kafka, Redis, Mongo, Timescale, etc.
-- **Managed Docker platforms** (Railway / Render / DO App Platform) > IaC, k8s, raw
-  cloud. Dockerfile + push.
-- **No serverless, no edge** for the app layer. App close to DB; CDN handles user
-  latency. Cloudflare for CDN.
-- **Observability from day one.** Structured logs + distributed traces. Errors
-  never sampled out. Sentry + BetterStack as defaults; self-hosted Grafana stack
-  must earn its keep.
-- **End-to-end type safety.** Schema at every boundary; tRPC / OpenAPI / native
-  framework typing between front and back. **Branded types** wherever they fit.
-- **API integrations** stack five primitives: in-flight map, rate limiter,
-  semaphore, circuit breaker, retry — in that order. Functional,
-  consumer-policied, in-memory.
-- **Database stores data; app owns the rules.** No business logic in stored
-  procedures, triggers, or non-trivial constraints. Migrations reversible by
-  default; expand → backfill → contract for invasive changes.
-- **Value types at the boundary.** UTC `timestamptz` for time. `bigint` /
-  `decimal.js` for money. Avoid Unix-numeric timestamps and floating-point money.
-- **Feature flags live in our Postgres.** No third-party flag SaaS.
-- **Background jobs are idempotent — always.** Graphile Worker on Postgres,
-  workers next to the web tier, cron in code. The ideal job test is end-to-end
-  through the API → queue → worker → final-state seam.
-- **File storage: Cloudflare R2 + pre-signed URLs.** Paths in DB, bytes in R2.
-  Uploads go browser → R2 direct; the server only signs and records.
-- **Polling first; push (WS / SSE / webhooks) earns its keep** on latency,
-  resource intensity, or inbound from an external system.
-- **Avoid double state.** One source of truth per piece of state. Caches,
-  dedicated search indexes, read replicas — each duplicate earns its keep.
-  Strong consistency over availability in the CAP trade.
-- **Green CI + full-stack preview deploys + deploy on every merge.** Multiple
-  deploys per day is the cadence. Evals (non-deterministic) are the one
-  exception — run on every PR, not always required to pass.
-- **AI: evals are load-bearing, costs are tracked per request.** Anthropic +
-  OpenAI via OpenRouter is the default. Every metered API call is logged in
-  Postgres (per user / request / model / cost). Fallback: provider down ⇒
-  feature down, unless the product must stay available.
-- **Test behaviour with fewer, coherent workflow tests.** Keep related actions
-  and assertions together, climb the fidelity ladder, and prefer recorded
-  fixtures over invented stubs. Unit tests are a tool, not the load-bearing layer.
-- **Commercial readiness** is declared per project. Commercial-ready ⇒ RBAC + RLS
-  + audit logging + authorization-matrix tests required.
-- **Frontend (when app-shaped):** TanStack Query + Zustand + Tailwind +
-  TanStack Form. Local-first feel under the Doherty
-  threshold; keyboard-first. Skip the stack on small surfaces — simplicity wins.
-- **Version control is jj (Jujutsu), colocated with git.** Isolated work happens in a
-  jj **workspace** (not a git worktree — the workspace is jj's isolation unit); commits
-  are `jj commit`, branches are bookmarks, `jj git push` / `gh` handle the remote. The
-  skills are jj-native.
-- **Atomic conventional commits**, no `--no-verify`, no `Co-Authored-By`. Rebase-merge.
-- **Plan first, attack the plan, gate on the user, then write code.**
-- **Comments and commits say *why*, not *what*.** Default to no comments.
-- **Fail loud, distinguish "no data" from "fetched zero"** — the "two zeros" rule.
-- **No `throw` in app code** — return a `Result<T, E>`.
-- **Felt product value** is the bar for issues — not "feature vs refactor".
-
-Full reasoning in [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md). Project-specific bindings
-(runtimes, labels, modules) in `CLAUDE.md`. Codex reads `AGENTS.md`, which stays thin
-and delegates back to `CLAUDE.md` plus the `.claude/skills/` workflows.
+- `docs/PHILOSOPHY.md` owns durable engineering principles.
+- `docs/packs/defaults.md` owns concrete technology choices.
+- `CLAUDE.md` owns routing and runtime behaviour.
+- `skills/` owns procedures.
+- Executable checks own enforcement.
 
 ## Not in here
 

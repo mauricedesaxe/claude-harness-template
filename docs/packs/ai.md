@@ -9,9 +9,9 @@ paths:
 # AI / LLM domain pack
 
 AI / LLM domain pack. Layers on the spine ([`../PHILOSOPHY.md`](../PHILOSOPHY.md)).
-Applies to any product with AI features. It builds on the web pack
-([`web.md`](web.md)) for the Postgres `api_calls` cost-tracking table. §27 references
-§5 (Postgres only), §11 (API integration primitives), and §22 (background jobs).
+Applies to any product with AI features. It builds on the technical defaults
+([`defaults.md`](defaults.md)). §27 references §11 (API integration primitives),
+§12 (managed observability), and §22 (background work).
 § numbers match the spine's Section index.
 
 ---
@@ -92,16 +92,16 @@ can leave any single provider without a code change.
   upkeep.
 - **Latency** in a specific geo that managed providers serve badly. Rare.
 
-### Cost discipline: track every metered call
+### Observe every metered call
 
-**Hard line: every metered API call is logged in Postgres** with enough fields
-to attribute cost per user, per request, per model, per time window. This is
-non-negotiable for any project that ships AI features.
+**Hard line: every metered API call is observable** with enough fields to attribute
+cost per user, request, model, and time window. This is non-negotiable for any
+project that ships AI features.
 
 Shape (adapt to the project):
 
 ```
-api_calls (
+metered_api_call (
   id, user_id, request_id, provider, model, endpoint,
   input_tokens, output_tokens, cost_estimate_cents,
   latency_ms, status, started_at, finished_at
@@ -110,19 +110,20 @@ api_calls (
 
 **Why this is non-negotiable.** AI costs scale per-request, not per-user-month.
 A bug, an abusive user, or a hot loop can rack up four-digit bills in hours.
-Without per-request tracking, you find out from the provider's billing page
-weeks after the fact. With it, you alert at the first $10/hour anomaly and you
-know exactly which user / request / model / time window did it.
+Without per-request telemetry, you find out from the provider's billing page after
+the cost occurs. With it, you can alert on an anomaly and identify the user, request,
+model, and time window.
 
 **The rule extends to any per-request metered API**, not only LLMs (Twilio SMS,
 certain Maps APIs, transaction-fee processors). The §11 in-flight map and rate
-limiter stop you making expensive calls. The cost-tracking table tells you what
-you did make, once you let them through.
+limiter stop you making expensive calls. Managed observability records the calls
+that pass those controls. LangSmith or an equivalent AI telemetry service can own
+this signal when it provides the needed attribution and retention.
 
-**Earn-its-keep, when cost tracking can be relaxed:**
+**When usage telemetry can be relaxed:**
 
 - **Non-commercial / personal projects** with a known small footprint and a
-  single user. The provider's billing page is fine.
+  single user. The provider's billing page can be enough.
 - **Multi-tenant where each user gets their own deployment / self-hosts.** Cost
   is naturally segregated by deployment; internal tracking is redundant.
 - **Non-metered APIs** (a flat-rate SaaS, an internal service). No per-call cost
@@ -140,8 +141,8 @@ answers from a fallback model.
 code. That covers commercial-ready, customer-facing, and contractually
 guaranteed. Try the primary. On §11 breaker-open or a provider error, fall
 through to the secondary. The chain is observable per §12, so you know when you
-are degraded. The cost-tracking table (above) records which provider actually
-served each request so the bill stays attributable.
+are degraded. The metered-call telemetry records which provider served each
+request so the bill stays attributable.
 
 ### Prompt as code vs prompt as data
 
