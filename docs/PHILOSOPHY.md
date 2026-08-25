@@ -852,6 +852,10 @@ directory sits alongside `.git` at the repo root. git stays underneath as the
 *interop and remote* layer: GitHub, `origin`, and the shared history teammates
 see. jj drives all local version-control work on top of it.
 
+When two agents need writable copies on the same machine or sandbox, use one jj
+workspace per agent. If the git repository is not colocated yet, initialize jj with
+`jj git init --colocate` first. Parallel work makes colocation mandatory.
+
 This holds even when the wider team is on plain git. The shared history is git,
 the local working copy is jj, and `jj git push` / `jj git fetch` bridge the two.
 Most single-author projects can be jj end to end.
@@ -907,9 +911,9 @@ where a workspace was needed, and it corrupts concurrent runs silently. The
 workspace-not-worktree rule is named here, once, and that keeps every skill
 downstream correct.
 
-**Earn-its-keep.** A repo with no jj, where `.jj` is absent, falls back to git
-worktrees and plain git. The skills are jj-native by default, so a non-jj repo is
-the deviation, not the rule. Reach for raw `git` mutations inside a jj repo only
+**Earn-its-keep.** A repo with no jj can use plain git while one actor works alone.
+Before parallel agents write to that repo, colocate it and use jj workspaces. Reach
+for raw `git` mutations inside a jj repo only
 for something jj genuinely can't express. Nearly everything has a jj verb, and a
 mix of the two is how divergent duplicate commits appear.
 

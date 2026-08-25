@@ -22,11 +22,11 @@ Open a todolist with one entry per phase before launching anything.
 2. Choose the shape. Partition into slices, race N workers on identical briefs, or mix both. For a race or mixed shape, declare `first pass`, `rank all`, or `best-of` before spawning.
 3. Set N from the user or derive it from the shape. N is total workers, not the concurrency limit.
 4. Pick the worker model from the `code` role in `models.md`, resolved through `~/.lazar-harness/models.md` when present. For a model race, name each arm's model up front.
-5. Give each worker its own writable output when it writes. Use a jj workspace, branch, or `/tmp/swarm-<slug>/worker-<n>/`.
+5. Give each worker its own writable output when it writes. Prepare one jj workspace per repository writer through the **separate-before-serializing-shared-state** principle skill. Use `/tmp/swarm-<slug>/worker-<n>/` for independent artifacts.
 
 ## Phase B: Fan out
 
-Spawn all N workers in one message with `subagent_type: general-purpose`, `run_in_background: true`, and the configured model. Each worker gets its own jj workspace or output path (`§28`, pstack-principle-separate-before-serializing-shared-state). On the background-agents runtime these can run as real cloud workers; in Claude Code and OpenCode they run locally.
+Spawn all N workers in one message with `subagent_type: general-purpose`, `run_in_background: true`, and the configured model. Each repository writer gets its prepared jj workspace. On the background-agents runtime these can run as real cloud workers; in Claude Code and OpenCode they run locally.
 
 When a worker must start from a non-default pushed branch, base its workspace on that branch: `jj git fetch` then `jj workspace add --revision <branch>`.
 
