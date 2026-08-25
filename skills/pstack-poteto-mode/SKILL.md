@@ -61,7 +61,7 @@ because a subagent can read a leaf skill and cannot read the philosophy.
 - **Type System Discipline** (**pstack-principle-type-system-discipline**). Designing types or a signature in any typed language. Make illegal states unrepresentable, brand primitives, parse external data at boundaries.
 - **Make Operations Idempotent** (**pstack-principle-make-operations-idempotent**). Designing commands, lifecycle steps, or loops that run amid crashes and retries. Converge to the same end state.
 - **Migrate Callers Then Delete Legacy APIs** (**pstack-principle-migrate-callers-then-delete-legacy-apis**). Introducing a new internal API while old callers exist. Migrate and delete in one wave.
-- **Separate Before Serializing Shared State** (**pstack-principle-separate-before-serializing-shared-state**). Concurrent actors might write the same file, branch, key, or object. Eliminate the sharing first. This is the reason each fan-out worker gets its own jj workspace or output path (`§28`).
+- **Separate Before Serializing Shared State** (**pstack-principle-separate-before-serializing-shared-state**). Concurrent actors might write the same file, branch, key, or object. Eliminate the sharing first. Parallel repository writers each get a jj workspace (`§28`).
 
 **Verification**
 

@@ -2,7 +2,7 @@
 
 Invoked at the end of every other playbook.
 
-**Workspace.** In a jj repo, cut a workspace off fresh trunk per `§28` (`jj git fetch`, then `jj workspace add --revision 'trunk()'`), or work the default workspace directly when the sandbox is the isolation. Concurrent subagents that edit at once each get their own jj workspace (the **separate-before-serializing-shared-state** principle skill); a shared `@` collides. A non-jj repo uses a git worktree off main.
+**Workspace.** In a jj repo, cut a workspace off fresh trunk per `§28` (`jj git fetch`, then `jj workspace add --revision 'trunk()'`), or work the default workspace directly when one sandbox agent writes. Prepare parallel repository writers through the **separate-before-serializing-shared-state** principle skill. Each gets a jj workspace because a shared `@` collides. A lone agent can use plain git.
 
 **Commits.** Record atomic conventional commits, one logical change each, as the work goes, via the **lazar-commit** skill. Each commit is landable and ordered to tell the story. Fold a fix into an earlier commit with `jj squash --from/--into`, never `git commit --fixup` (`§28`).
 

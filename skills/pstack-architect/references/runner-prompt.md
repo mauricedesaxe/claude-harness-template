@@ -1,6 +1,6 @@
 # Architect runner prompt
 
-The orchestrator passes this file through to every parallel candidate runner during Phase B and fills in the variable inputs around it: the task, the Phase A grounding artifacts, the isolated working directory, and the path to write outputs. The working directory is an isolated working copy (a jj workspace, or a git worktree in a non-jj repo) when available, otherwise a per-runner subdirectory under the sketch dir; what matters is independence between candidates.
+The orchestrator passes this file through to every parallel candidate runner during Phase B and fills in the variable inputs around it: the task, the Phase A grounding artifacts, the prepared jj workspace or independent output directory, and the path to write outputs. The candidate writes only in that prepared location.
 
 You are producing one candidate design in architect's parallel exploration. Read the **pstack-architect** skill in full first; that's the workflow you're inside. Output a candidate design package: type sketch, function signatures, module map, and prose rationale shaped per [`rationale-template.md`](rationale-template.md).
 

@@ -105,7 +105,8 @@ staging, why jj fires no git hooks. The rules it produces:
 - **jj drives every local step** in a repo with a `.jj` directory: `jj describe` / `jj commit`,
   `jj squash`, `jj rebase`, `jj new` / `jj edit`, `jj bookmark`, `jj git push`, `jj git fetch`.
   Read-only git (`status`, `log`, `diff`, `show`) and `gh` are fine. A repo without `.jj` uses git
-  normally.
+  normally while one actor works alone. Before parallel agents write to a non-colocated git repo,
+  run `jj git init --colocate` and give each agent a jj workspace.
 - **No git mutations in a jj repo**: commit, push, rebase, merge, reset, cherry-pick, branch
   delete/move, clean, stash, checkout, switch, restore. `git clean -fd` hurts most: jj snapshotted
   those untracked files into `@`, so git will not put them back. `~/.claude/hooks/enforce-jj.sh`
@@ -147,10 +148,8 @@ call, and never `cd` into the main checkout, whose `@` belongs to another agent.
 
 <!-- surface:sandbox -->
 
-**Work the default workspace directly with `jj edit`.** The sandbox is the isolation: this checkout
-is mine alone, and a workspace inside it would buy nothing. Reach for `jj workspace add` only when
-fanning out concurrent subagents that edit at once, which is the one case where a shared `@` still
-collides (`§28`).
+**Work the default workspace directly with `jj edit` while one agent writes.** The sandbox is the isolation
+in that case. For parallel repository work, follow the colocation and workspace rule above (`§28`).
 
 <!-- /surface:sandbox -->
 
