@@ -150,7 +150,7 @@ function runOxlint(group) {
       "--format", "json",
       ...group.files,
     ], { cwd: ROOT, encoding: "utf8" });
-    return parseJsonRun(group, result, parseOxlint, [0, 1]);
+    return parseJsonRun(group, result, parseOxlint);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -165,7 +165,7 @@ function runRuff(group) {
     "--config", `lint.mccabe.max-complexity = ${LIMITS.complexity.maximum}`,
     ...group.files,
   ], { cwd: ROOT, encoding: "utf8" });
-  return parseJsonRun(group, result, parseRuff, [0, 1]);
+  return parseJsonRun(group, result, parseRuff);
 }
 
 function runPylint(group) {
@@ -223,8 +223,8 @@ function runJscpd(group) {
   }
 }
 
-function parseJsonRun(group, result, parser, acceptedStatuses) {
-  if (result.error || !acceptedStatuses.includes(result.status)) return skippedRun(group.tool, "tool process failed");
+function parseJsonRun(group, result, parser) {
+  if (result.error || ![0, 1].includes(result.status)) return skippedRun(group.tool, "tool process failed");
   const parsed = parseJsonOutput(group, result.stdout, parser);
 
   if (result.status !== 0 && parsed.findings.length === 0 && parsed.skipped.length === 0) {
