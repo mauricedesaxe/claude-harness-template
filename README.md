@@ -104,6 +104,11 @@ opencode/
   plugin/comment-lint.ts    rejects new comments before OpenCode file edits
 hooks/
   enforce-jj.sh             PreToolUse: allows read-only git, steers the rest to jj
+bin/
+  comment-lint              runtime-neutral launcher for the comment policy
+  comment-lint.mjs          comment policy core for hooks, plugins, and commits
+  complexity-lint           runtime-neutral launcher for structural checks
+  complexity-lint.mjs       structural analyzer orchestration and reporting
 agents/
   pstack-poteto-agent.md    poteto-mode subagent wrapper
 skills/
@@ -115,6 +120,7 @@ skills/
   lazar-ship/               bookmark → push → PR → gate → rebase-merge → close out on the tracker
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
+  lazar-ux-audit/           browser-driven UI and UX review against §34
   pstack-*/                 the engineering layer: poteto-mode router, playbooks, principle leaves (forked, see below)
   matt-*/                   Matt Pocock's four kept skills, vendored (see below)
   use-railway/              Railway ops, vendored — unprefixed on purpose (see below)
@@ -123,6 +129,8 @@ docs/
   PHILOSOPHY.md             the paradigm-agnostic spine, installed as a rule
   packs/                    per-paradigm packs, each scoped by its own `paths:`
 test/
+  comment-lint.sh           drives comment parsing, hooks, and diff reconstruction
+  complexity-lint.sh        drives analyzer parsing and repository-local tool lookup
   install-smoke.sh          runs install.sh under a temp HOME, asserts the tree
   enforce-jj.sh             drives the hook with synthetic PreToolUse payloads
   opencode-comment-lint.sh  drives the OpenCode plugin against a temporary HOME
@@ -217,7 +225,7 @@ them. Which files those are is read off the files, so a skill that grows a block
 surface being installed all stop the run: each one otherwise ships silently, and the first truncates
 the file at the marker.
 
-Three files use it today:
+Five files use it today:
 
 - **`CLAUDE.md`** — which jj workspace to work in. `§28` states the isolation principle for both
   surfaces; only the default action differs, since a sandbox is already a checkout of its own.
@@ -226,6 +234,8 @@ Three files use it today:
   destroyed, and push, PR and merge all sit downstream of it.
 - **`skills/lazar-tldraw/SKILL.md`** — whether to export through the local CLI or use the sandbox's
   whiteboard tool.
+- **`skills/lazar-qa/SKILL.md`** — whether to use local browser tooling or the sandbox browser.
+- **`skills/lazar-ux-audit/SKILL.md`** — whether to use local browser tooling or the sandbox browser.
 
 Both variants sit next to each other in the file someone edits, so the two surfaces are reviewed as
 one diff and neither is a copy of the other. `install.sh` carries the reasoning at the transform.

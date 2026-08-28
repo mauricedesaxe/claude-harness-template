@@ -17,7 +17,7 @@ export const CommentLint: Plugin = async () => ({
   "tool.execute.before": async (input, output) => {
     let job: Job | null
     try {
-      job = await resolve(input.tool, output.args ?? {})
+      job = jobFor(input.tool, output.args ?? {})
     } catch {
       return
     }
@@ -34,11 +34,11 @@ export const CommentLint: Plugin = async () => ({
   },
 })
 
-async function resolve(tool: string, args: ToolArgs): Promise<Job | null> {
+function jobFor(tool: string, args: ToolArgs): Job | null {
   if (tool === "write" && typeof args.filePath === "string" && typeof args.content === "string") {
     return {
       mode: "claude-hook",
-      stdin: hookPayload(args.filePath, { old_content: await readExisting(args.filePath), content: args.content }),
+      stdin: hookPayload(args.filePath, { content: args.content }),
     }
   }
   if (tool === "edit" && typeof args.filePath === "string" && typeof args.newString === "string") {
@@ -54,11 +54,6 @@ async function resolve(tool: string, args: ToolArgs): Promise<Job | null> {
   return null
 }
 
-async function readExisting(filePath: string): Promise<string> {
-  const file = Bun.file(filePath)
-  return await file.exists() ? file.text() : ""
-}
-
 function hookPayload(filePath: string, values: Record<string, unknown>): string {
   return JSON.stringify({ tool_input: { file_path: filePath, ...values } })
 }
@@ -70,7 +65,7 @@ function patchToDiff(patchText: string): string {
     if (header) out.push(`diff --git a/${header[1].trim()} b/${header[1].trim()}`, `+++ b/${header[1].trim()}`)
     else if (line.startsWith("*** Delete File:")) out.push("diff --git a/deleted b/deleted", "+++ /dev/null")
     else if (line.startsWith("***")) continue
-    else if (line.startsWith("@@") || line.startsWith("+") || line.startsWith("-")) out.push(line)
+    else if (line.startsWith("@@") || line.startsWith("+") || line.startsWith("-") || line.startsWith(" ")) out.push(line)
     else out.push(` ${line}`)
   }
   return out.join("\n")

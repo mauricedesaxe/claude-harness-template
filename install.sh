@@ -289,10 +289,18 @@ report_skills_tracked() {
   return 0
 }
 
-# Written after its tree is installed, so a failed copy leaves the prior footprint in place.
 write_skills_footprint() {
-  local dest=$1
-  LC_ALL=C sort -u -- "$SKILLS_MANIFEST" >"$dest/$SKILLS_FOOTPRINT_NAME"
+  local dest=$1 mode=${2:-exact} staged
+  mkdir -p -- "$dest"
+  dest=$(resolve_dir "$dest")
+  staged=$(mktemp -- "$dest/.${SKILLS_FOOTPRINT_NAME}.XXXXXX")
+  if { [ "$mode" = cumulative ] && prior_skills_footprint "$dest"; cat -- "$SKILLS_MANIFEST"; } |
+    LC_ALL=C sort -u >"$staged"; then
+    mv -- "$staged" "$dest/$SKILLS_FOOTPRINT_NAME"
+  else
+    rm -f -- "$staged"
+    return 1
+  fi
 }
 
 # Seed the per-machine model config once. Create-only: an existing file is the user's, edited for
@@ -601,15 +609,19 @@ install_philosophy() {
 # a skill that fails to render stops the run with both trees still on their previous install rather
 # than with one of them already replaced by the copy that failed.
 install_skills() {
-  local built
+  local built claude_dest opencode_dest
   built=$(mktemp -d)
   cp -R -- "$HARNESS_SOURCE/skills" "$built/skills"
   render_surface_tree "$built/skills"
 
-  install_skills_tracked "$CLAUDE_HOME/skills" "$built/skills"
-  write_skills_footprint "$(resolve_dir "$CLAUDE_HOME/skills")"
-  install_skills_tracked "$OPENCODE_HOME/skills" "$built/skills"
-  write_skills_footprint "$(resolve_dir "$OPENCODE_HOME/skills")"
+  claude_dest="$CLAUDE_HOME/skills"
+  opencode_dest="$OPENCODE_HOME/skills"
+  write_skills_footprint "$claude_dest" cumulative
+  write_skills_footprint "$opencode_dest" cumulative
+  install_skills_tracked "$claude_dest" "$built/skills"
+  write_skills_footprint "$claude_dest"
+  install_skills_tracked "$opencode_dest" "$built/skills"
+  write_skills_footprint "$opencode_dest"
   rm -rf -- "$built"
   purge_harness_skills "$AGENTS_SKILLS"
   purge_dir "$OPENCODE_SKILL_SINGULAR"

@@ -8,6 +8,8 @@ import { spawnSync } from "node:child_process";
 const ROOT = realpathSync(process.cwd());
 const JAVASCRIPT_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"]);
 const PYTHON_EXTENSIONS = new Set([".py", ".pyi"]);
+const PYLINT_REFACTOR_STATUS = 8;
+const PYLINT_CONVENTION_STATUS = 16;
 const LIMITS = {
   complexity: { maximum: 10, blockingAbove: 20 },
   depth: { maximum: 4, blockingAbove: 8 },
@@ -35,6 +37,36 @@ function readStdin() {
   });
 }
 
+function decodeDiffPath(value) {
+  const raw = value.split("\t")[0].trim();
+  const path = raw.startsWith('"') && raw.endsWith('"') ? decodeCQuoted(raw.slice(1, -1)) : raw;
+  return path.replace(/^b\//, "");
+}
+
+function decodeCQuoted(value) {
+  const bytes = [];
+  const escapes = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, "\\": 92 };
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] !== "\\") {
+      const slash = value.indexOf("\\", index);
+      const end = slash < 0 ? value.length : slash;
+      bytes.push(...new TextEncoder().encode(value.slice(index, end)));
+      index = end - 1;
+      continue;
+    }
+    const octal = value.slice(index + 1).match(/^[0-7]{1,3}/)?.[0];
+    if (octal) {
+      bytes.push(Number.parseInt(octal, 8));
+      index += octal.length;
+      continue;
+    }
+    const escaped = value[++index];
+    if (escaped === undefined) return "";
+    bytes.push(escapes[escaped] ?? escaped.charCodeAt(0));
+  }
+  return new TextDecoder().decode(Uint8Array.from(bytes));
+}
+
 function changedPaths(diff) {
   const paths = new Set();
   let current = null;
@@ -53,7 +85,7 @@ function changedPaths(diff) {
     }
     if (inFileHeader && line.startsWith("+++ ")) {
       flush();
-      const raw = line.slice(4).split("\t")[0].trim().replace(/^b\//, "");
+      const raw = decodeDiffPath(line.slice(4));
       current = raw === "/dev/null" ? null : safePath(raw);
       changed = false;
       inFileHeader = false;
@@ -180,7 +212,8 @@ function runPylint(group) {
     `--max-module-lines=${LIMITS["module-lines"].maximum}`,
     ...group.files,
   ], { cwd: ROOT, encoding: "utf8" });
-  if (result.error || !Number.isInteger(result.status) || (result.status & ~(8 | 16)) !== 0) {
+  if (result.error || !Number.isInteger(result.status) ||
+      (result.status & ~(PYLINT_REFACTOR_STATUS | PYLINT_CONVENTION_STATUS)) !== 0) {
     return skippedRun(group.tool, "tool process failed");
   }
   const parsed = parseJsonOutput(group, result.stdout, parsePylint);
@@ -214,10 +247,10 @@ function runJscpd(group) {
     } catch {
       return skippedRun(group.tool, "malformed or missing JSON report");
     }
-    const findings = parseJscpd(report, new Set(group.files.map((file) => resolve(file))));
-    return findings === null
-      ? skippedRun(group.tool, "malformed or unselected clone path")
-      : { findings, skipped: [] };
+    const parsed = parseJscpd(report, selectedFiles(group.files));
+    return parsed === null
+      ? skippedRun(group.tool, "malformed analyzer output")
+      : { findings: parsed.findings, skipped: skipsForUnparsed(group.tool, parsed.unparsed) };
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -240,20 +273,25 @@ function parseJsonOutput(group, stdout, parser) {
   } catch {
     return skippedRun(group.tool, "malformed JSON output");
   }
-  const findings = parser(output, new Set(group.files.map((file) => resolve(file))));
-  return findings === null
+  const parsed = parser(output, selectedFiles(group.files));
+  return parsed === null
     ? skippedRun(group.tool, "malformed analyzer output")
-    : { findings, skipped: [] };
+    : { findings: parsed.findings, skipped: skipsForUnparsed(group.tool, parsed.unparsed) };
 }
 
 function skippedRun(tool, reason) {
   return { findings: [], skipped: [{ tool, reason }] };
 }
 
+function skipsForUnparsed(tool, unparsed) {
+  return unparsed === 0 ? [] : [{ tool, reason: `${unparsed} mapped diagnostic(s) could not be parsed` }];
+}
+
 function parseOxlint(output, selected) {
   const diagnostics = flattenOxlint(output);
   if (diagnostics === null) return null;
   const findings = [];
+  let unparsed = 0;
   const rules = {
     complexity: ["complexity", "complexity", scoreFromComplexity],
     "max-depth": ["max-depth", "depth", actualFromParentheses],
@@ -270,17 +308,24 @@ function parseOxlint(output, selected) {
     const line = diagnostic?.line ?? diagnostic?.location?.start?.line ??
       diagnostic?.span?.start?.line ?? diagnostic?.labels?.[0]?.span?.line;
     const file = validatedFile(diagnostic?.file ?? diagnostic?.filename ?? diagnostic?.filePath, selected);
-    if (!file || !validLocation(line, message)) continue;
+    if (!file || !validLocation(line, message)) {
+      unparsed++;
+      continue;
+    }
     const [findingRule, metric, valueParser] = definition;
     if (metric === null) {
       findings.push(finding("oxlint", findingRule, file, line, message, "error"));
       continue;
     }
     const value = valueParser(message);
-    if (!Number.isInteger(value) || value <= LIMITS[metric].maximum) continue;
+    if (!Number.isInteger(value)) {
+      unparsed++;
+      continue;
+    }
+    if (value <= LIMITS[metric].maximum) continue;
     findings.push(metricFinding("oxlint", findingRule, file, line, metric, value, message));
   }
-  return findings;
+  return { findings, unparsed };
 }
 
 function flattenOxlint(output) {
@@ -313,21 +358,27 @@ function normalizeOxlintRule(rule) {
 function parseRuff(output, selected) {
   if (!Array.isArray(output)) return null;
   const findings = [];
+  let unparsed = 0;
   for (const diagnostic of output) {
     if (diagnostic?.code !== "C901") continue;
     const message = diagnostic?.message;
     const value = scoreFromComplexity(message);
     const line = diagnostic?.location?.row;
     const file = validatedFile(diagnostic?.filename, selected);
-    if (!file || !validLocation(line, message) || !Number.isInteger(value) || value <= LIMITS.complexity.maximum) continue;
+    if (!file || !validLocation(line, message) || !Number.isInteger(value)) {
+      unparsed++;
+      continue;
+    }
+    if (value <= LIMITS.complexity.maximum) continue;
     findings.push(metricFinding("ruff", "C901", file, line, "complexity", value, message));
   }
-  return findings;
+  return { findings, unparsed };
 }
 
 function parsePylint(output, selected) {
   if (!Array.isArray(output)) return null;
   const findings = [];
+  let unparsed = 0;
   const rules = {
     R1702: ["too-many-nested-blocks", "depth"],
     C0302: ["too-many-lines", "module-lines"],
@@ -339,17 +390,21 @@ function parsePylint(output, selected) {
     const value = actualFromRatio(message);
     const line = diagnostic?.line;
     const file = validatedFile(diagnostic?.path ?? diagnostic?.abspath, selected);
-    if (!file || !validLocation(line, message) || !Number.isInteger(value)) continue;
+    if (!file || !validLocation(line, message) || !Number.isInteger(value)) {
+      unparsed++;
+      continue;
+    }
     const [rule, metric] = definition;
     if (value <= LIMITS[metric].maximum) continue;
     findings.push(metricFinding("pylint", rule, file, line, metric, value, message));
   }
-  return findings;
+  return { findings, unparsed };
 }
 
 function parseJscpd(output, selected) {
   if (!Array.isArray(output?.duplicates)) return null;
   const findings = [];
+  let unparsed = 0;
   for (const duplicate of output.duplicates) {
     const first = duplicate?.firstFile;
     const second = duplicate?.secondFile;
@@ -358,13 +413,16 @@ function parseJscpd(output, selected) {
     const line = first?.start;
     const secondLine = second?.start;
     const value = duplicate?.lines;
-    if (!firstFile || !secondFile || !validLocation(line, "duplicate") || !Number.isInteger(secondLine) || secondLine < 1) return null;
-    if (!Number.isInteger(value) || value < LIMITS["duplicate-lines"].minimum) return null;
+    if (!firstFile || !secondFile || !validLocation(line, "duplicate") || !Number.isInteger(secondLine) || secondLine < 1 ||
+        !Number.isInteger(value) || value < LIMITS["duplicate-lines"].minimum) {
+      unparsed++;
+      continue;
+    }
     const secondPath = relative(ROOT, secondFile).replaceAll("\\", "/");
     const message = `Duplicated block with ${secondPath}:${secondLine}`;
     findings.push(metricFinding("jscpd", "duplicate-code", firstFile, line, "duplicate-lines", value, message));
   }
-  return findings;
+  return { findings, unparsed };
 }
 
 function scoreFromComplexity(message) {
@@ -387,8 +445,20 @@ function actualFromRatio(message) {
 
 function validatedFile(file, selected) {
   if (typeof file !== "string") return null;
-  const absolute = resolve(ROOT, file);
-  return selected.has(absolute) ? absolute : null;
+  const absolute = canonicalPath(file);
+  return absolute && selected.has(absolute) ? absolute : null;
+}
+
+function selectedFiles(files) {
+  return new Set(files.map(canonicalPath).filter((file) => file !== null));
+}
+
+function canonicalPath(file) {
+  try {
+    return realpathSync(resolve(ROOT, file));
+  } catch {
+    return null;
+  }
 }
 
 function validLocation(line, message) {

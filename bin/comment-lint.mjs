@@ -7,21 +7,18 @@ const PYTHON = "python";
 const LANG_BY_EXT = {
   ts: C_STYLE, tsx: C_STYLE, mts: C_STYLE, cts: C_STYLE,
   js: C_STYLE, jsx: C_STYLE, mjs: C_STYLE, cjs: C_STYLE,
-  rs: C_STYLE, go: C_STYLE, java: C_STYLE, cs: C_STYLE,
-  swift: C_STYLE, kt: C_STYLE, kts: C_STYLE, scala: C_STYLE,
-  c: C_STYLE, h: C_STYLE, cpp: C_STYLE, hpp: C_STYLE, cc: C_STYLE, hh: C_STYLE,
-  php: C_STYLE, py: PYTHON, pyi: PYTHON,
+  go: C_STYLE, py: PYTHON, pyi: PYTHON,
 };
 
-const DIRECTIVE = /(eslint-disable|eslint-enable|prettier-ignore|biome-ignore|@ts-expect-error|@ts-ignore|@ts-nocheck|@ts-check|tslint:|deno-lint-ignore|v8\s+ignore|c8\s+ignore|istanbul\s+ignore|type:\s*ignore|noqa|pylint:|pyright:\s*ignore|ruff:|mypy:|fmt:\s*(on|off)|pragma|go:[a-z]+|@license|SPDX-License-Identifier)/i;
+const DIRECTIVE = /^(?:eslint-disable\b|eslint-enable\b|prettier-ignore\b|biome-ignore\b|@ts-expect-error\b|@ts-ignore\b|@ts-nocheck\b|@ts-check\b|tslint:|deno-lint-ignore\b|v8\s+ignore\b|c8\s+ignore\b|istanbul\s+ignore\b|type:\s*ignore\b|noqa\b|pylint:|pyright:\s*ignore\b|ruff:|mypy:|fmt:\s*(?:on|off)\b|go:[a-z]+\b|@license\b|SPDX-License-Identifier\b|#pragma\b|pragma\s*:)/i;
 const LICENSE = /(copyright|licen[cs]e|SPDX-License-Identifier|@license|all rights reserved)/i;
 const LICENSE_HEADER_SCAN_LINES = 5;
 const DECISION_HEADER =
-  "comment-lint (PHILOSOPHY §21): the code you wrote adds prose comments.";
+  "comment-lint (PHILOSOPHY §21): this change adds prose comments.";
 const FIX_MENU = [
-  "Every new non-exempt comment is prohibited.",
-  "Make the code say it, or move longer explanation to docs.",
-  "Only shebangs, leading license headers, and recognized tooling directives are exempt.",
+  "Delete narration that restates the code.",
+  "Keep a comment only for a non-obvious invariant, an external workaround, or a surprising algorithmic choice.",
+  "Use native symbol docs or an explicit Why: rationale when the explanation belongs at the code.",
 ].join("\n");
 
 function extensionOf(fileName) {
@@ -54,12 +51,12 @@ function comment(line, raw, kind = "prose") {
 
 function exemptKind(text, line, raw, leading = false) {
   if (line === 1 && raw.startsWith("#!")) return "shebang";
-  if (DIRECTIVE.test(text)) return "directive";
+  if (DIRECTIVE.test(normalizedToken(text))) return "directive";
   if (leading && line <= LICENSE_HEADER_SCAN_LINES && LICENSE.test(text)) return "license";
   return "prose";
 }
 
-function scanCStyle(text, supportsRegex) {
+function scanCStyle(text, isJavaScript) {
   const comments = [];
   let line = 1;
   let i = 0;
@@ -71,7 +68,7 @@ function scanCStyle(text, supportsRegex) {
     const ch = text[i];
     const next = text[i + 1];
     if (quote) {
-      if (ch === "\\") { i += 2; continue; }
+      if (ch === "\\" && quote !== "`") { i += 2; continue; }
       if (ch === quote) quote = null;
       if (ch === "\n") line++;
       i++;
@@ -92,7 +89,8 @@ function scanCStyle(text, supportsRegex) {
       continue;
     }
     if (ch === '"' || ch === "'") { quote = ch; canStartRegex = false; i++; continue; }
-    if (ch === "`" && supportsRegex) { inTemplate = true; i++; continue; }
+    if (ch === "`" && isJavaScript) { inTemplate = true; i++; continue; }
+    if (ch === "`" && !isJavaScript) { quote = ch; i++; continue; }
     if (ch === "\n") { line++; i++; continue; }
     if (ch === "/" && next === "/") {
       const start = i;
@@ -115,7 +113,7 @@ function scanCStyle(text, supportsRegex) {
       comments.push(comment(startLine, raw, exemptKind(raw, startLine, raw, leading)));
       continue;
     }
-    if (ch === "/" && supportsRegex && canStartRegex) {
+    if (ch === "/" && isJavaScript && canStartRegex) {
       const regex = skipRegex(text, i);
       if (regex !== null) {
         line += (text.slice(i, regex).match(/\n/g) || []).length;
@@ -199,7 +197,7 @@ function scanPythonLine(line, inTriple) {
     const ch = line[i];
     if (ch === '"' || ch === "'") {
       const triple = line.slice(i, i + 3);
-      if (triple === '\"\"\"' || triple === "'''") {
+      if (triple === '"""' || triple === "'''") {
         const close = line.indexOf(triple, i + 3);
         if (close < 0) return { index: -1, triple };
         i = close + 3;
@@ -227,8 +225,35 @@ function tokensFor(fileName, text) {
     : scanCStyle(text, /^(?:[cm]?[jt]sx?|mjs)$/.test(extensionOf(fileName)));
   const licenseEnd = leadingLicenseEnd(text, lang);
   return comments.filter(
-    (item) => item.kind === "prose" && item.line > licenseEnd && item.token.length > 0,
+    (item) => item.kind === "prose" && item.line > licenseEnd && item.token.length > 0 &&
+      !allowedComment(fileName, text, item),
   );
+}
+
+function allowedComment(fileName, text, item) {
+  if (/^Why:\s+\S/i.test(item.token)) return true;
+  if (/^(?:[cm]?[jt]sx?|mjs)$/.test(extensionOf(fileName)) && isJavaScriptDoc(text, item)) return true;
+  return extensionOf(fileName) === "go" && isGoLineDoc(text, item);
+}
+
+function isJavaScriptDoc(text, item) {
+  if (!item.snippet.startsWith("/**") && !item.snippet.startsWith("///")) return false;
+  const lines = text.split("\n");
+  if (!/^\s*(?:\/\*\*|\/\/\/)/.test(lines[item.line - 1] ?? "")) return false;
+  const declaration = lines[item.endLine] ?? "";
+  return /^\s*(?:(?:export|declare)\s+)*(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|enum|namespace|const|let|var)\s+[A-Za-z_$]/.test(declaration) ||
+    /^\s+(?:(?:public|private|protected|static|readonly|abstract|async|get|set)\s+)*[#A-Za-z_$][\w$#]*\s*(?:[(:=])/.test(declaration);
+}
+
+function isGoLineDoc(text, item) {
+  const lines = text.split("\n");
+  if (!item.snippet.startsWith("//") || !/^\s*\/\//.test(lines[item.line - 1] ?? "")) return false;
+  let start = item.line - 1;
+  while (start > 0 && /^\s*\/\//.test(lines[start - 1])) start--;
+  let index = item.endLine;
+  while (index < lines.length && /^\s*\/\//.test(lines[index])) index++;
+  const declaration = lines[index]?.match(/^\s*(?:func\s+(?:\([^)]*\)\s*)?|type\s+|var\s+|const\s+)([A-Za-z_]\w*)/);
+  return declaration !== null && normalizedToken(lines[start]).startsWith(declaration[1]);
 }
 
 function leadingLicenseEnd(text, lang) {
@@ -255,32 +280,6 @@ function subtractTokens(oldTokens, newTokens) {
 
 function lintPair(file, oldText, newText) {
   return { file, violations: subtractTokens(tokensFor(file, oldText), tokensFor(file, newText)) };
-}
-
-function proseSourceLines(file, text) {
-  const lines = text.split("\n");
-  const prose = new Set();
-  for (const token of tokensFor(file, text)) {
-    for (let line = token.line; line <= token.endLine; line++) prose.add(lines[line - 1] ?? "");
-  }
-  return prose;
-}
-
-function lintDiffHunk(file, hunk, currentProse) {
-  const direct = lintPair(file, hunk.removed.join("\n"), hunk.added.join("\n")).violations;
-  const hasCommentSyntax = [...hunk.removed, ...hunk.added].some((line) =>
-    line.includes("/*") || line.includes("*/") || /^\s*(?:\/\/|#)/.test(line),
-  );
-  if (hasCommentSyntax) return direct;
-  const oldTokens = hunk.removed
-    .filter((line) => currentProse.has(line))
-    .map((line, index) => comment(index + 1, line));
-  const removedComment = oldTokens.length > 0;
-  const newTokens = hunk.added
-    .filter((line) => currentProse.has(line) || (removedComment && /^\s*\*\s*\S/.test(line)))
-    .map((line, index) => comment(index + 1, line));
-  const inferred = subtractTokens(oldTokens, newTokens);
-  return [...new Map([...direct, ...inferred].map((token) => [token.token, token])).values()];
 }
 
 function readExisting(file) {
@@ -333,6 +332,36 @@ function candidatesFromHook(payload) {
   return [];
 }
 
+function decodeDiffPath(value) {
+  const raw = value.split("\t")[0].trim();
+  const path = raw.startsWith('"') && raw.endsWith('"') ? decodeCQuoted(raw.slice(1, -1)) : raw;
+  return path.replace(/^b\//, "");
+}
+
+function decodeCQuoted(value) {
+  const bytes = [];
+  const escapes = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, "\\": 92 };
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] !== "\\") {
+      const slash = value.indexOf("\\", index);
+      const end = slash < 0 ? value.length : slash;
+      bytes.push(...new TextEncoder().encode(value.slice(index, end)));
+      index = end - 1;
+      continue;
+    }
+    const octal = value.slice(index + 1).match(/^[0-7]{1,3}/)?.[0];
+    if (octal) {
+      bytes.push(Number.parseInt(octal, 8));
+      index += octal.length;
+      continue;
+    }
+    const escaped = value[++index];
+    if (escaped === undefined) return "";
+    bytes.push(escapes[escaped] ?? escaped.charCodeAt(0));
+  }
+  return new TextDecoder().decode(Uint8Array.from(bytes));
+}
+
 function parseDiff(diff) {
   const files = new Map();
   let current = null;
@@ -345,31 +374,76 @@ function parseDiff(diff) {
       continue;
     }
     if (inFileHeader && line.startsWith("+++ ")) {
-      const path = line.slice(4).replace(/^b\//, "").split("\t")[0].trim();
+      const path = decodeDiffPath(line.slice(4));
       current = path === "/dev/null" ? null : path;
-      if (current && !files.has(current)) files.set(current, []);
+      if (current && !files.has(current)) files.set(current, { hunks: [], synthetic: false });
       hunk = null;
       inFileHeader = false;
       continue;
     }
     if (current && line.startsWith("@@")) {
-      hunk = { added: [], removed: [] };
-      files.get(current).push(hunk);
+      const range = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+      hunk = {
+        oldStart: range ? Number(range[1]) : null,
+        oldCount: range ? Number(range[2] ?? 1) : null,
+        newStart: range ? Number(range[3]) : null,
+        newCount: range ? Number(range[4] ?? 1) : null,
+        operations: [],
+      };
+      files.get(current).hunks.push(hunk);
+      if (!range) files.get(current).synthetic = true;
       continue;
     }
     if (!current) continue;
     if (!hunk) {
-      hunk = { added: [], removed: [] };
-      files.get(current).push(hunk);
+      hunk = { oldStart: null, oldCount: null, newStart: null, newCount: null, operations: [] };
+      files.get(current).hunks.push(hunk);
+      files.get(current).synthetic = true;
     }
-    if (line.startsWith("+")) hunk.added.push(line.slice(1));
-    else if (line.startsWith("-")) hunk.removed.push(line.slice(1));
+    if (line.startsWith("+")) {
+      hunk.operations.push({ kind: "+", text: line.slice(1) });
+    } else if (line.startsWith("-")) {
+      hunk.operations.push({ kind: "-", text: line.slice(1) });
+    }
     else if (line.startsWith(" ")) {
-      hunk.added.push(line.slice(1));
-      hunk.removed.push(line.slice(1));
+      hunk.operations.push({ kind: " ", text: line.slice(1) });
     }
   }
   return files;
+}
+
+function reconstructOldFile(current, hunks) {
+  const lines = current.split("\n");
+  for (const hunk of [...hunks].reverse()) {
+    const newLines = hunk.operations.filter((operation) => operation.kind !== "-").map((operation) => operation.text);
+    const oldLines = hunk.operations.filter((operation) => operation.kind !== "+").map((operation) => operation.text);
+    if (newLines.length !== hunk.newCount || oldLines.length !== hunk.oldCount) return null;
+    const index = hunk.newStart - 1;
+    if (index < 0 || lines.slice(index, index + newLines.length).some((line, offset) => line !== newLines[offset])) return null;
+    lines.splice(index, newLines.length, ...oldLines);
+  }
+  return lines.join("\n");
+}
+
+function applySyntheticHunks(current, hunks) {
+  const lines = current.split("\n");
+  let cursor = 0;
+  for (const hunk of hunks) {
+    const oldLines = hunk.operations.filter((operation) => operation.kind !== "+").map((operation) => operation.text);
+    const newLines = hunk.operations.filter((operation) => operation.kind !== "-").map((operation) => operation.text);
+    if (oldLines.length === 0) {
+      if (current !== "" || hunks.length !== 1 || hunk.operations.some((operation) => operation.kind !== "+")) return null;
+      return newLines.join("\n");
+    }
+    const matches = [];
+    for (let index = cursor; index <= lines.length - oldLines.length; index++) {
+      if (oldLines.every((line, offset) => lines[index + offset] === line)) matches.push(index);
+    }
+    if (matches.length !== 1) return null;
+    lines.splice(matches[0], oldLines.length, ...newLines);
+    cursor = matches[0] + newLines.length;
+  }
+  return lines.join("\n");
 }
 
 function reasonFor(results) {
@@ -412,10 +486,15 @@ async function runClaudeHook() {
 
 async function runDiff() {
   const results = [];
-  for (const [file, hunks] of parseDiff(await readStdin())) {
+  for (const [file, parsed] of parseDiff(await readStdin())) {
     if (!langOf(file)) continue;
-    const currentProse = proseSourceLines(file, readExisting(file));
-    const violations = hunks.flatMap((hunk) => lintDiffHunk(file, hunk, currentProse));
+    const current = readExisting(file);
+    const compared = parsed.synthetic
+      ? applySyntheticHunks(current, parsed.hunks)
+      : reconstructOldFile(current, parsed.hunks);
+    const violations = compared === null ? [] : parsed.synthetic
+      ? lintPair(file, current, compared).violations
+      : lintPair(file, compared, current).violations;
     if (violations.length > 0) results.push({ file, violations });
   }
   if (results.length === 0) return;

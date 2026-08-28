@@ -122,7 +122,7 @@ staging, why jj fires no git hooks. The rules it produces:
 - **Conventional commits, atomic, one logical change each**:
   `feat|fix|refactor|chore|docs|test|style|perf|ci|build|revert`. Subject under 72 characters,
   details in the body. `lazar-commit` checks the message shape and runs the project's checks
-  itself, and CI re-enforces both.
+  locally. Projects with CI must re-enforce both there.
 - **Rebase-merge PRs**: `gh pr merge <#> --rebase --delete-branch`, never `--merge`. Every commit has
   to be good enough to live on `main`.
 - **Never add a `Co-Authored-By: Claude` trailer** or any other Claude/Anthropic attribution line.
