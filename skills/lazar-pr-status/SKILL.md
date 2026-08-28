@@ -191,10 +191,9 @@ and nothing published. `gh pr view`, `gh issue view`, `gh api` with GET, and the
 read tools are the whole surface. Never resolve a thread, never touch the tracker's state, never
 `gh api` with a write method.
 
-The default holds wherever this runs. This report's audience is me, not the PR. It's the
-briefing I read before I review someone else's work. To post it unasked would drop my private
-notes on their PR. That's what makes it different from `lazar-review`, whose output *is* a review and whose
-destination *is* the PR.
+The default holds wherever this runs. This report's audience is me, not the PR. It's the briefing I
+read before I review someone else's work. To post it unasked would drop my private notes on their
+PR.
 
 **Publishing happens only when I ask for it, and only after you ask me.** If I say to post it,
 say what you're about to post and where, then wait for me to confirm. A confirmed post is a PR

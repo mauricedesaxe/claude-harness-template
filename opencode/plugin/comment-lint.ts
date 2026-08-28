@@ -1,57 +1,77 @@
 import type { Plugin } from "@opencode-ai/plugin"
 
-/**
- * comment-lint for OpenCode: the write-time half of the §21 guard, the counterpart
- * to Claude Code's PostToolUse hook. tool.execute.before fires before a write lands,
- * so a throw both blocks it and hands the model the §21 reason. Fail-open.
- */
-
 const BIN = `${process.env.HOME}/.lazar-harness/bin/comment-lint`
+
+type Job = { mode: string; stdin: string }
+type ToolArgs = {
+  filePath?: unknown
+  content?: unknown
+  oldString?: unknown
+  newString?: unknown
+  patchText?: unknown
+  patch?: unknown
+}
+type RunResult = { code: number; stderr: string }
 
 export const CommentLint: Plugin = async () => ({
   "tool.execute.before": async (input, output) => {
-    const job = resolve(input.tool, output.args ?? {})
+    let job: Job | null
+    try {
+      job = await resolve(input.tool, output.args ?? {})
+    } catch {
+      return
+    }
     if (!job) return
 
-    let result
+    let result: RunResult
     try {
       result = await runCore(job.mode, job.stdin)
     } catch {
-      return // bin missing or spawn unavailable: fail open, never block a write
+      return
     }
     if (result.code === 0) return
     throw new Error(result.stderr || `comment-lint rejected the ${input.tool}`)
   },
 })
 
-/** Maps a file-writing tool to a (core mode, stdin) pair, or null when there's nothing to lint. */
-function resolve(tool: string, args: any): { mode: string; stdin: string } | null {
-  if (tool === "write" && typeof args.filePath === "string" && typeof args.content === "string")
-    return { mode: "claude-hook", stdin: hookPayload(args.filePath, args.content) }
-  if (tool === "edit" && typeof args.filePath === "string" && typeof args.newString === "string")
-    return { mode: "claude-hook", stdin: hookPayload(args.filePath, args.newString) }
+async function resolve(tool: string, args: ToolArgs): Promise<Job | null> {
+  if (tool === "write" && typeof args.filePath === "string" && typeof args.content === "string") {
+    return {
+      mode: "claude-hook",
+      stdin: hookPayload(args.filePath, { old_content: await readExisting(args.filePath), content: args.content }),
+    }
+  }
+  if (tool === "edit" && typeof args.filePath === "string" && typeof args.newString === "string") {
+    return {
+      mode: "claude-hook",
+      stdin: hookPayload(args.filePath, { old_string: args.oldString, new_string: args.newString }),
+    }
+  }
   const patchText = args.patchText ?? args.patch
-  if (tool === "apply_patch" && typeof patchText === "string")
+  if (tool === "apply_patch" && typeof patchText === "string") {
     return { mode: "diff", stdin: patchToDiff(patchText) }
+  }
   return null
 }
 
-function hookPayload(filePath: string, content: string): string {
-  return JSON.stringify({ tool_input: { file_path: filePath, content } })
+async function readExisting(filePath: string): Promise<string> {
+  const file = Bun.file(filePath)
+  return await file.exists() ? file.text() : ""
 }
 
-/**
- * Rewrites an apply_patch body into the unified-diff shape diff mode parses: each
- * `*** Add/Update File:` header becomes `+++ b/<path>`, its `+` lines already match.
- * Context, `@@`, `-` removals, and the Begin/End markers, diff mode ignores.
- */
+function hookPayload(filePath: string, values: Record<string, unknown>): string {
+  return JSON.stringify({ tool_input: { file_path: filePath, ...values } })
+}
+
 function patchToDiff(patchText: string): string {
   const out: string[] = []
   for (const line of patchText.split("\n")) {
     const header = line.match(/^\*\*\* (?:Add|Update) File: (.+)$/)
-    if (header) out.push(`+++ b/${header[1].trim()}`)
-    else if (line.startsWith("*** Delete File:")) out.push("+++ /dev/null")
-    else out.push(line)
+    if (header) out.push(`diff --git a/${header[1].trim()} b/${header[1].trim()}`, `+++ b/${header[1].trim()}`)
+    else if (line.startsWith("*** Delete File:")) out.push("diff --git a/deleted b/deleted", "+++ /dev/null")
+    else if (line.startsWith("***")) continue
+    else if (line.startsWith("@@") || line.startsWith("+") || line.startsWith("-")) out.push(line)
+    else out.push(` ${line}`)
   }
   return out.join("\n")
 }

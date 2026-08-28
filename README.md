@@ -101,20 +101,17 @@ patches/
 CLAUDE.md                   the instructions both runtimes load
 opencode/
   commands/bro.md           OpenCode's user-invoked /bro adapter
+  plugin/comment-lint.ts    rejects new comments before OpenCode file edits
 hooks/
   enforce-jj.sh             PreToolUse: allows read-only git, steers the rest to jj
 agents/
-  clarity-reviewer.md       docs/comment + self-explanatory-code discipline (§21)
-  complexity-reviewer.md    complexity placement + deep-module discipline (§32)
-  git-hygiene-reviewer.md   atomic conventional commits, linear history, PR meta
-  yagni-reviewer.md         speculative generality, in a diff or in a plan
+  pstack-poteto-agent.md    poteto-mode subagent wrapper
 skills/
   bro/                      user-invoked plain-language reset
   lazar-commit/             atomic conventional commits, jj-native, no AI attribution
   lazar-pr-status/          a PR number → its issue, what's addressed, what's only replied to, drift
   lazar-qa/                 drive a change in a real browser (preview or local) → bugs, UX, intent gaps
   lazar-research/           an issue's open questions → /deep-research + a throwaway prototype → a verdict
-  lazar-review/             the one review: only the global doctrine agents, converged
   lazar-ship/               bookmark → push → PR → gate → rebase-merge → close out on the tracker
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
@@ -128,15 +125,15 @@ docs/
 test/
   install-smoke.sh          runs install.sh under a temp HOME, asserts the tree
   enforce-jj.sh             drives the hook with synthetic PreToolUse payloads
+  opencode-comment-lint.sh  drives the OpenCode plugin against a temporary HOME
 ```
 
 ## Enforcement
 
-Everything else here is guidance, and guidance dies at the first delegation boundary: `CLAUDE.md`
-and `~/.claude/rules/` are **not inherited by subagents**, so a rule written there reaches a main
-loop and stops. An agent that had been told not to run `install.sh` complied, then spawned a
-reviewer subagent that ran it and wiped a live config directory. A `PreToolUse` hook fires for
-every agent at every depth, so it is the only enforcement this harness has.
+Most of this repository is guidance, and guidance dies at the first delegation boundary:
+`CLAUDE.md` and `~/.claude/rules/` are **not inherited by subagents**. Claude Code uses a
+`PreToolUse` hook for file edits. OpenCode uses `tool.execute.before` in a plugin for the same
+comment rule.
 
 `hooks/` is therefore an install target alongside `skills/` and `agents/`, with the same purge:
 a hook this repo stops shipping comes off the disk, and the same install takes its wiring out of
@@ -175,9 +172,8 @@ profile's install and the last, a profile not yet installed still wires a hook t
 gone, and fires it on every prompt. The plan is worth reading before the first run rather than
 between the second and the third.
 
-**OpenCode gets none of this.** It has no hook equivalent, so enforcement is Claude Code's alone
-and OpenCode keeps guidance. Enforcement where it is available beats enforcement nowhere; the
-asymmetry is chosen.
+OpenCode has no equivalent for the jj command guard. Its comment rule runs through
+`opencode/plugin/comment-lint.ts` before `write`, `edit`, and `apply_patch` calls.
 
 An agent is authored **once**, in Claude Code's format. OpenCode additionally requires a
 `mode:` and a `permission:` block, and the installer generates those from that single source
@@ -221,23 +217,15 @@ them. Which files those are is read off the files, so a skill that grows a block
 surface being installed all stop the run: each one otherwise ships silently, and the first truncates
 the file at the marker.
 
-Four files use it today:
+Three files use it today:
 
 - **`CLAUDE.md`** — which jj workspace to work in. `§28` states the isolation principle for both
   surfaces; only the default action differs, since a sandbox is already a checkout of its own.
-- **`skills/lazar-review/SKILL.md`** — what diff the reviewers are handed, and whether the verdict
-  is posted. Sharing a disk means `jj diff --from 'trunk()' --to @`, committed plus uncommitted.
-  Not sharing one means the pushed PR, which each reviewer fetches with `gh` for itself, and
-  nothing pushed means say so and spawn nobody rather than booting a sandbox per reviewer to fail
-  identically. Posting is refused on a laptop, where nothing goes out under Alex's name unread,
-  and required in a sandbox, where the review carries a bot's identity and the transcript reaches
-  nobody.
 - **`skills/lazar-ship/SKILL.md`** — whether Step 3 waits to be OK'd before committing. An
   approval gate with nobody to answer it strands finished work in a checkout that is about to be
   destroyed, and push, PR and merge all sit downstream of it.
-- **`agents/git-hygiene-reviewer.md`** — where the commit history is read from. It is the one
-  reviewer that gathers its own input, so a `jj log` of `trunk()..@` on a machine that only ever
-  cloned the base branch reports a clean stack for work it never saw.
+- **`skills/lazar-tldraw/SKILL.md`** — whether to export through the local CLI or use the sandbox's
+  whiteboard tool.
 
 Both variants sit next to each other in the file someone edits, so the two surfaces are reviewed as
 one diff and neither is a copy of the other. `install.sh` carries the reasoning at the transform.
@@ -406,6 +394,10 @@ the licence belongs next to the text it covers.
 ```sh
 bash test/install-smoke.sh
 bash test/enforce-jj.sh
+bash test/comment-lint.sh
+bash test/complexity-lint.sh
+bash test/opencode-comment-lint.sh
+bash test/skills-manifest.sh
 bash test/prefix-rewrite.sh
 bash test/tldraw-patch.sh
 bash test/model-invocation.sh

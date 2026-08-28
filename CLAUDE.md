@@ -37,18 +37,15 @@ deliberately not paraphrased here.
 
 The pstack flow runs as written, with these standing overrides.
 
-- **`lazar-review` is the one review command.** It runs only the global doctrine agents, converged
-  into one verdict, and nothing else. Not a repo's own reviewers, and not `pstack-interrogate`, the
-  separate multi-model adversarial pass, which is a different tool for a different job.
 - **`lazar-commit` and `lazar-ship` own the landing.** pstack's Shipping playbook defers to them.
   `lazar-commit` records atomic conventional commits as the work goes, and `lazar-ship` carries a
   bookmark through push, PR, CI, and a rebase merge.
 - **`lazar-tldraw` and `lazar-qa` get reached for proactively.** Show the idea, don't only describe
   it, and drive a change through a real browser before it ships. Diagram any system with three or
   more components and any data flow, and fat-marker a screen before building it.
-- **Three of Matt's skills are retained** for what pstack doesn't cover: `matt-diagnosing-bugs`
-  (reproduce before you touch the code), `matt-codebase-design` (the deep-module vocabulary), and
-  `matt-handoff`.
+- **Four of Matt's skills are retained** for what pstack doesn't cover: `matt-code-review` for a
+  standards and spec review, `matt-diagnosing-bugs` for reproduction first, `matt-codebase-design`
+  for deep-module vocabulary, and `matt-handoff` for handoffs.
 
 ## Writing
 
@@ -214,11 +211,10 @@ Add a convention the moment a repo teaches you one. Editing the note by hand is 
 `lazar-*` is mine, and `/bro` is my user-invoked plain-language reset. Anything else unprefixed is
 the runtime's or the repo's, bar `use-railway`. Railway's own installer writes that name into
 `~/.claude/skills`, so a rename restarts the fight it ended. Leave it alone. The engineering flow
-routes through `pstack-poteto-mode`, not from memory. My `lazar-*` set has eight:
+routes through `pstack-poteto-mode`, not from memory. The main `lazar-*` workflows are:
 
 | Skill | Reach for it when |
 |---|---|
-| `lazar-review` | Before a commit, push, or merge. The one review command; see the deviations above. |
 | `lazar-qa` | Exercising a change in a real browser before it ships. Prefers a preview deploy, else hosts locally, drives via the Playwright MCP, and reports bugs, UX gaps, and intent misses to chat or the PR. |
 | `lazar-commit` | A logical chunk of work is done. Record it as atomic conventional commits, as you go, not all at the end. |
 | `lazar-ship` | Landing work on `main`: bookmark, commit, push, PR, CI, rebase merge. Runs only the steps still missing. |
@@ -226,8 +222,3 @@ routes through `pstack-poteto-mode`, not from memory. My `lazar-*` set has eight
 | `lazar-research` | An issue's open questions need answering before we commit to an approach. Delegates the web to `/deep-research` and runnable questions to a throwaway prototype. Never closes the issue. |
 | `lazar-standup` | Writing the daily 3 Ps (Progress / Problems / Priorities), reconciling merged PRs, tracker issues, and unpushed local work into a post in my voice. |
 | `lazar-tldraw` | Showing a diagram or a low-fi wireframe. Reach for it proactively; see the deviations above. Needs `@kitschpatrol/tldraw-cli`. |
-
-The reviewer **agents** are run by `lazar-review`, never invoked directly. The harness's `agents/`
-set installs globally because it judges habits that hold in every repo. Every other reviewer judges
-a repo against *its own* standards, so it lives in that repo's `.claude/agents/`, where
-`lazar-review` picks it up automatically.

@@ -62,7 +62,7 @@ PSTACK_UPSTREAM="cursor/plugins"
 
 # The four Matt skills the harness still vendors after the pstack migration. pstack-poteto-mode is
 # the router and its playbooks and pstack-principle-* leaves cover the flow Matt's other skills used
-# to, so the rest are retired. `code-review` stays because lazar-review runs it as one axis;
+# to, so the rest are retired. `code-review` stays as the standards and spec review;
 # `codebase-design` for its deep-module vocabulary; `diagnosing-bugs` for reproduce-before-you-touch;
 # `handoff` for compaction.
 UPSTREAM_SKILLS=(

@@ -8,9 +8,8 @@ description: Drive a change through a real browser and report what's wrong with 
 I point at a change. You open the real app, drive it like a user, and tell me what's broken, what's
 clumsy, and where it misses what the issue asked for.
 
-This is the manual-QA counterpart to `lazar-review`. That one reads the diff; this one *uses the
-software*. The two hard rules: you run against a real running app, and you drive it through the
-browser for real. Reading the code is how you learn what to test, never how you conclude it works.
+Run against a real app and drive it through the browser. Reading the code is how you learn what to
+test, never how you conclude it works.
 
 ## Step 1: resolve the change and its intent
 
