@@ -17,10 +17,9 @@ What's specific to this repo, and easy to get wrong:
 
 - **`CLAUDE.md` has a line budget**: keep it lean, because adherence drops as it grows. Make budget
   by pointing at the philosophy or at `pstack-poteto-mode`, not by dropping a rule.
-- **`surface:local` / `surface:sandbox` blocks are per-environment prose**, in `CLAUDE.md` and in
-  `skills/lazar-review/SKILL.md`. The installer keeps the pair matching `HARNESS_SURFACE` and drops
-  the rest, so both variants live in the markdown and are edited together. A file carrying one
-  surface and not the other stops the install.
+- **`surface:local` / `surface:sandbox` blocks are per-environment prose.** The installer keeps the
+  pair matching `HARNESS_SURFACE` and drops the rest, so both variants live in the markdown and are
+  edited together. A file carrying one surface and not the other stops the install.
 - **Most vendored skill directories are never hand-edited.** This covers `skills/matt-*`,
   `skills/lazar-tldraw`, `skills/use-railway`, `skills/plannotator-*`, and
   `skills/visual-explainer`. Edit upstream or `patches/lazar-tldraw.patch`, then re-run

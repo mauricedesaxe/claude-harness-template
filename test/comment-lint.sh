@@ -1,124 +1,217 @@
 #!/usr/bin/env bash
-# Drives bin/comment-lint over synthetic files, one per rule it decides. Synthetic because a
-# fixture drawn from the repo pins whatever that file happens to contain today, and the thing
-# under test is the policy, not a file. Every case names the measure it exercises, so a
-# constant moved in the core fails the case that constant exists to serve.
 set -uo pipefail
 
 HARNESS_SOURCE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 CORE="$HARNESS_SOURCE/bin/comment-lint.mjs"
+TMP=$(mktemp -d)
 failures=0
+trap 'rm -rf -- "$TMP"' EXIT
 
 pass() { printf 'ok   %s\n' "$1"; }
-
-fail() {
-  printf 'FAIL %s\n' "$1" >&2
-  failures=$((failures + 1))
-}
+fail() { printf 'FAIL %s\n' "$1" >&2; failures=$((failures + 1)); }
 
 command -v node >/dev/null 2>&1 || {
   printf 'no node; comment-lint fails open and there is nothing to drive\n' >&2
   exit 0
 }
 
-# The core reads a Claude Code PostToolUse payload, so the file name has to ride along with the
-# content: language is chosen by extension, and a payload without one lints nothing at all.
-lint() {
-  local name=$1 body=$2
+hook() {
+  local name=$1 old=$2 new=$3
   node -e '
-    const [name, body] = process.argv.slice(1);
-    process.stdout.write(JSON.stringify({ tool_input: { file_path: name, content: body } }));
-  ' "$name" "$body" | node "$CORE" claude-hook 2>&1
+    const [name, oldText, newText] = process.argv.slice(1);
+    process.stdout.write(JSON.stringify({ tool_input: {
+      file_path: name, old_content: oldText, content: newText,
+    }}));
+  ' "$name" "$old" "$new" | node "$CORE" claude-hook 2>&1
 }
 
-# Asserts on the reported measure, never on the exit code alone. A case that trips the wrong
-# measure is a case that would keep passing through the exact regression it guards against:
-# both walls exit 2, and only the message says which rule caught it.
-assert_lint() {
-  local what=$1 want=$2 name=$3 body=$4 out
-  out=$(lint "$name" "$body")
+edit_hook() {
+  local name=$1 old=$2 new=$3
+  node -e '
+    const [name, oldText, newText] = process.argv.slice(1);
+    process.stdout.write(JSON.stringify({ tool_input: {
+      file_path: name, old_string: oldText, new_string: newText,
+    }}));
+  ' "$name" "$old" "$new" | node "$CORE" claude-hook 2>&1
+}
 
-  local got="clean"
-  case "$out" in
-  *"floating comment"*) got="loose" ;;
-  esac
-  case "$out" in
-  *"% of the text is comment"*) got="char" ;;
-  *"% of the lines are comment"*) got="line" ;;
-  esac
+current_hook() {
+  local name=$1 new=$2
+  node -e '
+    const [name, newText] = process.argv.slice(1);
+    process.stdout.write(JSON.stringify({ tool_input: {
+      file_path: name, content: newText,
+    }}));
+  ' "$name" "$new" | node "$CORE" claude-hook 2>&1
+}
 
-  if [ "$got" = "$want" ]; then
+assert_hook() {
+  local what=$1 want=$2 name=$3 old=$4 new=$5 out status
+  out=$(hook "$name" "$old" "$new")
+  status=$?
+  if [ "$status" -eq "$want" ]; then
     pass "$what"
   else
-    fail "$what (wanted $want, got $got)"
+    fail "$what (status=$status output='$out')"
   fi
 }
 
-# A paragraph of prose long enough to be a wall on its own, held on one physical line. The old
-# check counted comment lines only, so this exact shape scored 1 line and passed clean.
-WALL='This function resolves a payment intent against the ledger, and it first checks whether the intent has already been settled because the upstream redelivers webhooks and a double settle would double-charge the customer, and it then loads the ledger row, applies the delta, and writes it back under an optimistic version check so two concurrent deliveries cannot both win, and if that check fails it does not retry here because the caller decides.'
+assert_hook "a new doc comment is rejected" 2 doc.ts \
+  'export const value = 1;' $'/** Explains the value. */\nexport const value = 1;'
+assert_hook "a new trailing comment is rejected" 2 trailing.ts \
+  'export const value = 1;' 'export const value = 1; // Explains the value.'
+assert_hook "a new loose comment is rejected" 2 loose.py \
+  'value = 1' $'# Explains the value.\nvalue = 1'
 
-CODE=$(printf '  const step%d = compute(a, b);\n' 1 2 3 4 5 6 7 8 9 10 11 12 13 14)
+assert_hook "an unchanged surrounding comment passes" 0 unchanged.ts \
+  $'// Existing explanation.\nexport const value = 1;' \
+  $'// Existing explanation.\nexport const value = 2;'
+assert_hook "normalized unchanged comment text passes" 0 normalized.ts \
+  $'/** Existing explanation. */\nexport const value = 1;' \
+  $'/**\n * Existing   explanation.\n */\nexport const value = 2;'
+assert_hook "comment comparison preserves multiset counts" 2 duplicate.ts \
+  $'// Existing explanation.\nexport const value = 1;' \
+  $'// Existing explanation.\n// Existing explanation.\nexport const value = 1;'
+assert_hook "slashes inside a regular expression are not comments" 0 regex.ts '' \
+  'export const url = /^https?:\\/\\/example\\.com$/;'
+assert_hook "comment-like text inside a template stays text" 0 template-text.ts '' \
+  'export const value = `https://example.com/path`;'
+assert_hook "a comment inside a template expression is rejected" 2 template-expression.ts '' \
+  'export const value = `${/* Explain the value. */ source}`;'
+assert_hook "a trailing comment after division is rejected" 2 division.ts '' \
+  'export const average = total / count; // Explains the average.'
 
-# The regression this file exists for: a wall wrapped long is a few lines and most of the text.
-assert_lint "a long-wrapped prose wall trips the character measure" char wall.ts \
-  "$(printf '/**\n * %s\n */\nexport function settle(a, b) {\n%s\n  return a + b;\n}\n' "$WALL" "$CODE")"
+assert_hook "tooling directives are exempt" 0 directives.ts '' \
+  $'// @ts-nocheck\n/* eslint-disable no-console */\nexport const value = 1;'
+assert_hook "a shebang is exempt" 0 shebang.py '' \
+  $'#!/usr/bin/env python3\nvalue = 1'
+assert_hook "a leading license header is exempt" 0 license.ts '' \
+  $'// Copyright 2026 Someone\n// SPDX-License-Identifier: MIT\nexport const value = 1;'
+assert_hook "all lines in a leading license header are exempt" 0 license-full.ts '' \
+  $'// Copyright 2026 Someone\n// Permission is hereby granted, free of charge.\n// SPDX-License-Identifier: MIT\nexport const value = 1;'
 
-# The same wall on a single physical line. No line count can reach this one: it is one comment
-# line, under any floor expressed in lines, and still most of the file's text.
-assert_lint "a wall held on one physical line trips the character measure" char oneline.ts \
-  "$(printf '/** %s */\nexport function settle(a, b) {\n%s\n  return a + b;\n}\n' "$WALL" "$CODE")"
-
-# The other wall, which the character measure cannot see: a comment beside every line of code
-# is most of the lines and almost none of the text. Dropping the line measure regresses this.
-assert_lint "a comment beside every line trips the line measure" line perline.ts \
-  "$(printf 'export function settle(a, b) {\n%s}\n' \
-    "$(printf '  const step%d = computeTheNextPartOfTheLedgerDelta(a, b); // step\n' 1 2 3 4 5 6 7 8)")"
-
-# The floors, from the other side. A genuine short why on a symbol is what §21's own fix menu
-# tells the agent to write, so the check that enforces §21 must not bounce it.
-assert_lint "a one-line doc comment on a symbol stays clean" clean doc.ts \
-  "$(printf '/** Minor units throughout, never a float: the upstream rounds halves up. */\nexport function settle(a, b) {\n%s\n  return a + b;\n}\n' "$CODE")"
-
-assert_lint "a three-line doc comment on a symbol stays clean" clean doc3.ts \
-  "$(printf '/**\n * Minor units throughout, never a float, because the upstream rounds\n * halves up and a cent of drift compounds across a settlement run.\n */\nexport function settle(a, b) {\n%s\n  return a + b;\n}\n' "$CODE")"
-
-# Reflow invariance is the property the character measure is built on, and the reason it counts
-# non-whitespace only. Re-wrapping prose changes its line count and must not change the verdict.
-NARROW=$(printf '/**\n * Minor units throughout,\n * never a float, because\n * the upstream rounds\n * halves up.\n */\nexport function settle(a, b) {\n%s\n  return a + b;\n}\n' "$CODE")
-WIDE=$(printf '/**\n * Minor units throughout, never a float, because the upstream rounds halves up.\n */\nexport function settle(a, b) {\n%s\n  return a + b;\n}\n' "$CODE")
-narrow_out=$(lint narrow.ts "$NARROW")
-wide_out=$(lint wide.ts "$WIDE")
-if [ -z "$narrow_out" ] && [ -z "$wide_out" ]; then
-  pass "the same why wrapped narrow and wide gets the same verdict"
+current="$TMP/current.ts"
+printf '// Existing explanation.\nexport const value = 1;\n' >"$current"
+out=$(current_hook "$current" $'// Existing explanation.\nexport const value = 2;'); status=$?
+if [ "$status" -eq 0 ]; then
+  pass "whole-file writes read the current file before mutation"
 else
-  fail "the same why wrapped narrow and wide gets the same verdict (narrow='$narrow_out' wide='$wide_out')"
+  fail "whole-file writes read the current file before mutation (status=$status output='$out')"
 fi
 
-# The exemptions the density measures must not count, or every generated and licensed file in
-# the repo becomes unwritable. Each one is a whole file of nothing but exempt comment lines.
-assert_lint "tooling directives never count toward density" clean directives.ts \
-  "$(printf '/* eslint-disable no-console */\n// @ts-nocheck\n// prettier-ignore\n// biome-ignore lint: upstream\nexport const x = 1;\n')"
+out=$(edit_hook edit.ts '// Existing explanation.' '// Existing explanation.'); status=$?
+if [ "$status" -eq 0 ]; then
+  pass "edit payloads compare old and new text"
+else
+  fail "edit payloads compare old and new text (status=$status output='$out')"
+fi
 
-assert_lint "a license header never counts toward density" clean license.ts \
-  "$(printf '// Copyright 2026 Someone\n// SPDX-License-Identifier: MIT\n// All rights reserved.\n// Licence terms above.\nexport const x = 1;\n')"
+same_diff=$(printf '%s\n' \
+  'diff --git a/file.ts b/file.ts' \
+  '--- a/file.ts' \
+  '+++ b/file.ts' \
+  '@@ -1 +1 @@' \
+  '-// Existing explanation.' \
+  '+// Existing explanation.')
+out=$(printf '%s' "$same_diff" | node "$CORE" diff 2>&1); status=$?
+if [ "$status" -eq 0 ]; then
+  pass "diff mode subtracts removed comment tokens"
+else
+  fail "diff mode subtracts removed comment tokens (status=$status output='$out')"
+fi
 
-assert_lint "a shebang never counts toward density" clean shebang.py \
-  "$(printf '#!/usr/bin/env python3\nx = 1\n')"
+changed_diff=$(printf '%s\n' \
+  'diff --git a/file.ts b/file.ts' \
+  '--- a/file.ts' \
+  '+++ b/file.ts' \
+  '@@ -1 +1 @@' \
+  '-// Existing explanation.' \
+  '+// New explanation.')
+out=$(printf '%s' "$changed_diff" | node "$CORE" diff 2>&1); status=$?
+if [ "$status" -eq 1 ] && [[ "$out" == *"New explanation"* ]]; then
+  pass "diff mode rejects an added token after subtraction"
+else
+  fail "diff mode rejects an added token after subtraction (status=$status output='$out')"
+fi
 
-# Python runs the other scanner, so every measure needs its own case here: a shared bug in the
-# density maths would show in both, but a scanner that mis-weighs `#` text shows only in this one.
-assert_lint "a long-wrapped prose wall trips the character measure in python" char wall.py \
-  "$(printf '# %s\ndef settle(a, b):\n%s\n    return a + b\n' "$WALL" \
-    "$(printf '    step%d = compute(a, b)\n' 1 2 3 4 5 6 7 8 9 10 11 12 13 14)")"
+block_middle_diff=$(printf '%s\n' \
+  'diff --git a/file.ts b/file.ts' \
+  '--- a/file.ts' \
+  '+++ b/file.ts' \
+  '@@ -1,3 +1,3 @@' \
+  ' /**' \
+  '- * Existing explanation.' \
+  '+ * New explanation.' \
+  ' */')
+out=$(printf '%s' "$block_middle_diff" | node "$CORE" diff 2>&1); status=$?
+if [ "$status" -eq 1 ] && [[ "$out" == *"New explanation"* ]]; then
+  pass "diff mode rejects an edited block-comment continuation"
+else
+  fail "diff mode rejects an edited block-comment continuation (status=$status output='$out')"
+fi
 
-# A `#` inside a string is not a comment, and a scanner that thinks it is would weigh the whole
-# string as comment text and fail a file that has no comments in it at all.
-assert_lint "a hash inside a string is not comment text" clean strings.py \
-  "$(printf 'colours = ["#ffffff", "#000000", "#abcdef", "#123456", "#fedcba", "#0f0f0f"]\nheader = "# not a comment, and long enough that counting it would trip the ratio"\n')"
+long_block="$TMP/long-block.ts"
+printf '/**\n * First line.\n * Second line.\n * Third line.\n * New explanation.\n * Fifth line.\n * Sixth line.\n */\nexport const value = 1;\n' >"$long_block"
+long_block_diff=$(printf '%s\n' \
+  'diff --git a/'"$long_block"' b/'"$long_block" \
+  '--- a/'"$long_block" \
+  '+++ b/'"$long_block" \
+  '@@ -4,3 +4,3 @@' \
+  '  * Third line.' \
+  '- * Existing explanation.' \
+  '+ * New explanation.' \
+  '  * Fifth line.')
+out=$(printf '%s' "$long_block_diff" | node "$CORE" diff 2>&1); status=$?
+if [ "$status" -eq 1 ] && [[ "$out" == *"New explanation"* ]]; then
+  pass "diff mode uses the full file for long block-comment edits"
+else
+  fail "diff mode uses the full file for long block-comment edits (status=$status output='$out')"
+fi
 
-# Fail-open is the whole safety story: comment-lint guards style, so a core that errors on a file
-# it cannot parse would brick every write in the session rather than let a comment through.
+reflow_diff=$(printf '%s\n' \
+  'diff --git a/file.ts b/file.ts' \
+  '--- a/file.ts' \
+  '+++ b/file.ts' \
+  '@@ -1 +1,3 @@' \
+  '-/** Existing explanation. */' \
+  '+/**' \
+  '+ * Existing explanation.' \
+  '+ */')
+out=$(printf '%s' "$reflow_diff" | node "$CORE" diff 2>&1); status=$?
+if [ "$status" -eq 0 ]; then
+  pass "diff mode allows an unchanged block comment to reflow"
+else
+  fail "diff mode allows an unchanged block comment to reflow (status=$status output='$out')"
+fi
+
+multiline_math_diff=$(printf '%s\n' \
+  'diff --git a/file.ts b/file.ts' \
+  '--- a/file.ts' \
+  '+++ b/file.ts' \
+  '@@ -2 +2 @@' \
+  '-  * oldLeft * oldRight;' \
+  '+  * newLeft * newRight;')
+out=$(printf '%s' "$multiline_math_diff" | node "$CORE" diff 2>&1); status=$?
+if [ "$status" -eq 0 ]; then
+  pass "diff mode does not treat multiline arithmetic as a block comment"
+else
+  fail "diff mode does not treat multiline arithmetic as a block comment (status=$status output='$out')"
+fi
+
+header_like_diff=$(printf '%s\n' \
+  'diff --git a/file.ts b/file.ts' \
+  '--- a/file.ts' \
+  '+++ b/file.ts' \
+  '@@ -1 +1,2 @@' \
+  '+const next = ++value;' \
+  '+++ value; // New explanation.')
+out=$(printf '%s' "$header_like_diff" | node "$CORE" diff 2>&1); status=$?
+if [ "$status" -eq 1 ] && [[ "$out" == *"New explanation"* ]]; then
+  pass "added code beginning with three pluses stays in the current file"
+else
+  fail "added code beginning with three pluses stays in the current file (status=$status output='$out')"
+fi
+
 if printf 'not json at all' | node "$CORE" claude-hook >/dev/null 2>&1; then
   pass "malformed input fails open"
 else

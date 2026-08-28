@@ -1042,8 +1042,7 @@ of writing, the last point where a no is still free.
 To aim the gate at categories instead of outcomes is what breaks it in practice.
 "Refactors don't count" is a rule you can follow while you ship nothing anyone
 feels, and it forbids the refactor that would have. This is §1 at the altitude of
-product work rather than architecture. `yagni-reviewer` enforces it on diffs and
-plans.
+product work rather than architecture.
 
 **The mechanics apply to everything you write**: specs, ADRs, PRDs, issues, PR
 bodies, docs, commit messages, chat.

@@ -41,8 +41,8 @@ AGENTS_SKILLS="$HOME/.agents/skills"
 OPENCODE_SKILL_SINGULAR="$OPENCODE_HOME/skill"
 OPENCODE_COMMANDS="$OPENCODE_HOME/commands"
 
-# The comment-lint core lives here, not under CLAUDE_HOOKS, on purpose. The Claude Code hook is only
-# one of its two callers: the lazar-commit gate calls it too, from whatever runtime is committing,
+# The linter cores live here, not under CLAUDE_HOOKS, on purpose. The Claude Code hook is only
+# one comment-lint caller: the lazar-commit gate calls both linters from whatever runtime commits,
 # and OpenCode has no CLAUDE_HOOKS installed while a sandbox's CLAUDE_HOME is not a path OpenCode
 # knows. $HOME is the one root Claude Code, OpenCode and a sandbox all agree on (same reason the
 # machine-local notes sit under it), so a $HOME-anchored bin is the single copy every caller can
@@ -58,10 +58,12 @@ LAZAR_BIN="$HOME/.lazar-harness/bin"
 #
 # `skills-manifest.txt` is the committed declaration of that set. `test/skills-manifest.sh` fails if
 # it drifts from the `skills/` directories, so adding or renaming a skill is a change nobody makes
-# by accident. The runtime footprint below records what the last install actually put down, keyed
-# under $HOME beside the other machine-local notes so every runtime reads the same one.
+# by accident. Each skills destination carries its own hidden footprint, so one profile cannot
+# forget a retired skill before another profile upgrades. The old shared footprint remains a
+# migration input for destinations that do not have their own record yet.
 SKILLS_MANIFEST="$HARNESS_SOURCE/skills-manifest.txt"
-SKILLS_FOOTPRINT="$HOME/.lazar-harness/installed-skills"
+LEGACY_SKILLS_FOOTPRINT="$HOME/.lazar-harness/installed-skills"
+SKILLS_FOOTPRINT_NAME=".lazar-harness-installed-skills"
 
 # The per-machine model config the pstack fan-out skills resolve first. It is seeded from the shipped
 # docs/models.md once and never overwritten, so the OpenAI-vs-GLM swap and any per-machine slug edit
@@ -207,14 +209,18 @@ replace_dir() {
   rmdir -- "$staged"
 }
 
-# The footprint the last install recorded, or a one-time bootstrap from the owned names on disk when
-# there is none yet: the first run after this landed finds the harness's own skills sitting
-# unrecorded from an older wholesale install, and the owned-name check is how it recognises them
-# that once. After the run writes a footprint, this reads it and the names stop being consulted.
+# Read this destination's footprint first. An older shared footprint migrates profiles that have not
+# installed since per-destination records landed. With neither record, infer the harness-owned names
+# once from the destination itself.
 prior_skills_footprint() {
-  local dest=$1 entry base
-  if [ -f "$SKILLS_FOOTPRINT" ]; then
-    cat -- "$SKILLS_FOOTPRINT"
+  local dest=$1 footprint entry base
+  footprint="$dest/$SKILLS_FOOTPRINT_NAME"
+  if [ -f "$footprint" ]; then
+    cat -- "$footprint"
+    return 0
+  fi
+  if [ -f "$LEGACY_SKILLS_FOOTPRINT" ]; then
+    cat -- "$LEGACY_SKILLS_FOOTPRINT"
     return 0
   fi
   [ -d "$dest" ] || return 0
@@ -283,11 +289,10 @@ report_skills_tracked() {
   return 0
 }
 
-# Written after both trees are installed, so a run that dies partway leaves the prior footprint
-# describing the prior install rather than a set that was never fully put down.
+# Written after its tree is installed, so a failed copy leaves the prior footprint in place.
 write_skills_footprint() {
-  mkdir -p -- "$(dirname -- "$SKILLS_FOOTPRINT")"
-  LC_ALL=C sort -u -- "$SKILLS_MANIFEST" >"$SKILLS_FOOTPRINT"
+  local dest=$1
+  LC_ALL=C sort -u -- "$SKILLS_MANIFEST" >"$dest/$SKILLS_FOOTPRINT_NAME"
 }
 
 # Seed the per-machine model config once. Create-only: an existing file is the user's, edited for
@@ -429,16 +434,15 @@ HARNESS_SURFACES='local sandbox'
 # script, and a second file needing the treatment costs no change here at all.
 #
 # What differs is only ever the default action. `§28` states the isolation principle for every
-# surface, and `lazar-review` reviews the same work either way; a block that contradicted the other
-# variant rather than adapting it would be two harnesses, not one.
+# surface. A block that contradicted the other variant rather than adapting it would be two
+# harnesses, not one.
 #
 # `sandbox` says the working copy is not shared, there is no GUI, and the run is ephemeral. It does
 # not say nobody is watching: an Open Inspect session someone is driving and an unattended
 # automation run are both this surface. So a block that turns on whether a human can answer settles
-# that from what the skill is *for*, never from the flag. `lazar-review` is always something else's
-# output being reviewed, so it posts; `lazar-pr-status` is always Alex driving, so it asks first and
-# treats no answer as a no. Neither reads the flag to decide it, and a second flag for attendedness
-# would be a knob no caller can set correctly.
+# that from what the skill is for, never from the flag. `lazar-pr-status` is always Alex driving, so
+# it asks first and treats no answer as a no. A second flag for attendedness would be a knob no caller
+# can set correctly.
 #
 # Staged like every other write here, so a file that fails to render leaves the previous install in
 # place rather than a half-written one. Every failure below is a mis-authored source: an unclosed
@@ -603,8 +607,9 @@ install_skills() {
   render_surface_tree "$built/skills"
 
   install_skills_tracked "$CLAUDE_HOME/skills" "$built/skills"
+  write_skills_footprint "$(resolve_dir "$CLAUDE_HOME/skills")"
   install_skills_tracked "$OPENCODE_HOME/skills" "$built/skills"
-  write_skills_footprint
+  write_skills_footprint "$(resolve_dir "$OPENCODE_HOME/skills")"
   rm -rf -- "$built"
   purge_harness_skills "$AGENTS_SKILLS"
   purge_dir "$OPENCODE_SKILL_SINGULAR"
@@ -643,9 +648,9 @@ install_hooks() {
   replace_dir "$CLAUDE_HOOKS" "$HARNESS_SOURCE/hooks"
 }
 
-# The comment-lint core and its launcher. replace_dir touches only the bin subdir, so a hand-edited
+# The linter cores and launchers. replace_dir touches only the bin subdir, so a hand-edited
 # ~/.lazar-harness/repos/ note next to it survives. cp -R carries the executable bits the repo set.
-install_comment_lint() {
+install_linters() {
   replace_dir "$LAZAR_BIN" "$HARNESS_SOURCE/bin"
 }
 
@@ -686,8 +691,7 @@ write_claude_settings() {
       | .hooks.PreToolUse = ((.hooks.PreToolUse // []) + [{
           matcher: $matcher,
           hooks: [{ type: "command", command: $command }]
-        }])
-      | .hooks.PostToolUse = ((.hooks.PostToolUse // []) + [{
+        }, {
           matcher: $lintmatcher,
           hooks: [{ type: "command", command: $lintcommand }]
         }])
@@ -713,9 +717,7 @@ install_agents() {
   done
 
   # After the dialect transform, not before, so each runtime's copy is rendered and neither can
-  # ship a marker line to a reviewer as instruction. An agent needs this for the same reason the
-  # skill that spawns it does: git-hygiene-reviewer reads the commit graph itself, and where it
-  # boots into a sandbox of its own there is no parent working copy for a `jj log` to read.
+  # ship a marker line as instruction.
   render_surface_tree "$built"
 
   replace_dir "$CLAUDE_HOME/agents" "$built/claude"
@@ -794,9 +796,9 @@ install_opencode_plugin
 # and the run can be re-read and re-run. The other way round leaves the state this pair exists to
 # prevent — a hook purged off the disk and every profile still firing it on every prompt.
 #
-# The comment-lint bin lands before the settings merge names it, so a merge that dies never leaves
-# settings.json pointing at a PostToolUse command that was not written yet.
-install_comment_lint
+# The linter bin lands before the settings merge names comment-lint, so a failed merge never leaves
+# settings.json pointing at a PreToolUse command that was not written yet.
+install_linters
 write_claude_settings
 install_hooks
 

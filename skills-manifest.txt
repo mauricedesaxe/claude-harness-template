@@ -3,7 +3,6 @@ lazar-commit
 lazar-pr-status
 lazar-qa
 lazar-research
-lazar-review
 lazar-ship
 lazar-standup
 lazar-tldraw

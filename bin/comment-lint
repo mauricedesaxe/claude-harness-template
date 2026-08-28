@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runtime-neutral entry point for the comment-lint core, called by the Claude Code
-# PostToolUse hook and by the lazar-commit gate alike. It only resolves a node and
+# PreToolUse hook and by the lazar-commit gate alike. It only resolves a node and
 # execs the sibling .mjs; all policy lives there.
 #
 # Fail-open on a missing node, unlike enforce-jj.sh's fail-closed on a missing jq.

@@ -84,6 +84,7 @@ settings="$claude/settings.json"
 # the launcher path plus the mode arg, verbatim.
 lazarbin="$TEST_HOME/.lazar-harness/bin"
 lintcmd="$lazarbin/comment-lint claude-hook"
+complexitycmd="$lazarbin/complexity-lint"
 # OpenCode's write-time guard is a plugin, not a hook: it loads out of the plugin dir under the
 # OpenCode home and shells out to the same shared-bin core the Claude Code hook wires above.
 ocplugin="$opencode/plugin/comment-lint.ts"
@@ -231,12 +232,22 @@ assert_same_file "comment-lint launcher installs to the shared bin" \
   "$HARNESS_SOURCE/bin/comment-lint" "$lazarbin/comment-lint"
 assert_same_file "comment-lint core installs to the shared bin" \
   "$HARNESS_SOURCE/bin/comment-lint.mjs" "$lazarbin/comment-lint.mjs"
+assert_same_file "complexity-lint launcher installs to the shared bin" \
+  "$HARNESS_SOURCE/bin/complexity-lint" "$complexitycmd"
+assert_same_file "complexity-lint core installs to the shared bin" \
+  "$HARNESS_SOURCE/bin/complexity-lint.mjs" "$lazarbin/complexity-lint.mjs"
 
 # The hook execs the launcher directly, so a copy without its exec bit is wired and dead.
 if [ -x "$lazarbin/comment-lint" ]; then
   pass "the installed comment-lint launcher is executable"
 else
   fail "the installed comment-lint launcher is executable"
+fi
+
+if [ -x "$complexitycmd" ]; then
+  pass "the installed complexity-lint launcher is executable"
+else
+  fail "the installed complexity-lint launcher is executable"
 fi
 
 # The OpenCode plugin lands under the OpenCode home's plugin dir, byte-identical to source. OpenCode
@@ -256,38 +267,51 @@ assert_contains "the OpenCode plugin shells out to the shared-bin core" \
 # to cover apply_patch too (it routes that tool's multi-file body through the core's diff mode).
 assert_contains "the OpenCode plugin covers the apply_patch write tool" \
   'apply_patch' "$ocplugin"
+assert_contains "the OpenCode plugin forwards old edit text" \
+  'old_string: args.oldString' "$ocplugin"
+assert_contains "the OpenCode plugin reads old whole-file content" \
+  'old_content: await readExisting' "$ocplugin"
+assert_contains "the OpenCode plugin preserves removed patch lines" \
+  'line.startsWith("-")' "$ocplugin"
+assert_contains "the OpenCode plugin marks patch context as diff context" \
+  'else out.push(` ${line}`)' "$ocplugin"
 
 installed_wiring=$(wired_hooks PreToolUse)
+expected_pre_wiring=$(printf '%s\n%s' "$hooks/enforce-jj.sh" "$lintcmd")
 
-if [ "$installed_wiring" = "$hooks/enforce-jj.sh" ]; then
-  pass "settings.json wires enforce-jj, and only it, on PreToolUse at the installed path"
+if [ "$installed_wiring" = "$expected_pre_wiring" ]; then
+  pass "settings.json wires enforce-jj and comment-lint on PreToolUse"
 else
-  fail "settings.json wires enforce-jj, and only it, on PreToolUse at the installed path: got '$installed_wiring'"
+  fail "settings.json wires enforce-jj and comment-lint on PreToolUse: got '$installed_wiring'"
 fi
 
-# comment-lint is the one hook on the after-the-write event, so a PreToolUse read never sees it and
-# a PostToolUse read never sees enforce-jj: each event carries exactly its own hook.
-lint_wiring=$(wired_hooks PostToolUse)
+# comment-lint must run before a write so it can compare the current file with the proposed content.
+lint_wiring=$(wired_hooks PreToolUse | grep -F "$lintcmd" || true)
 
 if [ "$lint_wiring" = "$lintcmd" ]; then
-  pass "settings.json wires comment-lint, and only it, on PostToolUse at the shared-bin path"
+  pass "settings.json wires comment-lint on PreToolUse at the shared-bin path"
 else
-  fail "settings.json wires comment-lint, and only it, on PostToolUse at the shared-bin path: got '$lint_wiring'"
+  fail "settings.json wires comment-lint on PreToolUse at the shared-bin path: got '$lint_wiring'"
 fi
 
-# A fresh install wires exactly two hooks, one per event, each once: enforce-jj before a tool runs,
-# comment-lint after. Nothing fires twice and no third entry rides along.
+# A fresh install wires exactly two hooks before tools run. Nothing fires twice.
 all_wiring=$(all_wired_hooks)
 expected_wiring=$(printf '%s\n%s' "$hooks/enforce-jj.sh" "$lintcmd")
 
 if [ "$all_wiring" = "$expected_wiring" ]; then
-  pass "a fresh install wires only enforce-jj on PreToolUse and comment-lint on PostToolUse"
+  pass "a fresh install wires only enforce-jj and comment-lint on PreToolUse"
 else
-  fail "a fresh install wires only enforce-jj on PreToolUse and comment-lint on PostToolUse: got '$all_wiring'"
+  fail "a fresh install wires only enforce-jj and comment-lint on PreToolUse: got '$all_wiring'"
+fi
+
+if [ -z "$(wired_hooks PostToolUse)" ]; then
+  pass "a fresh install leaves PostToolUse empty"
+else
+  fail "a fresh install leaves PostToolUse empty"
 fi
 
 # The matcher is comment-lint's reach: a write tool missing here is a write the linter never sees.
-lint_matcher=$(matcher_of PostToolUse "$lintcmd")
+lint_matcher=$(matcher_of PreToolUse "$lintcmd")
 for tool in Edit Write MultiEdit; do
   case "|$lint_matcher|" in
   *"|$tool|"*)
@@ -299,7 +323,7 @@ for tool in Edit Write MultiEdit; do
   esac
 done
 
-if [ -x "$installed_wiring" ]; then
+if [ -x "$hooks/enforce-jj.sh" ] && [ -x "${lintcmd% claude-hook}" ]; then
   pass "the command settings.json names is a file that exists and runs"
 else
   fail "the command settings.json names is a file that exists and runs"
@@ -432,17 +456,6 @@ assert_same_file "lazar-research installs to Claude Code" \
 assert_same_file "lazar-research installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-research/SKILL.md" "$opencode/skills/lazar-research/SKILL.md"
 
-# lazar-review is surface-rendered like CLAUDE.md, and for the same reason: a reviewer spawned into
-# a sandbox of its own cannot read the parent's working copy, so the diff source it is handed is the
-# pushed PR rather than a `jj diff` of a path that does not exist on its machine.
-REVIEW_LOCAL='committed plus uncommitted'
-REVIEW_SANDBOX='gh pr diff'
-
-assert_surface_rendered "lazar-review installed to Claude Code" \
-  "$claude/skills/lazar-review/SKILL.md" "$REVIEW_LOCAL" "$REVIEW_SANDBOX"
-assert_surface_rendered "lazar-review installed to OpenCode" \
-  "$opencode/skills/lazar-review/SKILL.md" "$REVIEW_LOCAL" "$REVIEW_SANDBOX"
-
 assert_same_file "lazar-pr-status installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-pr-status/SKILL.md" "$claude/skills/lazar-pr-status/SKILL.md"
 assert_same_file "lazar-pr-status installs to OpenCode" \
@@ -480,10 +493,11 @@ assert_same_file "lazar-commit installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-commit/SKILL.md" "$claude/skills/lazar-commit/SKILL.md"
 assert_same_file "lazar-commit installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-commit/SKILL.md" "$opencode/skills/lazar-commit/SKILL.md"
+assert_contains "installed lazar-commit carries the complexity-lint gate" \
+  'COMPLEXITY_LINT="$HOME/.lazar-harness/bin/complexity-lint"' \
+  "$claude/skills/lazar-commit/SKILL.md"
 
-# Surface-rendered for the reason lazar-review is: Step 3 waits for me to OK the planned commits,
-# and where nobody is reading a transcript that approval never arrives. It strands finished work
-# uncommitted in a checkout torn down at the end of the run, with push, PR and merge all downstream.
+# Step 3 waits for approval on a local surface. A sandbox has nobody available to grant it.
 SHIP_LOCAL='Proceed once I OK it'
 SHIP_SANDBOX="Commit without waiting to be OK'd"
 
@@ -492,17 +506,13 @@ assert_surface_rendered "lazar-ship installed to Claude Code" \
 assert_surface_rendered "lazar-ship installed to OpenCode" \
   "$opencode/skills/lazar-ship/SKILL.md" "$SHIP_LOCAL" "$SHIP_SANDBOX"
 
-# Skills and agents reach skills by name: lazar-ship composes lazar-commit, and every reviewer
-# tells a finding which skill to cite. A name the harness stopped shipping still reads fine and
-# dispatches nowhere, which is how git-hygiene-reviewer went on citing `commit` and `ship` after
-# both were renamed, and how the skills carried `work` long after it was deleted.
+# Skills and agents reach skills by name. A name the harness stopped shipping still reads fine and
+# dispatches nowhere.
 #
 # A reference is recognised by its shape, never matched against a list of dead names a future
 # rename would have to remember to extend. Either the name carries a harness prefix — asserted
 # below, a `lazar-` token can only be meant as a skill — or the prose labels it one (`x` skill).
-# Ordinary English carries neither marker,
-# which is what keeps this off the words git-hygiene-reviewer is largely made of: it says
-# "commit" constantly and correctly, and yagni-reviewer weighs unfelt "work".
+# Ordinary English carries neither marker.
 #
 # Only what this repo authors is walked. A vendored matt- skill's prose is upstream's to fix.
 skill_refs() {
@@ -525,11 +535,6 @@ if [ -z "${dangling_refs// /}" ]; then
 else
   fail "every skill and agent the harness authors names only skills it ships:$dangling_refs"
 fi
-
-assert_contains "lazar-review discovers Claude Code's global agents" \
-  '${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agents' "$claude/skills/lazar-review/SKILL.md"
-assert_contains "lazar-review discovers OpenCode's global agents" \
-  '${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents' "$claude/skills/lazar-review/SKILL.md"
 
 # Both runtimes read the same instructions byte for byte (asserted above), so pinning the note
 # path once pins it for both. Read the root back out of what was installed rather than restating
@@ -817,23 +822,21 @@ jq '.model = "anthropic/claude-opus-4-5"
 mv "$opencode/opencode.json.seeded" "$opencode/opencode.json"
 printf -- '---\ndescription: Mine\n---\nMine\n' >"$opencode/commands/my-command.md"
 
-# An agent the harness used to ship is only really dropped once an upgrade takes it off the
-# disk of someone who installed it back when it was global.
-printf -- '---\nname: code-reviewer\n---\n' >"$claude/agents/code-reviewer.md"
-printf -- '---\nmode: subagent\n---\n' >"$opencode/agents/code-reviewer.md"
+# Retired agents are only dropped once an upgrade takes them off an existing install.
+retired_agents='clarity-reviewer complexity-reviewer git-hygiene-reviewer yagni-reviewer'
+for agent in $retired_agents; do
+  printf -- '---\nname: %s\n---\n' "$agent" >"$claude/agents/$agent.md"
+  printf -- '---\nmode: subagent\n---\n' >"$opencode/agents/$agent.md"
+done
 
-# Same for a skill: deleting lazar-work from the repo does nothing for the disk of someone who
-# installed it while the harness still shipped it, and it keeps loading until an install removes it.
-# The harness removes only what it recorded installing, so lazar-work is written into the footprint
-# too — that is what a prior install that shipped it would have left, and it is what makes the next
-# install recognise it as its own orphan rather than a foreign skill it must not touch.
+# The skills footprint lets an upgrade distinguish a retired harness skill from a foreign skill.
 for root in "$claude" "$opencode"; do
-  mkdir -p -- "$root/skills/lazar-work/scripts"
-  printf -- '---\nname: lazar-work\n---\n' >"$root/skills/lazar-work/SKILL.md"
-  printf -- 'stale\n' >"$root/skills/lazar-work/scripts/run.sh"
+  mkdir -p -- "$root/skills/lazar-review"
+  printf -- '---\nname: lazar-review\n---\n' >"$root/skills/lazar-review/SKILL.md"
+  rm -f -- "$root/skills/.lazar-harness-installed-skills"
 done
 mkdir -p -- "$TEST_HOME/.lazar-harness"
-printf 'lazar-work\n' >>"$TEST_HOME/.lazar-harness/installed-skills"
+printf 'lazar-review\n' >>"$TEST_HOME/.lazar-harness/installed-skills"
 
 # A skill another tool installed and marked as its own is not the harness's to purge. Seeded the way
 # Newsjack leaves it, a directory with a `.newsjack-installed` marker, and absent from the footprint,
@@ -884,7 +887,7 @@ fi
 # and so would anyone who read the README's second line first.
 claude_real=$(cd -- "$claude" && pwd -P)
 
-for reported in "skills/lazar-work" "agents/code-reviewer.md" "skills/lazar-tldraw/STALE.md" \
+for reported in "skills/lazar-review" "agents/clarity-reviewer.md" "skills/lazar-tldraw/STALE.md" \
   "hooks/set-tab-title.sh"; do
   if printf '%s\n' "$reinstall_report" | grep -qF -- "delete  $claude_real/$reported"; then
     pass "the run that installs names $reported before purging it"
@@ -935,7 +938,9 @@ assert_contains "reinstalling keeps unrelated opencode.json keys" \
 
 stale=""
 for root in "$claude" "$opencode"; do
-  [ -e "$root/agents/code-reviewer.md" ] && stale="$stale $root/agents/code-reviewer.md"
+  for agent in $retired_agents; do
+    [ -e "$root/agents/$agent.md" ] && stale="$stale $root/agents/$agent.md"
+  done
 done
 
 if [ -z "${stale// /}" ]; then
@@ -1008,7 +1013,7 @@ done
 
 run_installer "$TEST_HOME" >/dev/null || fail "the installer runs against an empty config"
 
-if [ "$(wired_hooks PreToolUse)" = "$hooks/enforce-jj.sh" ]; then
+if [ "$(wired_hooks PreToolUse)" = "$expected_pre_wiring" ]; then
   pass "an empty settings.json is merged into rather than left empty"
 else
   fail "an empty settings.json is merged into rather than left empty"
@@ -1022,7 +1027,7 @@ assert_contains "an empty opencode.json is merged into rather than left empty" \
 printf '\n  \n' >"$settings"
 run_installer "$TEST_HOME" >/dev/null || fail "the installer runs against a whitespace-only config"
 
-if [ "$(wired_hooks PreToolUse)" = "$hooks/enforce-jj.sh" ]; then
+if [ "$(wired_hooks PreToolUse)" = "$expected_pre_wiring" ]; then
   pass "a whitespace-only settings.json is merged into rather than left empty"
 else
   fail "a whitespace-only settings.json is merged into rather than left empty"
@@ -1058,7 +1063,7 @@ run_installer "$TEST_HOME" >/dev/null || fail "the installer recovers once setti
 
 stale_skill=""
 for root in "$claude" "$opencode"; do
-  [ -e "$root/skills/lazar-work" ] && stale_skill="$stale_skill $root/skills/lazar-work"
+  [ -e "$root/skills/lazar-review" ] && stale_skill="$stale_skill $root/skills/lazar-review"
 done
 
 if [ -z "${stale_skill// /}" ]; then
@@ -1067,8 +1072,31 @@ else
   fail "reinstalling purges a skill the harness no longer ships:$stale_skill"
 fi
 
-# The purge is a whole-tree replace, so the same install that drops lazar-work must still land
-# every skill the harness does ship, supporting files and all. Anchored on an unrendered skill, so
+if [ -f "$claude/skills/.lazar-harness-installed-skills" ] && \
+  [ -f "$opencode/skills/.lazar-harness-installed-skills" ]; then
+  pass "each skills destination records its own harness footprint"
+else
+  fail "each skills destination records its own harness footprint"
+fi
+
+second_claude="$TEST_HOME/.claude-second"
+second_xdg="$TEST_HOME/.config-second"
+mkdir -p -- "$second_claude/skills/lazar-review" "$second_xdg/opencode/skills/lazar-review"
+printf -- '---\nname: lazar-review\n---\n' >"$second_claude/skills/lazar-review/SKILL.md"
+printf -- '---\nname: lazar-review\n---\n' >"$second_xdg/opencode/skills/lazar-review/SKILL.md"
+
+run_installer "$TEST_HOME" CLAUDE_CONFIG_DIR="$second_claude" \
+  XDG_CONFIG_HOME="$second_xdg" >/dev/null || fail "a second profile upgrades"
+
+if [ ! -e "$second_claude/skills/lazar-review" ] && \
+  [ ! -e "$second_xdg/opencode/skills/lazar-review" ]; then
+  pass "one profile upgrade does not forget retired skills before another profile upgrades"
+else
+  fail "one profile upgrade does not forget retired skills before another profile upgrades"
+fi
+
+# The same install that drops a retired skill must still land every skill the harness ships.
+# Anchored on an unrendered skill, so
 # it stays a comparison against the source: re-reading the rendered tldraw against the same install
 # it came from would compare a file to itself and pass whatever happened.
 assert_same_file "reinstalling keeps a skill the harness still ships" \
@@ -1076,9 +1104,7 @@ assert_same_file "reinstalling keeps a skill the harness still ships" \
 assert_same_file "reinstalling keeps a still-shipped skill's supporting files" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$opencode/skills/lazar-tldraw/LICENSE"
 
-for source_agent in "$HARNESS_SOURCE"/agents/*.md; do
-  assert_agent_installs "$(basename -- "$source_agent" .md)"
-done
+assert_agent_installs pstack-poteto-agent
 
 # A `§N` is the contract between a citation and the doctrine: an agent's finding cites the
 # number, and the spine promises its own cross-references resolve through the index. Dropping or
@@ -1161,14 +1187,6 @@ for instructions in "$SANDBOX_HOME/.claude/CLAUDE.md" "$SANDBOX_HOME/.config/ope
     "$instructions" "$CLAUDE_MD_SANDBOX" "$CLAUDE_MD_LOCAL"
 done
 
-# The surface has to reach a skill and not only the instructions files. It is what decides whether a
-# spawned reviewer can read the parent's working copy, and the skill that spawns reviewers is where
-# that decision is spent: 15 sandboxes once booted to report that a jj workspace path did not exist.
-for skill in "$SANDBOX_HOME/.claude/skills" "$SANDBOX_HOME/.config/opencode/skills"; do
-  assert_sandbox_rendered "the sandbox lazar-review under $(dirname -- "${skill#"$SANDBOX_HOME/"}")" \
-    "$skill/lazar-review/SKILL.md" "$REVIEW_SANDBOX" "$REVIEW_LOCAL"
-done
-
 assert_contains "the local CLAUDE.md cuts a workspace off fresh trunk" \
   "$CLAUDE_MD_LOCAL" "$claude/CLAUDE.md"
 
@@ -1176,13 +1194,6 @@ if cmp -s -- "$claude/CLAUDE.md" "$SANDBOX_HOME/.claude/CLAUDE.md"; then
   fail "the two surfaces install different workspace defaults"
 else
   pass "the two surfaces install different workspace defaults"
-fi
-
-if cmp -s -- "$claude/skills/lazar-review/SKILL.md" \
-  "$SANDBOX_HOME/.claude/skills/lazar-review/SKILL.md"; then
-  fail "the two surfaces install different lazar-review diff sources"
-else
-  pass "the two surfaces install different lazar-review diff sources"
 fi
 
 # The half of the tldraw split that carries the weight. Dropping the split leaves the local prose
@@ -1209,59 +1220,7 @@ for skill in "$SANDBOX_HOME/.claude/skills" "$SANDBOX_HOME/.config/opencode/skil
     "$skill/lazar-ship/SKILL.md" "$SHIP_SANDBOX" "$SHIP_LOCAL"
 done
 
-# An agent is rendered like a skill, and for a sharper reason: git-hygiene-reviewer runs its own
-# `jj log` over the stack, and a reviewer that booted into a sandbox of its own is looking at a
-# clean clone of the base branch where `trunk()..@` is empty. Unrendered, it reports a clean stack
-# for work it never read, which is the quietest way for this agent to fail.
-HYGIENE_LOCAL='The stack is on this machine'
-HYGIENE_SANDBOX='The stack is not on this machine'
-
-for root in "$claude" "$opencode"; do
-  assert_surface_rendered "git-hygiene-reviewer installed to ${root##*/}" \
-    "$root/agents/git-hygiene-reviewer.md" "$HYGIENE_LOCAL" "$HYGIENE_SANDBOX"
-done
-
-for root in "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
-  assert_sandbox_rendered "the sandbox git-hygiene-reviewer under ${root#"$SANDBOX_HOME/"}" \
-    "$root/agents/git-hygiene-reviewer.md" "$HYGIENE_SANDBOX" "$HYGIENE_LOCAL"
-done
-
-# The same failure one step further out. git-hygiene-reviewer reads history, which the diff does not
-# carry; these three read *code around* the diff, which the base branch carries wrongly. A sandbox
-# clone has never seen the PR, so a file it adds is absent and a file it modifies opens pre-PR.
-# Unrendered, clarity-reviewer judges prose nobody wrote, complexity-reviewer judges old interfaces,
-# and yagni-reviewer counts call sites that do not exist yet. All fail while reporting confidently,
-# so the check is that each names its own checkout step.
-REVIEW_CONTEXT_LOCAL='This disk holds the code under review'
-REVIEW_CONTEXT_SANDBOX='This disk holds the base branch, not the change'
-
-for source_agent in "$HARNESS_SOURCE"/agents/*.md; do
-  grep -qF "$REVIEW_CONTEXT_LOCAL" "$source_agent" || continue
-  agent=$(basename -- "$source_agent" .md)
-
-  for root in "$claude" "$opencode"; do
-    assert_surface_rendered "$agent installed to ${root##*/}" \
-      "$root/agents/$agent.md" "$REVIEW_CONTEXT_LOCAL" "$REVIEW_CONTEXT_SANDBOX"
-  done
-
-  for root in "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
-    assert_sandbox_rendered "the sandbox $agent under ${root#"$SANDBOX_HOME/"}" \
-      "$root/agents/$agent.md" "$REVIEW_CONTEXT_SANDBOX" "$REVIEW_CONTEXT_LOCAL"
-    assert_contains "the sandbox $agent is told how to reach the PR's head" \
-      'gh pr checkout' "$root/agents/$agent.md"
-  done
-done
-
-# The reviewers only have a head to check out because the orchestrator pushed before spawning them.
-# Asserted on the sandbox lazar-review, where the ordering is load-bearing; locally there is no push
-# in the loop at all.
-assert_contains "the sandbox lazar-review pushes before it fans out" \
-  'Push first, then fan out' "$SANDBOX_HOME/.claude/skills/lazar-review/SKILL.md"
-
-# The whole-tree claim behind the two above. Rendering was wired for skills alone once, so an agent
-# that grew a block shipped its markers to both surfaces as prose, and a marker line reads to a
-# reviewer as instruction in a file no runtime would complain about. Asserted over every agent, so
-# the next one to grow a block is covered without this test learning its name.
+# Rendering was wired for skills alone once. Check every installed agent for leaked markers.
 unrendered=""
 for root in "$claude" "$opencode" "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
   for installed_agent in "$root"/agents/*.md; do
@@ -1347,8 +1306,10 @@ else
 fi
 
 sandbox_wired=$(jq -r '.hooks.PreToolUse[].hooks[].command' "$sandbox_claude/settings.json")
+sandbox_expected=$(printf '%s\n%s' "$sandbox_claude/hooks/enforce-jj.sh" \
+  "$SANDBOX_REDIRECT_HOME/.lazar-harness/bin/comment-lint claude-hook")
 
-if [ "$sandbox_wired" = "$sandbox_claude/hooks/enforce-jj.sh" ]; then
+if [ "$sandbox_wired" = "$sandbox_expected" ]; then
   pass "the sandbox settings.json wires the hook where the sandbox put it"
 else
   fail "the sandbox settings.json wires the hook where the sandbox put it: got '$sandbox_wired'"
@@ -1851,7 +1812,7 @@ assert_same_file "the spine installs where CLAUDE_CONFIG_DIR points" \
 assert_same_file "skills install where CLAUDE_CONFIG_DIR points" \
   "$claude/skills/lazar-tldraw/SKILL.md" "$redirect_claude/skills/lazar-tldraw/SKILL.md"
 assert_same_file "agents install where CLAUDE_CONFIG_DIR points" \
-  "$claude/agents/yagni-reviewer.md" "$redirect_claude/agents/yagni-reviewer.md"
+  "$claude/agents/pstack-poteto-agent.md" "$redirect_claude/agents/pstack-poteto-agent.md"
 
 # Anything that is loaded by virtue of sitting in a config home has to land in the config home
 # Claude Code was pointed at, or it is not read at all. The hooks dir is the one thing under
@@ -1887,8 +1848,12 @@ else
 fi
 
 redirect_wired=$(jq -r '.hooks.PreToolUse[].hooks[].command' "$redirect_claude/settings.json")
+redirect_expected=$(printf '%s\n%s' "$REDIRECT_HOME/.claude/hooks/enforce-jj.sh" \
+  "$REDIRECT_HOME/.lazar-harness/bin/comment-lint claude-hook")
 
-if [ "$redirect_wired" = "$REDIRECT_HOME/.claude/hooks/enforce-jj.sh" ] && [ -x "$redirect_wired" ]; then
+if [ "$redirect_wired" = "$redirect_expected" ] && \
+  [ -x "$REDIRECT_HOME/.claude/hooks/enforce-jj.sh" ] && \
+  [ -x "$REDIRECT_HOME/.lazar-harness/bin/comment-lint" ]; then
   pass "the profile's settings.json wires the shared hook by the path it really sits at"
 else
   fail "the profile's settings.json wires the shared hook by the path it really sits at: got '$redirect_wired'"

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+core="$dir/complexity-lint.mjs"
+
+node_bin=""
+if command -v node >/dev/null 2>&1; then
+  node_bin=$(command -v node)
+else
+  for candidate in "$HOME"/.nvm/versions/node/*/bin/node /usr/local/bin/node /opt/homebrew/bin/node; do
+    if [ -x "$candidate" ]; then
+      node_bin=$candidate
+      break
+    fi
+  done
+fi
+
+[ -n "$node_bin" ] || exit 0
+exec "$node_bin" "$core" "$@"

@@ -109,26 +109,38 @@ on). Because jj has already snapshotted everything into `@`, the checks run agai
 what you're about to commit.
 
 **Comment gate (harness).** Run the harness comment-lint over the change before committing.
-It enforces the *placement* half of PHILOSOPHY §21. Floating what-comments and walls of prose
-get bounced. Doc-comments, directives, shebangs, and trailing on-the-line comments pass.
+It rejects every new prose comment token. Only shebangs, leading license headers, and recognized
+tooling directives pass. Unchanged comment tokens in edited context do not fail.
 It is also the runtime-neutral backstop for the Claude Code write-time hook, so it catches a
 comment written under OpenCode or a sandbox where that hook never fired.
 
 ```sh
 LINT="$HOME/.lazar-harness/bin/comment-lint"
-if [ -x "$LINT" ]; then jj diff --git | "$LINT" diff; fi
+if [ -x "$LINT" ]; then jj diff --git <paths> | "$LINT" diff; fi
 ```
 
 The `if` guard is load-bearing. On a machine without the harness bin, the whole gate is
 skipped and exits 0, so an absent linter never blocks a commit. When it's present, the pipe's
 exit status is comment-lint's. Exit 0, proceed.
 
-Nonzero, and the output lists the offending comments plus the §21 fix order (make the code say
-it; else attach a doc-comment to the symbol;
-else a trailing comment on the line; else move prose to docs). Fix in the working copy, which jj
-re-snapshots into `@`, and re-run. Don't commit over it. This gate is the commit-time
-counterpart to the `clarity-reviewer` agent, which judges comment *content* (the why-vs-what
-call a linter can't make) at review time.
+Nonzero output lists the new comment tokens. Make the code say it, or move longer explanation to
+docs. Fix the working copy and re-run the gate. Don't commit over it.
+
+**Complexity gate (harness).** Run complexity-lint after comment-lint. It checks each changed
+production JavaScript, TypeScript, or Python file with that file's nearest repository-local
+Oxlint or Ruff. It never downloads a tool and fails open when no local tool can run.
+
+```sh
+COMPLEXITY_LINT="$HOME/.lazar-harness/bin/complexity-lint"
+if [ -x "$COMPLEXITY_LINT" ]; then jj diff --git <paths> | "$COMPLEXITY_LINT"; fi
+```
+
+Scores from 11 through 20 are advisory. Scores above 20 block the commit. The linter checks each
+whole touched file, so a small edit can expose old complexity outside the changed lines. Fix the
+finding or split the commit only when the split matches the intended logical unit.
+
+Replace `<paths>` in both gates with the exact paths for the logical unit you are about to commit.
+This keeps unrelated work in `@` from blocking an otherwise valid atomic commit.
 
 Commit by **naming the paths** for this logical unit. Never a path-less `jj commit` when `@`
 holds more than one unit, which would sweep it all into one commit. `jj commit <paths>`
