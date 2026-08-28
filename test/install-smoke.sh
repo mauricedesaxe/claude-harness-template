@@ -294,7 +294,6 @@ else
   fail "settings.json wires comment-lint on PreToolUse at the shared-bin path: got '$lint_wiring'"
 fi
 
-# A fresh install wires exactly two hooks before tools run. Nothing fires twice.
 all_wiring=$(all_wired_hooks)
 expected_wiring=$(printf '%s\n%s' "$hooks/enforce-jj.sh" "$lintcmd")
 
