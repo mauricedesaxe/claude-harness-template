@@ -269,8 +269,8 @@ assert_contains "the OpenCode plugin covers the apply_patch write tool" \
   'apply_patch' "$ocplugin"
 assert_contains "the OpenCode plugin forwards old edit text" \
   'old_string: args.oldString' "$ocplugin"
-assert_contains "the OpenCode plugin reads old whole-file content" \
-  'old_content: await readExisting' "$ocplugin"
+assert_contains "the OpenCode plugin lets the core read old whole-file content" \
+  'hookPayload(args.filePath, { content: args.content })' "$ocplugin"
 assert_contains "the OpenCode plugin preserves removed patch lines" \
   'line.startsWith("-")' "$ocplugin"
 assert_contains "the OpenCode plugin marks patch context as diff context" \
@@ -802,7 +802,7 @@ chmod +x "$claude/hooks/set-tab-title.sh"
 # what is asserted is not only that the harness's own entry lands but that everything the user put
 # there is still there afterwards — including a hook of their own, which is theirs because it lives
 # outside the directory this installer owns rather than because of anything it is called.
-jq --arg stale "$hooks/set-tab-title.sh" '
+jq --arg stale "$hooks/set-tab-title.sh" --arg lintcmd "$lintcmd" '
   .model = "opus[1m]"
   | .enabledPlugins = { "vercel@claude-plugins-official": true }
   | .permissions = { defaultMode: "auto" }
@@ -811,6 +811,13 @@ jq --arg stale "$hooks/set-tab-title.sh" '
   | .hooks.PreToolUse += [{
       matcher: "Write",
       hooks: [{ type: "command", command: "~/bin/my-own-guard.sh" }]
+    }]
+  | .hooks.PostToolUse = [{
+      matcher: "Write",
+      hooks: [{ type: "command", command: $lintcmd }]
+    }, {
+      matcher: "Write",
+      hooks: [{ type: "command", command: "~/bin/my-post-write-hook.sh" }]
     }]
 ' "$settings" >"$settings.seeded"
 mv "$settings.seeded" "$settings"
@@ -984,6 +991,19 @@ else
   fail "reinstalling keeps a hook the user wired themselves, on its own event and matcher: got '$user_hook_matcher'"
 fi
 
+if wired_hooks PostToolUse | grep -qF -- "$lintcmd"; then
+  fail "reinstalling removes retired PostToolUse comment-lint wiring"
+else
+  pass "reinstalling removes retired PostToolUse comment-lint wiring"
+fi
+
+post_user_matcher=$(matcher_of PostToolUse '~/bin/my-post-write-hook.sh')
+if [ "$post_user_matcher" = Write ]; then
+  pass "reinstalling keeps a user PostToolUse hook"
+else
+  fail "reinstalling keeps a user PostToolUse hook: got '$post_user_matcher'"
+fi
+
 # The reason this file is merged and not replaced: model choice and plugins are what differ between
 # the profiles, and this is the file that carries them.
 assert_contains "reinstalling keeps the model settings.json carries" 'opus[1m]' "$settings"
@@ -1078,6 +1098,53 @@ else
   fail "each skills destination records its own harness footprint"
 fi
 
+fault_source=$(mktemp -d)
+fault_bin=$(mktemp -d)
+fault_state="$fault_bin/state"
+real_mv=$(command -v mv)
+cp -R -- "$HARNESS_SOURCE/." "$fault_source/"
+rm -rf -- "$fault_source/.git" "$fault_source/.jj"
+mkdir -p -- "$fault_source/skills/lazar-footprint-recovery"
+printf -- '---\nname: lazar-footprint-recovery\n---\n' >"$fault_source/skills/lazar-footprint-recovery/SKILL.md"
+printf 'lazar-footprint-recovery\n' >>"$fault_source/skills-manifest.txt"
+cat >"$fault_bin/mv" <<'SCRIPT'
+#!/usr/bin/env bash
+last=${!#}
+case "$last" in
+*/skills/.lazar-harness-installed-skills)
+  count=0
+  [ ! -f "$FAULT_STATE" ] || count=$(cat -- "$FAULT_STATE")
+  count=$((count + 1))
+  printf '%s\n' "$count" >"$FAULT_STATE"
+  [ "$count" -ne 3 ] || exit 1
+  ;;
+esac
+exec "$REAL_MV" "$@"
+SCRIPT
+chmod +x "$fault_bin/mv"
+
+if env -i PATH="$fault_bin:$PATH" HOME="$TEST_HOME" REAL_MV="$real_mv" FAULT_STATE="$fault_state" \
+  "$fault_source/install.sh" --install >/dev/null 2>&1; then
+  fail "a footprint finalization failure stops the install"
+else
+  pass "a footprint finalization failure stops the install"
+fi
+
+if [ -d "$claude/skills/lazar-footprint-recovery" ] && \
+  grep -qxF lazar-footprint-recovery "$claude/skills/.lazar-harness-installed-skills"; then
+  pass "a finalization failure leaves a cumulative record of newly installed skills"
+else
+  fail "a finalization failure leaves a cumulative record of newly installed skills"
+fi
+
+run_installer "$TEST_HOME" >/dev/null || fail "the next release recovers from a cumulative footprint"
+if [ -e "$claude/skills/lazar-footprint-recovery" ]; then
+  fail "the next release removes a skill recorded by cumulative preparation"
+else
+  pass "the next release removes a skill recorded by cumulative preparation"
+fi
+rm -rf -- "$fault_source" "$fault_bin"
+
 second_claude="$TEST_HOME/.claude-second"
 second_xdg="$TEST_HOME/.config-second"
 mkdir -p -- "$second_claude/skills/lazar-review" "$second_xdg/opencode/skills/lazar-review"
@@ -1103,7 +1170,9 @@ assert_same_file "reinstalling keeps a skill the harness still ships" \
 assert_same_file "reinstalling keeps a still-shipped skill's supporting files" \
   "$HARNESS_SOURCE/skills/lazar-tldraw/LICENSE" "$opencode/skills/lazar-tldraw/LICENSE"
 
-assert_agent_installs pstack-poteto-agent
+for source_agent in "$HARNESS_SOURCE"/agents/*.md; do
+  assert_agent_installs "$(basename -- "$source_agent" .md)"
+done
 
 # A `§N` is the contract between a citation and the doctrine: an agent's finding cites the
 # number, and the spine promises its own cross-references resolve through the index. Dropping or
@@ -1219,7 +1288,6 @@ for skill in "$SANDBOX_HOME/.claude/skills" "$SANDBOX_HOME/.config/opencode/skil
     "$skill/lazar-ship/SKILL.md" "$SHIP_SANDBOX" "$SHIP_LOCAL"
 done
 
-# Rendering was wired for skills alone once. Check every installed agent for leaked markers.
 unrendered=""
 for root in "$claude" "$opencode" "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
   for installed_agent in "$root"/agents/*.md; do

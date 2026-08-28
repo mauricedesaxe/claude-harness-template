@@ -6,8 +6,8 @@ TMP=$(mktemp -d)
 trap 'rm -rf -- "$TMP"' EXIT
 
 command -v bun >/dev/null 2>&1 || {
-  printf 'FAIL Bun is required for the OpenCode comment-lint test\n' >&2
-  exit 1
+  printf 'SKIP Bun is unavailable; OpenCode comment-lint plugin cases were not run\n'
+  exit 0
 }
 
 mkdir -p -- "$TMP/home/.lazar-harness/bin"
@@ -46,6 +46,16 @@ await expectPass("a clean edit passes", "edit", {
   newString: "export const value = 2",
 })
 
+await expectPass("whole-file writes let the core read existing content", "write", {
+  filePath: process.env.TEST_FILE,
+  content: "// Existing explanation.\nexport const value = 2;\n",
+})
+
+await expectPass("native docs pass", "write", {
+  filePath: "native-doc.ts",
+  content: "/** Public docs. */\nexport const value = 1;\n",
+})
+
 await expectReject("a new comment is rejected", "edit", {
   filePath: "new-comment.ts",
   oldString: "export const value = 1",
@@ -60,13 +70,36 @@ await expectPass("unchanged comment context passes", "edit", {
 
 await expectReject("apply_patch comment additions are rejected", "apply_patch", {
   patchText: `*** Begin Patch
-*** Update File: patched.ts
+*** Update File: ${process.env.LOOSE_FILE}
 @@
  export const value = 1
 +// Explain the value.
 *** End Patch`,
 })
+
+await expectReject("apply_patch comments in new files are rejected", "apply_patch", {
+  patchText: `*** Begin Patch
+*** Add File: new-comment.ts
++// Explain the value.
++export const value = 1
+*** End Patch`,
+})
+
+await expectPass("apply_patch URL edits inside multiline templates pass", "apply_patch", {
+  patchText: `*** Begin Patch
+*** Update File: ${process.env.URL_FILE}
+@@
+ export const endpoint = \`
+-https://old.example/path
++https://new.example/path
+ \`;
+*** End Patch`,
+})
 TS
 
-HOME="$TMP/home" bun "$TMP/run.ts" "$HARNESS_SOURCE/opencode/plugin/comment-lint.ts"
+printf '// Existing explanation.\nexport const value = 1;\n' >"$TMP/existing.ts"
+printf 'export const value = 1\n' >"$TMP/loose.ts"
+printf 'export const endpoint = `\nhttps://old.example/path\n`;\n' >"$TMP/url.ts"
+HOME="$TMP/home" TEST_FILE="$TMP/existing.ts" LOOSE_FILE="$TMP/loose.ts" URL_FILE="$TMP/url.ts" \
+  bun "$TMP/run.ts" "$HARNESS_SOURCE/opencode/plugin/comment-lint.ts"
 printf '\nall OpenCode comment-lint plugin cases passed\n'

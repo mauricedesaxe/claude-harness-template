@@ -109,8 +109,9 @@ on). Because jj has already snapshotted everything into `@`, the checks run agai
 what you're about to commit.
 
 **Comment gate (harness).** Run the harness comment-lint over the change before committing.
-It rejects every new prose comment token. Only shebangs, leading license headers, and recognized
-tooling directives pass. Unchanged comment tokens in edited context do not fail.
+It rejects new narration. Shebangs, leading license headers, recognized tooling directives,
+native symbol docs, and explicit `Why:` rationale comments pass. Unchanged comment tokens in
+edited context do not fail.
 It is also the runtime-neutral backstop for the Claude Code write-time hook, so it catches a
 comment written under OpenCode or a sandbox where that hook never fired.
 
@@ -123,8 +124,9 @@ The `if` guard is load-bearing. On a machine without the harness bin, the whole 
 skipped and exits 0, so an absent linter never blocks a commit. When it's present, the pipe's
 exit status is comment-lint's. Exit 0, proceed.
 
-Nonzero output lists the new comment tokens. Make the code say it, or move longer explanation to
-docs. Fix the working copy and re-run the gate. Don't commit over it.
+Nonzero output lists the new comment tokens. Delete narration that restates the code. Keep a
+comment only for the reasons allowed by PHILOSOPHY §21. Fix the working copy and re-run the gate.
+Don't commit over it.
 
 **Complexity gate (harness).** Run complexity-lint after comment-lint. It checks each changed
 production file with repository-local tools only. JavaScript and TypeScript use Oxlint and jscpd.
@@ -136,12 +138,10 @@ COMPLEXITY_LINT="$HOME/.lazar-harness/bin/complexity-lint"
 if [ -x "$COMPLEXITY_LINT" ]; then jj diff --git <paths> | "$COMPLEXITY_LINT"; fi
 ```
 
-The limits are 10 for complexity, 4 for nesting depth, 500 module lines, and 100 function lines.
-Values through twice each limit are advisory. Higher values block. Import cycles always block.
-Duplicate blocks from 5 through 20 lines are advisory, and longer blocks block. Blank lines and
-comments count toward line limits. The linter checks each whole touched file, so a small edit can
-expose an old finding outside the changed lines. Fix it, or split the commit only when that split
-matches the intended logical unit.
+Metric and duplicate findings are advisory in the lower band and blocking in the upper band.
+Import cycles always block. Blank lines and comments count toward line limits. The linter checks
+each whole touched file, so a small edit can expose an old finding outside the changed lines. Fix
+it, or split the commit only when that split matches the intended logical unit.
 
 Replace `<paths>` in both gates with the exact paths for the logical unit you are about to commit.
 This keeps unrelated work in `@` from blocking an otherwise valid atomic commit.

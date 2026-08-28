@@ -17,4 +17,8 @@ else
 fi
 
 [ -n "$node_bin" ] || exit 0
+
+repo_root=$(jj root 2>/dev/null || git rev-parse --show-toplevel 2>/dev/null || pwd)
+cd -- "$repo_root" || exit 0
+
 exec "$node_bin" "$core" "$@"

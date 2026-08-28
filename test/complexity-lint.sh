@@ -48,7 +48,8 @@ const fs = require("fs");
 const diagnostics = [];
 for (const file of process.argv.slice(3)) {
   const text = fs.readFileSync(file, "utf8");
-  const add = (code, message) => diagnostics.push({code:`eslint(${code})`, message, filename:file, labels:[{span:{line:3}}]});
+  const diagnosticPath = text.match(/diagnostic_path=([^\s]+)/)?.[1] ?? file;
+  const add = (code, message) => diagnostics.push({code:`eslint(${code})`, message, filename:diagnosticPath, labels:[{span:{line:3}}]});
   const value = (name) => Number(text.match(new RegExp(`${name}=(\\d+)`))?.[1]);
   if (value("complexity") > 10) add("complexity", `Function foo has a complexity of ${value("complexity")}. Maximum allowed is 10.`);
   if (value("depth") > 4) add("max-depth", `Blocks are nested too deeply (${value("depth")}). Maximum allowed is 4.`);
@@ -56,6 +57,7 @@ for (const file of process.argv.slice(3)) {
   if (value("function_lines") > 100) add("max-lines-per-function", `Function has too many lines (${value("function_lines")}). Maximum allowed is 100.`);
   if (text.includes("cycle=true")) diagnostics.push({code:"import(no-cycle)", message:"Dependency cycle detected.", filename:file, labels:[{span:{line:3}}]});
   if (text.includes("OX_RULE_UNAVAILABLE")) add("other-rule", "Rule unavailable.");
+  if (text.includes("OX_PARTIAL")) diagnostics.push({code:"eslint(complexity)", message:"missing score", filename:file});
 }
 process.stdout.write(JSON.stringify({diagnostics}));
 process.exit(diagnostics.length ? 1 : 0);
@@ -82,6 +84,7 @@ for (const file of process.argv.slice(2)) {
   const text = fs.readFileSync(file, "utf8");
   const value = Number(text.match(/complexity=(\d+)/)?.[1]);
   if (value) diagnostics.push({code:"C901", filename:file, location:{row:4}, message:`foo is too complex (${value} > 10)`});
+  if (text.includes("RUFF_PARTIAL")) diagnostics.push({code:"C901", filename:file, location:{row:5}, message:"missing score"});
 }
 process.stdout.write(JSON.stringify(diagnostics));
 process.exit(diagnostics.length ? 1 : 0);
@@ -112,6 +115,7 @@ for (const file of process.argv.slice(2)) {
   const lines = Number(text.match(/module_lines=(\d+)/)?.[1]);
   if (depth > 4) { add("R1702", `Too many nested blocks (${depth}/4)`); status |= 8; }
   if (lines > 500) { add("C0302", `Too many lines in module (${lines}/500)`); status |= 16; }
+  if (text.includes("PYLINT_PARTIAL")) { add("R1702", "missing ratio"); status |= 8; }
 }
 process.stdout.write(JSON.stringify(diagnostics));
 process.exit(status);
@@ -149,6 +153,7 @@ for (const file of files) {
   const text=fs.readFileSync(file,"utf8");
   const match=text.match(/duplicate=(\d+):([^\s]+)/);
   if (match) duplicates.push({lines:Number(match[1]), firstFile:{name:file,start:7}, secondFile:{name:match[2],start:9}});
+  if (text.includes("JSCPD_PARTIAL")) duplicates.push({lines:"bad", firstFile:{name:file,start:7}, secondFile:{name:file,start:9}});
 }
 fs.writeFileSync(report, JSON.stringify({duplicates}));
 NODE
@@ -265,7 +270,45 @@ assert_result "unavailable Oxlint rules fail open" 0 "skip: oxlint: analyzer rul
 
 printf 'duplicate=5:%s/outside.ts\n' "$TMP" >"$repo/src/bad-clone.ts"
 printf 'outside=true\n' >"$TMP/outside.ts"
-assert_result "jscpd rejects an unselected clone path" 0 "skip: jscpd: malformed or unselected clone path" "$repo" "$(diff_for src/bad-clone.ts)"
+assert_result "jscpd reports an unselected clone path" 0 "skip: jscpd: 1 mapped diagnostic(s) could not be parsed" "$repo" "$(diff_for src/bad-clone.ts)"
+
+for spec in \
+  'oxlint:ts:OX_PARTIAL:advisory: oxlint complexity' \
+  'ruff:py:RUFF_PARTIAL:advisory: ruff C901' \
+  'pylint:py:PYLINT_PARTIAL:advisory: pylint too-many-nested-blocks'; do
+  IFS=: read -r tool extension marker finding <<<"$spec"
+  file="src/partial-$tool.$extension"
+  if [ "$tool" = pylint ]; then printf 'depth=5\n%s\n' "$marker" >"$repo/$file"; else printf 'complexity=11\n%s\n' "$marker" >"$repo/$file"; fi
+  out=$(run_lint "$repo" "$(diff_for "$file")"); status=$?
+  if [ "$status" -eq 0 ] && [[ "$out" == *"$finding"* ]] && [[ "$out" == *"skip: $tool: 1 mapped diagnostic(s) could not be parsed"* ]]; then
+    pass "$tool keeps valid findings beside one unparsed diagnostic"
+  else
+    fail "$tool keeps valid findings beside one unparsed diagnostic (status=$status output='$out')"
+  fi
+done
+
+printf 'target=true\n' >"$repo/src/partial-jscpd-target.ts"
+printf 'duplicate=5:%s/src/partial-jscpd-target.ts\nJSCPD_PARTIAL\n' "$repo" >"$repo/src/partial-jscpd.ts"
+partial_jscpd_diff="$(diff_for src/partial-jscpd.ts)"$'\n'"$(diff_for src/partial-jscpd-target.ts)"
+out=$(run_lint "$repo" "$partial_jscpd_diff"); status=$?
+if [ "$status" -eq 0 ] && [[ "$out" == *"advisory: jscpd duplicate-code"* ]] && [[ "$out" == *"skip: jscpd: 1 mapped diagnostic(s) could not be parsed"* ]]; then
+  pass "jscpd keeps valid clones beside one unparsed clone"
+else
+  fail "jscpd keeps valid clones beside one unparsed clone (status=$status output='$out')"
+fi
+
+printf 'complexity=11\ndiagnostic_path=%s/src/alias.ts\n' "$repo" >"$repo/src/alias-target.ts"
+ln -s alias-target.ts "$repo/src/alias.ts"
+assert_result "diagnostic path aliases resolve to the selected canonical file" 0 "advisory: oxlint complexity src/alias-target.ts" "$repo" "$(diff_for src/alias.ts)"
+
+printf 'complexity=21\n' >"$repo/src/café.ts"
+quoted_diff=$(printf '%s\n' \
+  'diff --git "a/src/caf\303\251.ts" "b/src/caf\303\251.ts"' \
+  '--- "a/src/caf\303\251.ts"' \
+  '+++ "b/src/caf\303\251.ts"' \
+  '@@ -0,0 +1 @@' \
+  '+changed')
+assert_result "quoted non-ASCII diff paths are decoded" 1 "error: oxlint complexity src/café.ts" "$repo" "$quoted_diff"
 
 mkdir -p "$repo/tests" "$repo/src/__tests__"
 printf 'complexity=21\n' >"$repo/tests/a.ts"
