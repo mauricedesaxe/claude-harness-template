@@ -299,16 +299,16 @@ function applyReplacement(text, oldText, newText) {
 
 function candidatesFromHook(payload) {
   const input = payload.tool_input || {};
-  const file = input.file_path || input.filePath || "";
+  const file = input.file_path || "";
   if (!file) return [];
   const current = readExisting(file);
-  const content = input.content ?? input.new_content ?? input.newContent;
+  const content = input.content ?? input.new_content;
   if (typeof content === "string") {
-    const old = input.old_content ?? input.oldContent;
+    const old = input.old_content;
     return [{ file, oldText: typeof old === "string" ? old : current, newText: content }];
   }
-  const oldString = input.old_string ?? input.oldString;
-  const newString = input.new_string ?? input.newString;
+  const oldString = input.old_string;
+  const newString = input.new_string;
   if (typeof newString === "string") {
     const oldText = typeof oldString === "string" ? oldString : "";
     const replaced = typeof oldString === "string" ? applyReplacement(current, oldString, newString) : null;
@@ -316,8 +316,8 @@ function candidatesFromHook(payload) {
   }
   if (Array.isArray(input.edits)) {
     const pairs = input.edits.flatMap((edit) => {
-      const oldText = edit?.old_string ?? edit?.oldString;
-      const newText = edit?.new_string ?? edit?.newString;
+      const oldText = edit?.old_string;
+      const newText = edit?.new_string;
       return typeof oldText === "string" && typeof newText === "string"
         ? [{ file, oldText, newText }]
         : [];
