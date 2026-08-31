@@ -60,15 +60,11 @@ VISUAL_EXPLAINER_LICENSE_URL="https://raw.githubusercontent.com/$VISUAL_EXPLAINE
 # the pstack pins already in skills-lock.json rather than recomputing or dropping them.
 PSTACK_UPSTREAM="cursor/plugins"
 
-# The four Matt skills the harness still vendors after the pstack migration. pstack-poteto-mode is
-# the router and its playbooks and pstack-principle-* leaves cover the flow Matt's other skills used
-# to, so the rest are retired. `code-review` stays as the standards and spec review;
-# `codebase-design` for its deep-module vocabulary; `diagnosing-bugs` for reproduce-before-you-touch;
-# `handoff` for compaction.
+# The one Matt skill the harness still vendors. pstack-poteto-mode is the router, and its playbooks
+# and pstack-principle-* leaves cover the flow Matt's other skills used to, so the rest are retired.
+# `code-review` went out with lazar-review, and `codebase-design` and `diagnosing-bugs` went unused.
+# `handoff` stays for compaction, which nothing else covers.
 UPSTREAM_SKILLS=(
-  code-review
-  codebase-design
-  diagnosing-bugs
   handoff
 )
 
@@ -183,11 +179,12 @@ strip_model_invocation_lock() {
   mv -- "$skill_md.unlocked" "$skill_md"
 }
 
-# The prefix has to reach the cross-references too: these skills dispatch to each other by slash
-# name, so an unrewritten `/code-review` in a body reaches Claude Code's built-in rather than
-# matt-code-review — the very collision the prefix exists to prevent. Only a reference is
-# rewritten, never a path: the leading anchor skips `docs/agents/handoff-labels.md`, the trailing
-# one skips the route `/code-review/<name>`.
+# The prefix has to reach the cross-references too: a vendored skill dispatches by slash name, so an
+# unrewritten `/handoff` in a body reaches whatever else claims that name rather than matt-handoff.
+# That is the collision the prefix exists to prevent, and it is why the rewrite runs over every
+# vendored name rather than only the ones that collide today. Only a reference is rewritten, never a
+# path: the leading anchor skips `docs/agents/handoff-labels.md`, the trailing one skips the route
+# `/handoff/<name>`.
 #
 # Every file, not just markdown: a skill that ships a `template.sh` naming a slash command needs it
 # too, and `test/install-smoke.sh` pins that no installed skill dispatches to an unprefixed name.

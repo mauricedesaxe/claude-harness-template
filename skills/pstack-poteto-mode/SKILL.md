@@ -66,7 +66,7 @@ because a subagent can read a leaf skill and cannot read the philosophy.
 **Verification**
 
 - **Prove It Works** (**pstack-principle-prove-it-works**). After a task, before declaring done. Verify against the real artifact, not a proxy or "it compiles".
-- **Fix Root Causes** (**pstack-principle-fix-root-causes**). Debugging. Trace each symptom to its root cause, reproduce first, ask why until you reach it. The full method is the **matt-diagnosing-bugs** skill.
+- **Fix Root Causes** (**pstack-principle-fix-root-causes**). Debugging. Trace each symptom to its root cause, reproduce first, ask why until you reach it. The leaf carries the method; **pstack-why** owns the wider history sweep when the cause is not in the code.
 - **Sequence Work into Verifiable Units** (**pstack-principle-sequence-verifiable-units**). Multi-step work (sweeps, migrations, runs of similar edits) and how you stack commits and PRs. Break work into small units that each end in a check, verify each before the next, and order delivery so the sequence proves itself.
 
 **Delegation**

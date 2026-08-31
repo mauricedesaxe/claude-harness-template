@@ -2,14 +2,10 @@ bro
 lazar-commit
 lazar-pr-status
 lazar-qa
-lazar-research
 lazar-ship
 lazar-standup
 lazar-tldraw
 lazar-ux-audit
-matt-code-review
-matt-codebase-design
-matt-diagnosing-bugs
 matt-handoff
 plannotator-annotate
 plannotator-compound

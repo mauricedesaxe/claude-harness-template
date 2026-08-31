@@ -360,8 +360,7 @@ env -u GITHUB_TOKEN gh project item-edit --project-id "$PROJ" --id "$ITEM" \
 
 If the PR only references an issue without closing it (research, a partial that leaves the
 issue open), that issue does **not** move to done. Leave it where it is. Done is for what
-this merge actually closed. The `lazar-research` skill overrides this outright: it never
-closes and never moves to done.
+this merge actually closed.
 
 ## Step 8b: post-merge follow-ups
 

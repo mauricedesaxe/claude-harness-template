@@ -116,7 +116,6 @@ skills/
   lazar-commit/             atomic conventional commits, jj-native, no AI attribution
   lazar-pr-status/          a PR number → its issue, what's addressed, what's only replied to, drift
   lazar-qa/                 drive a change in a real browser (preview or local) → bugs, UX, intent gaps
-  lazar-research/           an issue's open questions → /deep-research + a throwaway prototype → a verdict
   lazar-ship/               bookmark → push → PR → gate → rebase-merge → close out on the tracker
   lazar-standup/            the daily 3 Ps, from merged PRs + tracker + unpushed local work
   lazar-tldraw/             talk → tldraw canvas: diagrams + low-fi wireframes (vendored)
@@ -281,10 +280,10 @@ same binary before the skills can run there.
 
 The four Matt skills the harness still vendors are renamed `matt-<name>` on the way in — the
 directory, the `name:` frontmatter, and the `/name` cross-references the prose dispatches through.
-The rest of Matt's set is retired now that pstack is the engineering layer (see below). The prefix
-is load-bearing: upstream ships `code-review`, so a skill installed under its own name would
-silently replace Claude Code's built-in `/code-review`, and a body left saying `/code-review` would
-call that built-in instead of `matt-code-review`.
+The rest of Matt's set is retired now that pstack is the engineering layer (see below), so
+`handoff` is the only one still vendored. The prefix stays load-bearing anyway: upstream ships
+`code-review`, and a skill installed under its own name would silently replace a built-in of the
+same name, so every vendored skill takes the prefix rather than only the ones that collide today.
 
 That makes the vendored prose diverge from upstream, which is a bug everywhere except here: the
 rename is a step of the vendor script, re-derived from scratch on every run and never

@@ -43,9 +43,9 @@ The pstack flow runs as written, with these standing overrides.
 - **`lazar-tldraw` and `lazar-qa` get reached for proactively.** Show the idea, don't only describe
   it, and drive a change through a real browser before it ships. Diagram any system with three or
   more components and any data flow, and fat-marker a screen before building it.
-- **Four of Matt's skills are retained** for what pstack doesn't cover: `matt-code-review` for a
-  standards and spec review, `matt-diagnosing-bugs` for reproduction first, `matt-codebase-design`
-  for deep-module vocabulary, and `matt-handoff` for handoffs.
+- **One of Matt's skills is retained**, `matt-handoff`, for compaction. pstack covers the rest:
+  its `fix-root-causes` leaf owns reproduce-before-you-touch, and `minimize-reader-load` and
+  `model-the-domain` own the design vocabulary the retired `codebase-design` carried.
 
 ## Writing
 
@@ -219,6 +219,5 @@ routes through `pstack-poteto-mode`, not from memory. The main `lazar-*` workflo
 | `lazar-commit` | A logical chunk of work is done. Record it as atomic conventional commits, as you go, not all at the end. |
 | `lazar-ship` | Landing work on `main`: bookmark, commit, push, PR, CI, rebase merge. Runs only the steps still missing. |
 | `lazar-pr-status` | Re-entering a PR. What each review asked for, what was addressed in code, what was answered only in a reply, what's unaddressed, and any drift since. |
-| `lazar-research` | An issue's open questions need answering before we commit to an approach. Delegates the web to `/deep-research` and runnable questions to a throwaway prototype. Never closes the issue. |
 | `lazar-standup` | Writing the daily 3 Ps (Progress / Problems / Priorities), reconciling merged PRs, tracker issues, and unpushed local work into a post in my voice. |
 | `lazar-tldraw` | Showing a diagram or a low-fi wireframe. Reach for it proactively; see the deviations above. Needs `@kitschpatrol/tldraw-cli`. |
