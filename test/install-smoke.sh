@@ -450,10 +450,6 @@ assert_same_file "lazar-standup installs to Claude Code" \
 assert_same_file "lazar-standup installs to OpenCode" \
   "$HARNESS_SOURCE/skills/lazar-standup/SKILL.md" "$opencode/skills/lazar-standup/SKILL.md"
 
-assert_same_file "lazar-research installs to Claude Code" \
-  "$HARNESS_SOURCE/skills/lazar-research/SKILL.md" "$claude/skills/lazar-research/SKILL.md"
-assert_same_file "lazar-research installs to OpenCode" \
-  "$HARNESS_SOURCE/skills/lazar-research/SKILL.md" "$opencode/skills/lazar-research/SKILL.md"
 
 assert_same_file "lazar-pr-status installs to Claude Code" \
   "$HARNESS_SOURCE/skills/lazar-pr-status/SKILL.md" "$claude/skills/lazar-pr-status/SKILL.md"
@@ -558,10 +554,10 @@ case "${note_path#\~/}" in
 esac
 
 pinned=$(lockfile_skills)
-if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 51 ]; then
-  pass "skills-lock.json pins all 51 vendored skills"
+if [ "$(printf '%s\n' "$pinned" | grep -c .)" -eq 48 ]; then
+  pass "skills-lock.json pins all 48 vendored skills"
 else
-  fail "skills-lock.json pins all 51 vendored skills"
+  fail "skills-lock.json pins all 48 vendored skills"
 fi
 
 # pstack is a hand-maintained fork, not a CLI-fetched vendor, so its pins carry a pristine-upstream

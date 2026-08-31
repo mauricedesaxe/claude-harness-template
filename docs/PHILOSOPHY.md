@@ -966,8 +966,8 @@ already, and usually didn't notice.
 **Prose.** Verdict first, then the evidence, then the caveats. Journalism calls
 it the inverted pyramid. Three rules elsewhere in this document are instances of
 it, and only now have a name. §21's commit subject carries the *what* over a
-body that carries the *why*. `lazar-research` writes verdict-first. A standup
-leads with what landed.
+body that carries the *why*. `lazar-qa` and `lazar-ux-audit` both open on the
+verdict. A standup leads with what landed.
 
 **The one inversion: a commit stack.** A stack can't be conclusion-first,
 because you can't deliver before you scaffold. So the stack runs chronologically
@@ -1182,8 +1182,9 @@ modules so the cost stays local:
   learn, or that will cost a lot to change. The first plausible design is
   evidence, not a default winner.
 
-`matt-codebase-design` owns the operational vocabulary and process for applying
-this section: **module**, **interface**, **depth**, **seam**, **adapter**,
+The **pstack-principle-minimize-reader-load** and
+**pstack-principle-model-the-domain** leaves carry the operational form of this
+section: **module**, **interface**, **depth**, **seam**, **adapter**,
 **leverage**, **locality**, the deletion test, and design-it-twice. This section
 owns why that process exists. The distinction follows John Ousterhout's
 [*A Philosophy of Software Design*](https://web.stanford.edu/~ouster/cgi-bin/book.php):
