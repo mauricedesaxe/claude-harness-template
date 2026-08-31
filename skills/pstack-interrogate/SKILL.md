@@ -103,3 +103,22 @@ Present the verdict in this structure:
 
 ### Agreement Map
 [Where did models agree, where did they diverge, and what does the pattern of agreement/disagreement tell us?]
+
+## Step 6, Record the Run
+
+Write the record once the verdict is delivered, to the contract in `records.md`, which sits beside
+`models.md` in the rules directory. The repo's own convention wins where it has one; otherwise the
+record goes to the machine-local store keyed by the git remote.
+
+`kind: interrogate`. The verdict is `changes requested` when anything landed in Act on, and
+`no changes requested` otherwise. Count the four buckets into `act_on`, `consider`, `noted` and
+`dismissed`, and set `findings_total` to their sum.
+
+`reviewers` carries one entry per model that ran, with the number of findings it raised. Take
+`consensus` and `disagreements` straight from the Agreement Map, and list any `pool` slug that would
+not resolve under `pool_dropped`. This is the part worth keeping: which model saw what is held by
+the chat window and nowhere else, and a thin `pool` is what makes a verdict lower-confidence three
+weeks later when nobody remembers the run.
+
+The record is never the deliverable and never delays it. Where it cannot be written, say so in one
+line and hand back the verdict anyway.

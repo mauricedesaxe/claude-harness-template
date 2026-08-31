@@ -62,7 +62,7 @@ You need a real target. Prefer the one closest to production.
 
 Isolate the work per **Workspace isolation** in `CLAUDE.md`: cut a jj workspace off the change's
 revision so a running dev server and its local DB don't collide with anything else. Tear it down in
-Step 6.
+Step 7.
 
 ## Step 3: drive the real browser, and prove it
 
@@ -176,7 +176,21 @@ repro so it stands without the image.
 
 <!-- /surface:sandbox -->
 
-## Step 6: clean up
+## Step 6: record the run
+
+Write the record before you clean up, to the contract in `records.md`, which sits beside the spine
+in the rules directory. The repo's own convention wins where it has one; otherwise the record goes
+to the machine-local store keyed by the git remote.
+
+`kind: qa`. The verdict is the same word the report leads with, one of `ship`, `fix first`, or
+`not close`. Count the sections you just wrote into `bugs`, `ux` and `intent_gaps`, set
+`findings_total` to their sum, and set `surface` by where you tested. The body is the report
+verbatim, screenshot paths left as paths.
+
+The record is never the deliverable and never delays it. Where it cannot be written, say so in one
+line and clean up anyway.
+
+## Step 7: clean up
 
 Leave the machine as you found it. Stop the dev server you started, `jj workspace forget` the
 workspace and remove its directory, and don't leave a browser session or a local DB behind. If you
