@@ -164,6 +164,13 @@ assert_same_file "models.md installs as a Claude Code rule" \
 assert_same_file "models.md installs as an OpenCode rule" \
   "$HARNESS_SOURCE/docs/models.md" "$opencode/rules/models.md"
 
+# records.md is shared by three judging skills, so it lands beside the spine for the same reason
+# models.md does: no one skill can own a file the other two have to read.
+assert_same_file "records.md installs as a Claude Code rule" \
+  "$HARNESS_SOURCE/docs/records.md" "$claude/rules/records.md"
+assert_same_file "records.md installs as an OpenCode rule" \
+  "$HARNESS_SOURCE/docs/records.md" "$opencode/rules/records.md"
+
 # The per-machine model config is seeded once from the shipped defaults, into ~/.lazar-harness where
 # no runtime owns it. A fresh install creates it; the not-clobbered half is asserted after the
 # reinstall below.
