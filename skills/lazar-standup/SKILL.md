@@ -108,11 +108,60 @@ shows work every day, means the filter is wrong, not that nothing happened.
      `review-*` workspaces, a round number in a commit subject), the honest line is that I'm
      working through my own automated reviews, not that I'm addressing a teammate's.
 
-3. **Problems:** only things someone other than me could act on. A dependency not ready, a
+3. **Fan out one PR-status agent per open PR in scope.** The gathering above says what moved.
+   This says where each PR actually stands, and it is the difference between a real standup and a
+   list of branch names. Do it every time, not only when a PR looks interesting.
+
+   **Scope.** Every open PR authored by me or assigned to me that targets trunk, plus every PR
+   whose base is one of those. That is trunk plus one level. Deeper members of a stack ride on
+   their base until it lands, so they do not each need an agent. Count them anyway, because
+   "PR#552 through PR#555, no rounds yet" is a real line.
+
+   ```bash
+   gh pr list --state open --limit 60 \
+     --json number,title,author,assignees,baseRefName,headRefName,isDraft \
+   | jq -r '.[] | select((.author.login=="<me>") or ([.assignees[].login]|index("<me>")))
+            | "\(.number)\t\(.isDraft)\tbase=\(.baseRefName)\t\(.title)"'
+   ```
+
+   Run the agents **in parallel, one per PR**, each invoking `lazar-pr-status` for its number, and
+   each told to stay read-only: post nothing, change nothing. Ask every one of them for the same
+   four things, so the lines compare:
+
+   - how many automated review rounds ran against **this** PR,
+   - the final round's date, verdict, and finding count, split into fixed, dropped, still open,
+   - the human review status: review count, states and dates, thread count, `reviewDecision`,
+   - the business-logic changes made in response to reviews, behaviour and contract only.
+
+   Wait for all of them. Never write a line about a PR whose agent has not reported.
+
+4. **Count the automated review rounds from the records in the repo, where the repo keeps them.**
+   Not all of my repos do. This is a convention some of them carry and others have never had, so
+   check before you rely on it. Where it exists, use it: it is what makes a line honest about how
+   far a PR has come, and it is invisible to GitHub. Where it does not, the round count is simply
+   not part of the line, and the rest of the gathering stands on its own.
+
+   A repo that runs its own `/review` skill records each round as a markdown file, usually
+   `work/<ISSUE>/reviews/<timestamp>-<sha>-<session>.md`, with a `pr:` field in its front matter.
+   That field is the only reliable filter. A stack carries its ancestors' records forward, so a
+   branch tree holding 75 records can hold 21 for the PR you asked about. Count by `pr:`, never by
+   file count, and say which records are carried over when it is ambiguous.
+
+   Three traps. Records often live only in an unpushed jj workspace, so search `.jj/ws/` as well as
+   the branch tree. Round numbering restarts between sessions, so "round 14" is not the total. And
+   the last recorded verdict can still read "changes requested" when every finding was fixed,
+   because no further round ran to confirm them. Say that plainly rather than calling it clean.
+
+   Tell the two zeros apart. A repo that keeps records and has none for this PR is a PR nobody has
+   reviewed, and "no review rounds yet" is one of the most useful lines in the post. A repo that
+   keeps no records at all says nothing about the PR, so the line carries no round count rather
+   than a zero.
+
+5. **Problems:** only things someone other than me could act on. A dependency not ready, a
    decision I'm waiting on from the team, or an environment issue that affects others. My own gating
    tasks (re-recording cassettes, finishing my own PR) are not problems. Usually `none rn`.
 
-4. **Priorities:** check each open PR's draft state
+6. **Priorities:** check each open PR's draft state
    (`gh pr list --author <login> --state open --json number,title,isDraft,baseRefName,headRefName`)
    and phrase the action to match it. Open, finish+open, or land: see the phrasing rule in
    Rules. Plus the next issues I'm picking up. Note stacking when one builds on another.
@@ -122,7 +171,7 @@ shows work every day, means the filter is wrong, not that nothing happened.
    open PR#424" is what I'll do today. "finish + open PR#424" is only the shape of it. The verb
    from the Rules is the floor, not the target.
 
-5. If I've just planned my day in another skill, pull the priorities straight from the plan I
+7. If I've just planned my day in another skill, pull the priorities straight from the plan I
    picked.
 
 Confirm the draft with me before I post it. This goes out under my name to a team.
@@ -137,6 +186,16 @@ Confirm the draft with me before I post it. This goes out under my name to a tea
   - `landed PR#299 (strategic summary, ICON-49)`
   - `start the Clarity preprocessing pipeline (WCO) for ICON-147 stacked on PR#316 (office extraction)`
   - `mapped out where artefact submission + strategic summary actually stand, what's blocked vs what i can pick up`
+- **One section per stack.** When my open PRs form stacks, Progress and Priorities each split into
+  a section per stack, under an italic `_<what the stack does> (<ISSUE>)_` label. Different stacks
+  are different initiatives, and one flat list hides which PR belongs to which. A repo with no
+  stacks keeps the flat list.
+- **Order every section base-up.** The PR that targets trunk comes first, then the one stacked on
+  it, up to the tip. That is the order they land in, so it reads as the order things unblock. Name
+  the base in the line itself, like `(road-map mappers, on PR#550)`, so the shape is legible
+  without a click.
+- **Collapse the unreviewed tail.** A run of tip PRs in the same state gets one line:
+  `PR#552 → PR#555 (milestone round, on PR#551): no review rounds yet, still draft`.
 - **One item per line.** Never combine two issues or PRs on one line ("ICON-148 and ICON-146 …"). Split them into separate lines, even when the action is the same.
 - **Links (settled 2026-07-16, Slack now renders markdown):** I turned on markdown rendering in my Slack. Inline markdown links `[text](url)` now work, and they are the format I want from now on. Wrap the ref word itself in the link, with the short parenthetical name in plain text after it:
   - PRs: `[PR#<n>](<repo-url>/pull/<n>)`, built from the inferred repo, e.g. `land [PR#369](https://github.com/iconicshift/platform/pull/369) (conflict detection, ICON-286)`.
@@ -150,11 +209,21 @@ Confirm the draft with me before I post it. This goes out under my name to a tea
 - **A problem is one that someone OTHER than me could or should act on.** A genuine problem is cross-team. I'm blocked on a person or a dependency, waiting on a decision, or hitting a team-wide nuisance. Listing it prompts someone else to act. Work I can handle entirely on my own is NOT a problem, even when it's hard, tedious, or gating my own other work (e.g. "I still have to re-record my cassettes" is my own task, not a problem). When in doubt, ask: could anyone but me move this? If no, it's not a problem.
 - **Do NOT put review requests in Problems.** A PR needing review belongs in Priorities, not Problems. (It came out of the Iconic team asking to stop listing "need a review on PR#X" as a problem, but it holds everywhere.)
 - If nothing meets that bar, Problems is just `none rn`. That's the common case, not a fallback.
-- **Progress = what actually changed since the last standup, stated honestly about its state.** A PR moving to MERGED is progress. A draft PR, and equally a stack that only exists on my machine, is work-in-progress, NOT something "opened for review". Never phrase it as "opened PR#X". Never word it so the team thinks it's ready to look at, because that pulls reviewers in early. If you mention wip work at all, keep it light: "got the X fix together, still wip", "clarity moving along, still wip". Do not detail its internals. That invites scrutiny it isn't ready for, and tells the team more than they need.
-- **One bullet per distinct thing done. Do NOT pad Progress with bullets that just explain a single PR**: the files it touched, that checks passed, its internal structure. That's all inside the PR and anyone can click through to see it; it isn't separate work I progressed on. If the day's progress is one PR, Progress is one bullet.
+- **Progress = what actually changed since the last standup, stated honestly about its state.** A PR moving to MERGED is progress. A draft PR, and equally a stack that only exists on my machine, is work-in-progress, NOT something "opened for review". Never phrase it as "opened PR#X". A PR that genuinely came out of draft in the window is the different case: "opened for review" is then the honest state, and it belongs in Progress. The ban is on dressing a draft up as ready, never on reporting a real state change. Never word it so the team thinks it's ready to look at, because that pulls reviewers in early. If you mention wip work at all, keep it light: "got the X fix together, still wip", "clarity moving along, still wip". Do not detail its internals. That invites scrutiny it isn't ready for, and tells the team more than they need.
+- **One bullet per distinct thing done. Do NOT pad Progress with bullets that just explain a single PR**: the files it touched, that checks passed, its internal structure. That's all inside the PR and anyone can click through to see it; it isn't separate work I progressed on. If the day's progress is one PR, Progress is one bullet. **A stack is the one exception, and only in the shape below**: each PR in it gets exactly one line, because each is a separate deliverable with its own state. One line per PR, never two.
 - **Phrase each priority by the PR's actual state, not the end goal.** The next action depends on where the PR is. Not yet a PR → "open PR#X" or "get PR#X up". A draft or still wip → "finish + open PR#X", because it can't land before it's even open for review. Already open for review → "land PR#X". Never say "land PR#X" for something that isn't open for review yet, landing is only the priority once it's actually reviewable.
 - Keep it short. My updates are a handful of bullets per section, not paragraphs. (Teammates who write longer prose updates, that's their style, not mine.)
 - **Matter-of-fact, no editorialising.** State what happened, not the colour around it. Don't thank people, don't celebrate unblocks, don't narrate dependencies landing ("prompts landed, thanks James" → just "started working on ICON-148"). A review coming back is "got approved by John with some comments I am to address", not a story.
+- **The per-PR line is a state line, not a summary of the work.** It carries the PR ref, a short
+  parenthetical name and its base, how many automated review rounds ran, the finding count of the
+  last one, and what I am doing about it next. Say "last automated review had 0 findings" or "last
+  automated review had 4 findings". Never list the findings themselves. What each one was is in the
+  PR, and nobody in a standup needs it. The two review numbers ride on the repo keeping review
+  records. Where it keeps none, the line is the ref, the name, the base, and the state.
+- **Then state where the PR is, in my words.** Open for review is "opened for review". A draft
+  whose last round was clean is "still draft, want one last manual pass before i open it". A draft
+  with findings still to work is "still draft, keep working through it". That is the whole
+  vocabulary, and it never tells the team more about a wip PR than that.
 - **My verbs, exactly:** "address John's review" (never "action" the review), "keep working on" (never "keep finishing"), "started working on", "landed", "got approved".
 - **A review that approved-with-comments is a Priority, not a Problem**. Phrase it "address John's review on PR#X + land". An approval with action items is still the PR's work to absorb; it is never a Problem.
 - **Don't park speculative cross-team questions in Problems.** Some findings are really someone else's call: a schema or compliance decision, an ownership question. I settle that once I'm in the PR and can see what's what, not when drafting the 3 Ps. If you're unsure whether something is a genuine cross-team blocker, that uncertainty is not itself a Problem. Leave it out or ask me. Don't invent one.
@@ -228,3 +297,54 @@ What the first draft got wrong, and where the answer sat:
 - **Priorities named the shape, not the step.** "finish + open PR#424" is true, and useless next to
   "one more round of automated reviews then dogfood and open PR#424". That is the actual next
   thing given where the review cadence had got to.
+
+## Calibration sample (Iconic, 2026-08-31)
+
+The one that produced the stack sections and the fan-out. Nine open PRs across two stacks, and a
+first draft that read as three vague bullets about "review rounds". Copy this shape whenever my
+open work is stacked.
+
+```
+Morning everyone :sun_with_face:
+
+*Progress*
+
+_onboarding live save ([ICON-368](https://linear.app/iconicshift/issue/ICON-368/onboarding-fields-dont-persist-live-founder-input-lost-on-reload))_
+- [PR#544](https://github.com/iconicshift/platform/pull/544) (gate refactors, base): 11 automated review rounds, last one had 2 findings, opened for review
+- [PR#539](https://github.com/iconicshift/platform/pull/539) (game-eligibility live save, on PR#544): 14 rounds, last one had 1 finding, still draft, want one last manual pass before i open it
+- [PR#540](https://github.com/iconicshift/platform/pull/540) (starting-position live save): 1 round, last one had 3 findings, still draft, keep working through it
+
+_road-map two-round split ([ICON-287](https://linear.app/iconicshift/issue/ICON-287/road-map-milestones-generate-without-founder-acceptance-of-annual))_
+- [PR#550](https://github.com/iconicshift/platform/pull/550) (write-prevention harness, base): 5 rounds, last one had 0 findings, opened for review
+- [PR#551](https://github.com/iconicshift/platform/pull/551) (road-map mappers, on PR#550): 7 rounds, last one had 4 findings, still draft, keep working through it
+- [PR#552](https://github.com/iconicshift/platform/pull/552) → [PR#555](https://github.com/iconicshift/platform/pull/555) (milestone round, on PR#551): no review rounds yet, still draft
+
+*Problems*
+none rn
+
+*Priorities*
+
+_onboarding live save_
+- one last manual pass on [PR#539](https://github.com/iconicshift/platform/pull/539), then open it
+- rebase [PR#540](https://github.com/iconicshift/platform/pull/540) onto PR#544 and work through automated reviews to get it ready
+
+_road-map two-round split_
+- land [PR#550](https://github.com/iconicshift/platform/pull/550)
+- keep working through [PR#551](https://github.com/iconicshift/platform/pull/551), then PR#552 → PR#555
+```
+
+Why it landed:
+
+- **A `lazar-pr-status` agent ran per PR, in parallel, before a word was drafted.** That is where
+  every number in the post came from. It also caught what no summary would have: PRs 552 to 555 had
+  never had a single review round, so the stack was further from ready than its length suggested.
+- **The round counts came from the repo's own review records, filtered by `pr:`.** 21 records
+  matched PR#539 out of 75 on the branch, and the local numbering said "round 14". Both numbers are
+  true about different things, and the post used the one I recognise.
+- **Two stacks, two sections, each ordered base-up.** The bases (#544 and #550) lead their
+  sections, and every line above them names the PR it sits on. The reader sees what unblocks what.
+- **Findings are counted, never listed.** "last one had 4 findings" and nothing more.
+- **Progress reported real state changes.** #544 and #550 came out of draft in the window, so
+  "opened for review" was honest rather than a draft dressed up.
+- **Priorities carried two lines per stack, in landing order**, and left out #544 entirely, because
+  nothing on it was mine to do.
