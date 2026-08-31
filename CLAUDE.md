@@ -221,3 +221,13 @@ routes through `pstack-poteto-mode`, not from memory. The main `lazar-*` workflo
 | `lazar-pr-status` | Re-entering a PR. What each review asked for, what was addressed in code, what was answered only in a reply, what's unaddressed, and any drift since. |
 | `lazar-standup` | Writing the daily 3 Ps (Progress / Problems / Priorities), reconciling merged PRs, tracker issues, and unpushed local work into a post in my voice. |
 | `lazar-tldraw` | Showing a diagram or a low-fi wireframe. Reach for it proactively; see the deviations above. Needs `@kitschpatrol/tldraw-cli`. |
+
+### Records
+
+`lazar-qa`, `lazar-ux-audit` and `pstack-interrogate` each write a **record** when they deliver a
+verdict, to the contract in `rules/records.md`. The verdict still goes to chat or the PR unchanged;
+the record is the copy that outlives the window, and it carries structured counts rather than a
+free-text verdict so a later reader can count rounds and findings without reopening bodies. A repo
+with its own convention wins; otherwise records go to
+`~/.lazar-harness/records/<host>/<owner>/<repo>/`, keyed like the tracker note. A record never
+delays the deliverable, and a repo with no remote gets none.
