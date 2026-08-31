@@ -177,6 +177,8 @@ report_plan() {
   report_write "$OPENCODE_RULES/PHILOSOPHY.md"
   report_write "$CLAUDE_RULES/models.md"
   report_write "$OPENCODE_RULES/models.md"
+  report_write "$CLAUDE_RULES/records.md"
+  report_write "$OPENCODE_RULES/records.md"
   report_models_local
   report_write "$OPENCODE_HOME/opencode.json" merge
   report_write "$CLAUDE_HOME/settings.json" merge
@@ -589,6 +591,10 @@ install_philosophy() {
   # beside the spine so a skill finds it at a stable path in whichever runtime it runs.
   cp -- "$HARNESS_SOURCE/docs/models.md" "$CLAUDE_RULES/models.md"
   cp -- "$HARNESS_SOURCE/docs/models.md" "$OPENCODE_RULES/models.md"
+  # records.md is the record contract the judging skills write against, installed the same way and
+  # for the same reason: three skills share it, so it cannot live inside any one of them.
+  cp -- "$HARNESS_SOURCE/docs/records.md" "$CLAUDE_RULES/records.md"
+  cp -- "$HARNESS_SOURCE/docs/records.md" "$OPENCODE_RULES/records.md"
   seed_models_local
   replace_dir "$CLAUDE_RULES/packs" "$HARNESS_SOURCE/docs/packs"
   replace_dir "$OPENCODE_RULES/packs" "$HARNESS_SOURCE/docs/packs"

@@ -126,6 +126,8 @@ skills/
                             all are generated — edit the upstream or the patch, not the file
 docs/
   PHILOSOPHY.md             the paradigm-agnostic spine, installed as a rule
+  models.md                 the per-role model config the fan-out skills resolve against
+  records.md                the record contract the judging skills write their verdicts to
   packs/                    per-paradigm packs, each scoped by its own `paths:`
 test/
   comment-lint.sh           drives comment parsing, hooks, and diff reconstruction
@@ -466,6 +468,7 @@ re-bootstrapping each repo.
 
 - `docs/PHILOSOPHY.md` owns durable engineering principles.
 - `docs/packs/defaults.md` owns concrete technology choices.
+- `docs/records.md` owns what a judging skill writes down and where it goes.
 - `CLAUDE.md` owns routing and runtime behaviour.
 - `skills/` owns procedures.
 - Executable checks own enforcement.
