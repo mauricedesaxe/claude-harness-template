@@ -141,7 +141,7 @@ shows work every day, means the filter is wrong, not that nothing happened.
    far a PR has come, and it is invisible to GitHub. Where it does not, the round count is simply
    not part of the line, and the rest of the gathering stands on its own.
 
-   A repo that runs its own `/review` skill records each round as a markdown file, usually
+   A repo that runs a review skill of its own records each round as a markdown file, usually
    `work/<ISSUE>/reviews/<timestamp>-<sha>-<session>.md`, with a `pr:` field in its front matter.
    That field is the only reliable filter. A stack carries its ancestors' records forward, so a
    branch tree holding 75 records can hold 21 for the PR you asked about. Count by `pr:`, never by
