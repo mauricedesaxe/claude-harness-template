@@ -137,7 +137,7 @@ assert_surface_rendered() {
 # Anchored on text only one block carries. `jj workspace add` appears in both, so asserting on that
 # would pass on a render that kept the wrong one.
 CLAUDE_MD_LOCAL='off fresh trunk'
-CLAUDE_MD_SANDBOX='The sandbox is the isolation'
+CLAUDE_MD_SANDBOX="You run in a remote, isolated background-agent sandbox, not on the user's PC or laptop."
 
 assert_surface_rendered "CLAUDE.md installed to Claude Code" \
   "$claude/CLAUDE.md" "$CLAUDE_MD_LOCAL" "$CLAUDE_MD_SANDBOX"
