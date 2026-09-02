@@ -228,8 +228,9 @@ the file at the marker.
 
 Five files use it today:
 
-- **`CLAUDE.md`** — which jj workspace to work in. `§28` states the isolation principle for both
-  surfaces; only the default action differs, since a sandbox is already a checkout of its own.
+- **`CLAUDE.md`** — which environment the agent runs in and which jj workspace to work in. `§28`
+  states the isolation principle for both surfaces; only the default action differs, since a
+  sandbox is already a checkout of its own.
 - **`skills/lazar-ship/SKILL.md`** — whether Step 3 waits to be OK'd before committing. An
   approval gate with nobody to answer it strands finished work in a checkout that is about to be
   destroyed, and push, PR and merge all sit downstream of it.

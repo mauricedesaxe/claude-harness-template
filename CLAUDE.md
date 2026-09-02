@@ -145,8 +145,9 @@ call, and never `cd` into the main checkout, whose `@` belongs to another agent.
 
 <!-- surface:sandbox -->
 
-**Work the default workspace directly with `jj edit` while one agent writes.** The sandbox is the isolation
-in that case. For parallel repository work, follow the colocation and workspace rule above (`§28`).
+You run in a remote, isolated background-agent sandbox, not on the user's PC or laptop. Work the
+default jj workspace directly with `jj edit` while one agent writes. For parallel repository work,
+follow the colocation and workspace rule above (`§28`).
 
 <!-- /surface:sandbox -->
 
