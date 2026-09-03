@@ -117,7 +117,24 @@ Comments follow the same rule as the reply, and the same rule as `§21`. Write t
 
 Your first todolist actions are the matched playbook's steps, copied in verbatim, before any task-specific todos and before you reason about the task. The failure mode is reading a playbook then writing a bespoke plan that drops its named steps (`architect`, the throughput checkpoint). A step you choose not to do stays in the list with a one-line `skip: <reason>`; skipping silently is not allowed. Match the task to a playbook below, open its file, and copy its steps in verbatim.
 
-A large or cross-cutting effort (a migration across many call sites, an ambitious multi-part change), or work the user steps away from to trust later, routes to the **pstack-figure-it-out** skill even when a narrower playbook like Feature fits. Use **pstack-figure-it-out** whenever no bundled playbook fits. It designs a bespoke, rigorous playbook for the task. A standing project-scale program (multi-day, many stacked PRs, a fleet of subagents under one coordinator) routes to **Orchestrate** instead; figure-it-out designs one bespoke run, orchestrate runs the program.
+<!-- surface:local -->
+
+A large or cross-cutting effort routes to the **pstack-figure-it-out** skill. This includes a
+migration across many call sites, an ambitious multi-part change, and work the user will review
+later. Use **pstack-figure-it-out** when no bundled playbook fits. It designs one rigorous run.
+Work driven to one predicate routes to **Autonomous run**.
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+A large or cross-cutting effort routes to the **pstack-figure-it-out** skill. This includes a
+migration across many call sites, an ambitious multi-part change, and work the user will review
+later. Use **pstack-figure-it-out** when no bundled playbook fits. It designs one rigorous run. A
+standing project-scale program routes to **Orchestrate** instead. This means multi-day work with
+many stacked PRs and a fleet of background children under one coordinator.
+
+<!-- /surface:sandbox -->
 
 - **Investigation.** Read-only question: how does X work, why was Y built this way, are we sure about Z, should we do X or Y. `playbooks/investigation.md`.
 - **Bug fix.** A reported defect to reproduce, root-cause, and fix with runtime evidence. `playbooks/bug-fix.md`.
@@ -134,7 +151,20 @@ A large or cross-cutting effort (a migration across many call sites, an ambitiou
 - **Babysit.** Driving a PR or a stack to merge-ready: conflicts, review threads, CI. `playbooks/babysit.md`.
 - **Shipping.** The half after Babysit. Independently verifying a green stack, then landing the contiguous verified run. In this harness the landing itself is the **lazar-ship** skill. `playbooks/shipping.md`.
 - **Autonomous run.** A long task to drive to completion without stopping ("run until done", "/loop until X"). `playbooks/autonomous-run.md`.
-- **Orchestrate.** A standing project handed to one coordinator chat: multi-day, many stacked PRs, dozens to hundreds of subagents, minimal human turns ("run this whole project", "own this migration until it lands"). Distinct from Autonomous run, which drives one task to a predicate; work one agent could finish inside the session's budget routes there, not here, however program-shaped the phrasing sounds. `playbooks/orchestrate.md`.
+<!-- surface:local -->
+
+- **Orchestrate.** Local work does not route here. Use Autonomous run for one done predicate. Use
+  **pstack-figure-it-out** for a large or multi-part run. `playbooks/orchestrate.md`.
+
+<!-- /surface:local -->
+
+<!-- surface:sandbox -->
+
+- **Orchestrate.** A standing project handed to one coordinator chat. Use it for multi-day work,
+  many stacked PRs, dozens to hundreds of background children, and few human turns. Work one agent
+  can finish inside the session budget routes to Autonomous run. `playbooks/orchestrate.md`.
+
+<!-- /surface:sandbox -->
 - **Autopilot-full.** A queue of independent PRs run to merged with full autonomy: one owner per PR carries build through merge, and the root swarm-verifies each merge-ready head before its owner merges ("autopilot this queue", "full autopilot", one-owner-per-PR programs). `playbooks/autopilot-full.md`.
 - **Autopilot-stack.** A queue of changes built and verified with full autonomy, delivered as one linear reviewed stack the operator lands herself ("autopilot-stack", "stack them, don't ship", "build the stack, I'll land it"). `playbooks/autopilot-stack.md`.
 - **Session pickup.** Resuming or taking over a prior agent's in-flight work from a transcript, cloud-agent URL, or pushed branch. `playbooks/session-pickup.md`.
