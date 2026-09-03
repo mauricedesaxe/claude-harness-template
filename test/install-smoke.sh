@@ -22,6 +22,10 @@ assert_contains() {
   if grep -qF -- "$2" "$3"; then pass "$1"; else fail "$1"; fi
 }
 
+assert_not_contains() {
+  if grep -qF -- "$2" "$3"; then fail "$1"; else pass "$1"; fi
+}
+
 lockfile_skills() {
   awk -F'"' '/^    "/ && /: \{$/ { print $2 }' "$HARNESS_SOURCE/skills-lock.json"
 }
@@ -143,6 +147,25 @@ assert_surface_rendered "CLAUDE.md installed to Claude Code" \
   "$claude/CLAUDE.md" "$CLAUDE_MD_LOCAL" "$CLAUDE_MD_SANDBOX"
 assert_surface_rendered "CLAUDE.md installed to OpenCode as AGENTS.md" \
   "$opencode/AGENTS.md" "$CLAUDE_MD_LOCAL" "$CLAUDE_MD_SANDBOX"
+
+router="$claude/skills/pstack-poteto-mode/SKILL.md"
+orchestrate="$claude/skills/pstack-poteto-mode/playbooks/orchestrate.md"
+opencode_router="$opencode/skills/pstack-poteto-mode/SKILL.md"
+opencode_orchestrate="$opencode/skills/pstack-poteto-mode/playbooks/orchestrate.md"
+
+assert_contains "the local router sends standing work to figure-it-out" \
+  'Local work does not route here.' "$router"
+assert_contains "the local orchestrate playbook routes one predicate to Autonomous run" \
+  'Use **Autonomous run** when one agent can drive the work to one' "$orchestrate"
+for local_file in "$claude/CLAUDE.md" "$router" "$orchestrate" \
+  "$opencode/AGENTS.md" "$opencode_router" "$opencode_orchestrate"; do
+  assert_not_contains "the local $(basename -- "$local_file") has no Beads policy" \
+    'Beads' "$local_file"
+  assert_not_contains "the local $(basename -- "$local_file") has no direct bd command" \
+    '`bd ' "$local_file"
+  assert_not_contains "the local $(basename -- "$local_file") has no orch.ts reference" \
+    'orch.ts' "$local_file"
+done
 
 # The skeleton this file grew out of shipped its TODOs to every install, which is what made the
 # installer unrunnable against a real harness.
@@ -1258,6 +1281,51 @@ for instructions in "$SANDBOX_HOME/.claude/CLAUDE.md" "$SANDBOX_HOME/.config/ope
     "$instructions" "$CLAUDE_MD_SANDBOX" "$CLAUDE_MD_LOCAL"
 done
 
+sandbox_claude_md="$SANDBOX_HOME/.claude/CLAUDE.md"
+sandbox_router="$SANDBOX_HOME/.claude/skills/pstack-poteto-mode/SKILL.md"
+sandbox_orchestrate="$SANDBOX_HOME/.claude/skills/pstack-poteto-mode/playbooks/orchestrate.md"
+sandbox_opencode_md="$SANDBOX_HOME/.config/opencode/AGENTS.md"
+sandbox_opencode_router="$SANDBOX_HOME/.config/opencode/skills/pstack-poteto-mode/SKILL.md"
+sandbox_opencode_orchestrate="$SANDBOX_HOME/.config/opencode/skills/pstack-poteto-mode/playbooks/orchestrate.md"
+
+assert_contains "the sandbox CLAUDE.md makes the root the sole Beads writer" \
+  'The root coordinator is the sole Beads writer.' "$sandbox_claude_md"
+assert_contains "the sandbox CLAUDE.md requires durable Beads commits and pushes" \
+  'Commit and push Dolt after each durable transition.' "$sandbox_claude_md"
+assert_contains "the sandbox CLAUDE.md gives children immutable bead briefs" \
+  'Children get immutable briefs that include' "$sandbox_claude_md"
+assert_contains "the sandbox CLAUDE.md forbids forced Beads pushes" \
+  'Never force that push' "$sandbox_claude_md"
+assert_contains "the sandbox CLAUDE.md rejects JSONL sync" \
+  'never use JSONL as a sync mechanism' "$sandbox_claude_md"
+assert_contains "the sandbox router keeps Orchestrate for standing programs" \
+  'standing project-scale program routes to **Orchestrate**' "$sandbox_router"
+assert_contains "the sandbox orchestrate playbook checks the durable ref" \
+  'git ls-remote --exit-code origin refs/dolt/data' "$sandbox_orchestrate"
+assert_contains "the sandbox orchestrate playbook bootstraps the remote graph" \
+  'bd bootstrap' "$sandbox_orchestrate"
+assert_contains "the sandbox orchestrate playbook pulls the remote graph" \
+  'bd dolt pull' "$sandbox_orchestrate"
+assert_contains "the sandbox orchestrate playbook loads current Beads guidance" \
+  'bd prime' "$sandbox_orchestrate"
+assert_contains "the sandbox orchestrate playbook initializes without agent files" \
+  'bd init --skip-agents --skip-hooks' "$sandbox_orchestrate"
+assert_contains "the sandbox orchestrate playbook uses direct Beads updates" \
+  'bd update <task-id> --status in_progress' "$sandbox_orchestrate"
+assert_contains "the sandbox orchestrate playbook commits durable Beads state" \
+  'bd dolt commit -m "<transition>"' "$sandbox_orchestrate"
+assert_contains "the sandbox orchestrate playbook pushes committed Beads state" \
+  '`bd dolt push`' "$sandbox_orchestrate"
+assert_contains "the sandbox orchestrate playbook forbids child Beads writes" \
+  'They never create, update,' "$sandbox_orchestrate"
+assert_contains "the sandbox orchestrate playbook keeps verification in Lazar records" \
+  'Existing Lazar records own verification evidence' "$sandbox_orchestrate"
+for sandbox_file in "$sandbox_claude_md" "$sandbox_router" "$sandbox_orchestrate" \
+  "$sandbox_opencode_md" "$sandbox_opencode_router" "$sandbox_opencode_orchestrate"; do
+  assert_not_contains "the sandbox $(basename -- "$sandbox_file") has no orch.ts reference" \
+    'orch.ts' "$sandbox_file"
+done
+
 assert_contains "the local CLAUDE.md cuts a workspace off fresh trunk" \
   "$CLAUDE_MD_LOCAL" "$claude/CLAUDE.md"
 
@@ -1293,16 +1361,18 @@ done
 
 unrendered=""
 for root in "$claude" "$opencode" "$SANDBOX_HOME/.claude" "$SANDBOX_HOME/.config/opencode"; do
-  for installed_agent in "$root"/agents/*.md; do
-    grep -qE '^<!-- /?surface:' "$installed_agent" &&
-      unrendered="$unrendered ${installed_agent#"$TEST_HOME/"}"
+  for installed_file in "$root"/CLAUDE.md "$root"/AGENTS.md "$root"/agents/*.md \
+    "$root"/skills/*/*.md "$root"/skills/*/playbooks/*.md; do
+    [ -f "$installed_file" ] || continue
+    grep -qE '^<!-- /?surface:' "$installed_file" &&
+      unrendered="$unrendered ${installed_file#"$TEST_HOME/"}"
   done
 done
 
 if [ -z "${unrendered// /}" ]; then
-  pass "no installed agent carries a surface marker the runtime would read as prose"
+  pass "no installed instruction file carries a surface marker the runtime would read as prose"
 else
-  fail "no installed agent carries a surface marker the runtime would read as prose:$unrendered"
+  fail "no installed instruction file carries a surface marker the runtime would read as prose:$unrendered"
 fi
 
 # write_instructions treats every value that is not `local` as the sandbox, so a typo would install

@@ -226,7 +226,7 @@ them. Which files those are is read off the files, so a skill that grows a block
 surface being installed all stop the run: each one otherwise ships silently, and the first truncates
 the file at the marker.
 
-Five files use it today:
+Seven files use it today:
 
 - **`CLAUDE.md`** — which environment the agent runs in and which jj workspace to work in. `§28`
   states the isolation principle for both surfaces; only the default action differs, since a
@@ -238,6 +238,12 @@ Five files use it today:
   whiteboard tool.
 - **`skills/lazar-qa/SKILL.md`** — whether to use local browser tooling or the sandbox browser.
 - **`skills/lazar-ux-audit/SKILL.md`** — whether to use local browser tooling or the sandbox browser.
+- **`skills/pstack-poteto-mode/SKILL.md`** — whether standing programs route to Orchestrate. Local
+  installs route the same work to Autonomous run or `pstack-figure-it-out`.
+- **`skills/pstack-poteto-mode/playbooks/orchestrate.md`** — the local redirect or the sandbox
+  coordinator procedure. The sandbox variant uses Beads for program tasks and dependencies only
+  when the origin already has `refs/dolt/data` or the user asks for initialization. The image owns
+  the `bd` binary. This harness does not install it, and local installs do not mention it.
 
 Both variants sit next to each other in the file someone edits, so the two surfaces are reviewed as
 one diff and neither is a copy of the other. `install.sh` carries the reasoning at the transform.
